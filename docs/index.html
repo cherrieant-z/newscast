@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>每日调查新闻与高保真语音播客</title>
+  <meta name="description" content="AI、OPC、国际经济与社媒重点资讯，每天早晨 6:00 自动生成深度调查报道与普通话高保真播客语音">
+  
+  <!-- PWA 元数据 (采用相对路径完美适配 GitHub Pages) -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#090d16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="./static/icons/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="./static/icons/icon.svg">
+
+  <!-- Tailwind CSS & 图标库 & Markdown 渲染 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    /* 适配 iPhone 底部安全区域 */
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 16px);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes soundwave {
+      0%, 100% { height: 6px; }
+      50% { height: 22px; }
+    }
+    .wave-bar {
+      animation: soundwave 1.2s ease-in-out infinite;
+    }
+    .wave-bar:nth-child(2) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.4s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.1s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.3s; }
+  </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen font-sans antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- 顶部状态栏与导航 -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-[#090d16]/85 border-b border-slate-800/80 px-4 py-3">
+    <div class="max-w-xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+          <i data-lucide="radio" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
+            NewsCast
+            <span class="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30">每日播客</span>
+          </h1>
+          <p id="topDateStr" class="text-[11px] text-slate-400">正在同步今日简报...</p>
+        </div>
+      </div>
+
+      <!-- 右侧操作区：往期列表 & PWA安装 -->
+      <div class="flex items-center space-x-2">
+        <button id="btnHistory" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 transition-all border border-slate-700/60 flex items-center gap-1 text-xs">
+          <i data-lucide="calendar" class="w-3.5 h-3.5 text-sky-400"></i>
+          <span>往期</span>
+        </button>
+        <button id="btnPwaInstall" class="hidden p-2 rounded-xl bg-sky-600/20 text-sky-400 border border-sky-500/30 text-xs items-center gap-1">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>安装</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 领域分类横向滑动胶囊栏 -->
+  <nav class="sticky top-[57px] z-30 bg-[#090d16]/95 border-b border-slate-800/60 backdrop-blur-sm">
+    <div class="max-w-xl mx-auto px-4 py-2.5 overflow-x-auto no-scrollbar flex items-center space-x-2" id="categoryTabs">
+      <button class="cat-pill active px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-sky-500 text-white transition-all shadow-sm shadow-sky-500/30" data-cat="ALL">全部简报</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="LEAD">🔍 主打调查</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="AI">🤖 人工智能</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="OPC">🚀 一人企业(OPC)</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="国际经济">🌐 国际经济</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="YouTube">📺 YouTube</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="X">⚡ X (Twitter)</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="TikTok">🎵 TikTok</button>
+    </div>
+  </nav>
+
+  <!-- 主内容区域 (留出底部悬浮播放器空间) -->
+  <main class="max-w-xl mx-auto px-4 pt-4 pb-44 space-y-5">
+
+    <!-- 顶部状态提示横幅 -->
+    <div id="statusBanner" class="p-3 rounded-2xl bg-gradient-to-r from-sky-950/40 via-indigo-950/30 to-purple-950/40 border border-sky-800/30 text-xs flex items-center justify-between text-sky-200">
+      <div class="flex items-center space-x-2">
+        <span class="flex h-2 w-2 relative">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span id="bannerText">每日晨间 06:00 云端自动生成 · 今日播客已就绪</span>
+      </div>
+      <span class="text-[10px] text-slate-400 font-mono">Edge-TTS (Yunxi)</span>
+    </div>
+
+    <!-- 核心内容容器 -->
+    <div id="contentContainer" class="space-y-5">
+
+      <!-- 1. 今日主打调查报道卡片 -->
+      <section id="sectionLead" class="relative overflow-hidden rounded-3xl bg-gradient-to-b from-slate-800/90 via-slate-900/90 to-slate-950 border border-sky-500/20 shadow-2xl p-5">
+        <div class="absolute -right-10 -top-10 w-40 h-40 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            <i data-lucide="award" class="w-3.5 h-3.5"></i>
+            今日重磅调查
+          </span>
+          <span id="leadMetaTime" class="text-[11px] text-slate-400 font-medium">约 10 分钟播客</span>
+        </div>
+
+        <h2 id="leadTitle" class="text-lg sm:text-xl font-bold leading-snug text-white tracking-tight mb-3">
+          深度调查报道
+        </h2>
+
+        <!-- 主打调查展开正文 -->
+        <div id="leadContent" class="text-sm leading-relaxed text-slate-300 space-y-3 prose prose-invert prose-p:my-2 prose-headings:text-slate-100 max-w-none">
+          正在加载深度调查与播客图文...
+        </div>
+
+        <!-- 播放此条快捷按钮 -->
+        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+          <div class="text-xs text-slate-400 flex items-center gap-1">
+            <i data-lucide="headphones" class="w-3.5 h-3.5 text-sky-400"></i>
+            云希 · 清晨播客闲聊风解说
+          </div>
+          <button id="btnPlayMain" class="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 active:scale-95 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all">
+            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+            <span>收听完整播客</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 2. 分类资讯速览流 -->
+      <section id="sectionFlashes" class="space-y-3.5">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+            过去 24 小时重点简讯
+          </h3>
+          <span class="text-[11px] text-slate-400" id="flashCountBadge">共 6 大领域</span>
+        </div>
+
+        <div id="flashCardList" class="space-y-3">
+          <!-- 动态渲染的卡片 -->
+        </div>
+      </section>
+
+      <!-- 3. 权威来源索引与原文直达卡片 -->
+      <section id="sectionSources" class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            权威数据来源与原文索引
+          </h3>
+          <span class="text-[10px] text-slate-400">点击直达原始报道</span>
+        </div>
+        <div id="sourceLinksList" class="space-y-2">
+          <!-- 动态渲染外链 -->
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- 往期历史侧边抽屉/弹窗 -->
+  <div id="historyModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-all">
+    <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="history" class="w-4 h-4 text-sky-400"></i>
+          往期早报与播客存档
+        </h3>
+        <button id="btnCloseHistory" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="historyListContainer" class="p-4 overflow-y-auto space-y-2.5 divide-y divide-slate-800/50">
+        <!-- 动态历史条目 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部悬浮音频播放器 (Sticky Floating Player) -->
+  <div id="bottomPlayer" class="fixed bottom-0 left-0 right-0 z-50 p-2 sm:p-4 pointer-events-none pb-safe">
+    <div class="max-w-xl mx-auto pointer-events-auto rounded-3xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 shadow-2xl shadow-black/80 px-4 py-3 flex flex-col space-y-2">
+      
+      <!-- 进度条与时间显示 -->
+      <div class="flex items-center space-x-2.5">
+        <span id="playerCurrentTime" class="text-[10px] font-mono text-slate-400 w-8 text-right">00:00</span>
+        <div class="relative flex-1 flex items-center cursor-pointer group py-1" id="progressContainer">
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full w-0 transition-all duration-100"></div>
+          </div>
+          <input type="range" id="progressRange" min="0" max="100" value="0" step="0.1" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+        </div>
+        <span id="playerTotalTime" class="text-[10px] font-mono text-slate-400 w-8">10:00</span>
+      </div>
+
+      <!-- 播放器核心控制栏 -->
+      <div class="flex items-center justify-between">
+        <!-- 左侧信息区 (头像 + 标题) -->
+        <div class="flex items-center space-x-2.5 overflow-hidden pr-2">
+          <div class="relative w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-700 flex-shrink-0 flex items-center justify-center shadow-md">
+            <div id="waveAnimation" class="flex items-end justify-center space-x-0.5 w-5 h-5 hidden">
+              <span class="w-0.5 bg-white rounded-full wave-bar"></span>
+              <span class="w-0.5 bg-white rounded-full wave-bar"></span>
+              <span class="w-0.5 bg-white rounded-full wave-bar"></span>
+              <span class="w-0.5 bg-white rounded-full wave-bar"></span>
+            </div>
+            <i id="waveIconStatic" data-lucide="mic" class="w-5 h-5 text-white"></i>
+          </div>
+          <div class="truncate">
+            <div id="playerTitle" class="text-xs font-bold text-white truncate">每日调查播客</div>
+            <div id="playerSubtitle" class="text-[10px] text-slate-400 truncate">普通话高保真 · 科技早咖啡</div>
+          </div>
+        </div>
+
+        <!-- 右侧控制区 (后退15s, 播放/暂停, 快进15s, 倍速切换) -->
+        <div class="flex items-center space-x-2 flex-shrink-0">
+          <button id="btnRewind15" title="快退 15 秒" class="p-2 text-slate-300 hover:text-white active:scale-90 transition-transform">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          </button>
+
+          <button id="btnPlayPause" class="w-11 h-11 rounded-full bg-gradient-to-r from-sky-500 to-indigo-600 hover:brightness-110 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-sky-500/30 transition-all">
+            <i id="playIcon" data-lucide="play" class="w-5 h-5 fill-current ml-0.5"></i>
+            <i id="pauseIcon" data-lucide="pause" class="w-5 h-5 fill-current hidden"></i>
+          </button>
+
+          <button id="btnForward15" title="快进 15 秒" class="p-2 text-slate-300 hover:text-white active:scale-90 transition-transform">
+            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+          </button>
+
+          <button id="btnSpeed" title="调整播报倍速" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-sky-400 font-mono text-xs font-semibold">
+            1.0x
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <audio id="audioElement" preload="metadata"></audio>
+
+  <script>
+    let currentReport = null;
+    let allReports = [];
+    let currentSpeedIndex = 1;
+    const speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
+    const categoryColors = {
+      'AI': 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+      'OPC': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      '国际经济': 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+      'YouTube': 'bg-red-500/15 text-red-400 border-red-500/30',
+      'X': 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+      'TikTok': 'bg-pink-500/15 text-pink-400 border-pink-500/30'
+    };
+
+    const audio = document.getElementById('audioElement');
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const btnPlayMain = document.getElementById('btnPlayMain');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const progressBar = document.getElementById('progressBar');
+    const progressRange = document.getElementById('progressRange');
+    const playerCurrentTime = document.getElementById('playerCurrentTime');
+    const playerTotalTime = document.getElementById('playerTotalTime');
+    const btnRewind15 = document.getElementById('btnRewind15');
+    const btnForward15 = document.getElementById('btnForward15');
+    const btnSpeed = document.getElementById('btnSpeed');
+    const waveAnimation = document.getElementById('waveAnimation');
+    const waveIconStatic = document.getElementById('waveIconStatic');
+    const btnHistory = document.getElementById('btnHistory');
+    const historyModal = document.getElementById('historyModal');
+    const btnCloseHistory = document.getElementById('btnCloseHistory');
+
+    function formatTime(seconds) {
+      if (!seconds || isNaN(seconds)) return '00:00';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    // 双模加载器：优先加载静态 data/reports.json (GitHub Pages)，备选本地 FastAPI /api
+    async function loadReports() {
+      try {
+        const staticResp = await fetch('./data/reports.json?t=' + Date.now()).catch(() => null);
+        if (staticResp && staticResp.ok) {
+          const list = await staticResp.json();
+          if (Array.isArray(list) && list.length > 0) {
+            allReports = list;
+            renderReport(allReports[0]);
+            renderHistoryModal(allReports);
+            return;
+          }
+        }
+
+        // 备用：从本地 FastAPI 获取
+        const apiResp = await fetch('/api/reports/latest');
+        if (apiResp.ok) {
+          const report = await apiResp.json();
+          allReports = [report];
+          renderReport(report);
+        }
+      } catch (err) {
+        console.error('加载简报数据失败:', err);
+      }
+    }
+
+    function renderReport(report) {
+      currentReport = report;
+      document.getElementById('topDateStr').innerText = report.date_str + ' · 晨报特辑';
+      document.getElementById('leadTitle').innerText = report.lead_title || report.title;
+      document.getElementById('leadMetaTime').innerText = `时长约 ${report.audio_duration_str || '10:00'}`;
+      document.getElementById('playerTotalTime').innerText = report.audio_duration_str || '10:00';
+      document.getElementById('playerTitle').innerText = report.lead_title || report.title;
+
+      // 渲染主打调查 Markdown
+      if (window.marked && report.markdown_content) {
+        const parts = report.markdown_content.split('## ⚡ 重点资讯深度速览');
+        if (parts.length > 0) {
+          document.getElementById('leadContent').innerHTML = marked.parse(parts[0]);
+        }
+      }
+
+      renderFlashes(report);
+      renderSources(report.sources || []);
+
+      // 音频源挂载 (自动解析相对路径或绝对路径)
+      if (report.audio_url) {
+        audio.src = report.audio_url;
+      }
+
+      setupMediaSession(report);
+      lucide.createIcons();
+    }
+
+    function renderFlashes(report) {
+      const list = document.getElementById('flashCardList');
+      list.innerHTML = '';
+      const sources = report.sources || [];
+
+      sources.forEach((item) => {
+        const colorClass = categoryColors[item.category] || 'bg-slate-800 text-slate-300 border-slate-700';
+        const card = document.createElement('div');
+        card.className = `flash-card rounded-2xl bg-slate-900/70 border border-slate-800/80 p-4 transition-all hover:border-slate-700 space-y-2.5`;
+        card.setAttribute('data-category', item.category);
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border ${colorClass}">
+              ${item.category}
+            </span>
+            <span class="text-[11px] text-slate-400 font-mono">${item.source_name || '权威信源'}</span>
+          </div>
+          <h4 class="text-sm font-semibold text-slate-100 leading-snug">${item.title}</h4>
+          <div class="flex items-center justify-end pt-1">
+            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[11px] font-medium text-sky-400 hover:text-sky-300 active:scale-95 transition-all">
+              <span>查看原文</span>
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+            </a>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    function renderSources(sources) {
+      const list = document.getElementById('sourceLinksList');
+      list.innerHTML = '';
+      sources.forEach((s, idx) => {
+        const item = document.createElement('div');
+        item.className = 'text-xs text-slate-400 flex items-center justify-between gap-2 py-1 border-b border-slate-800/40 last:border-none';
+        item.innerHTML = `
+          <div class="truncate flex items-center gap-1.5">
+            <span class="font-mono text-slate-400">${idx + 1}.</span>
+            <span class="text-slate-300 truncate">${s.title}</span>
+          </div>
+          <a href="${s.url}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline flex-shrink-0 text-[11px]">
+            ${s.source_name}
+          </a>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function renderHistoryModal(reports) {
+      const container = document.getElementById('historyListContainer');
+      container.innerHTML = '';
+      reports.forEach((r) => {
+        const item = document.createElement('div');
+        item.className = 'pt-2.5 first:pt-0 cursor-pointer hover:bg-slate-800/40 p-2 rounded-xl transition-all';
+        item.innerHTML = `
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="font-bold text-sky-400">${r.date_str}</span>
+            <span class="text-slate-400 font-mono">${r.audio_duration_str}</span>
+          </div>
+          <p class="text-xs font-semibold text-slate-200 line-clamp-1">${r.lead_title || r.title}</p>
+        `;
+        item.addEventListener('click', () => {
+          renderReport(r);
+          historyModal.classList.add('hidden');
+          if (audio.paused) togglePlay();
+        });
+        container.appendChild(item);
+      });
+    }
+
+    btnHistory.addEventListener('click', () => {
+      historyModal.classList.remove('hidden');
+      lucide.createIcons();
+    });
+    btnCloseHistory.addEventListener('click', () => {
+      historyModal.classList.add('hidden');
+    });
+
+    // 分类筛选切换
+    document.getElementById('categoryTabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('.cat-pill');
+      if (!btn) return;
+      document.querySelectorAll('.cat-pill').forEach(b => {
+        b.classList.remove('bg-sky-500', 'text-white', 'shadow-sm', 'shadow-sky-500/30');
+        b.classList.add('bg-slate-800/80', 'text-slate-300');
+      });
+      btn.classList.add('bg-sky-500', 'text-white', 'shadow-sm', 'shadow-sky-500/30');
+      btn.classList.remove('bg-slate-800/80', 'text-slate-300');
+
+      const cat = btn.getAttribute('data-cat');
+      filterCategory(cat);
+    });
+
+    function filterCategory(cat) {
+      const leadSec = document.getElementById('sectionLead');
+      const cards = document.querySelectorAll('.flash-card');
+
+      if (cat === 'ALL') {
+        leadSec.style.display = 'block';
+        cards.forEach(c => c.style.display = 'block');
+      } else if (cat === 'LEAD') {
+        leadSec.style.display = 'block';
+        cards.forEach(c => c.style.display = 'none');
+      } else {
+        leadSec.style.display = 'none';
+        cards.forEach(c => {
+          if (c.getAttribute('data-category') === cat) {
+            c.style.display = 'block';
+          } else {
+            c.style.display = 'none';
+          }
+        });
+      }
+    }
+
+    function togglePlay() {
+      if (audio.paused) {
+        audio.play().then(() => updatePlayUI(true)).catch(e => console.log('Play err:', e));
+      } else {
+        audio.pause();
+        updatePlayUI(false);
+      }
+    }
+
+    function updatePlayUI(isPlaying) {
+      if (isPlaying) {
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        waveAnimation.classList.remove('hidden');
+        waveIconStatic.classList.add('hidden');
+      } else {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+        waveAnimation.classList.add('hidden');
+        waveIconStatic.classList.remove('hidden');
+      }
+    }
+
+    btnPlayPause.addEventListener('click', togglePlay);
+    btnPlayMain.addEventListener('click', () => {
+      if (audio.paused) togglePlay();
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    });
+
+    btnRewind15.addEventListener('click', () => {
+      audio.currentTime = Math.max(0, audio.currentTime - 15);
+    });
+    btnForward15.addEventListener('click', () => {
+      audio.currentTime = Math.min(audio.duration || 9999, audio.currentTime + 15);
+    });
+
+    btnSpeed.addEventListener('click', () => {
+      currentSpeedIndex = (currentSpeedIndex + 1) % speeds.length;
+      const speed = speeds[currentSpeedIndex];
+      audio.playbackRate = speed;
+      btnSpeed.innerText = speed.toFixed(speed % 1 === 0 ? 1 : 2) + 'x';
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      if (!isNaN(audio.duration) && audio.duration > 0) {
+        const pct = (audio.currentTime / audio.duration) * 100;
+        progressBar.style.width = pct + '%';
+        progressRange.value = pct;
+        playerCurrentTime.innerText = formatTime(audio.currentTime);
+        playerTotalTime.innerText = formatTime(audio.duration);
+      }
+    });
+
+    audio.addEventListener('ended', () => {
+      updatePlayUI(false);
+      progressBar.style.width = '0%';
+      progressRange.value = 0;
+    });
+
+    progressRange.addEventListener('input', (e) => {
+      if (!isNaN(audio.duration)) {
+        const targetSec = (e.target.value / 100) * audio.duration;
+        audio.currentTime = targetSec;
+      }
+    });
+
+    function setupMediaSession(report) {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: report.lead_title || report.title,
+          artist: '每日深度调查与科技前沿播客 (云希)',
+          album: `NewsCast · ${report.date_str}`,
+          artwork: [
+            { src: './static/icons/icon.svg', sizes: '512x512', type: 'image/svg+xml' }
+          ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skip = details.seekOffset || 15;
+          audio.currentTime = Math.max(audio.currentTime - skip, 0);
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skip = details.seekOffset || 15;
+          audio.currentTime = Math.min(audio.currentTime + skip, audio.duration || 9999);
+        });
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.warn('[PWA] SW register skipped:', err);
+        });
+      });
+    }
+
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const pwaBtn = document.getElementById('btnPwaInstall');
+      pwaBtn.classList.remove('hidden');
+      pwaBtn.classList.add('flex');
+      pwaBtn.addEventListener('click', () => {
+        pwaBtn.classList.add('hidden');
+        deferredPrompt.prompt();
+      });
+    });
+
+    loadReports();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

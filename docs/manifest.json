@@ -1,0 +1,19 @@
+{
+  "name": "每日调查新闻与语音播报",
+  "short_name": "NewsCast",
+  "description": "每天早晨 6:00 自动生成 AI、OPC、国际经济及社媒核心调查与高保真语音播报",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#0ea5e9",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./static/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
