@@ -2,9 +2,12 @@ name: Daily NewsCast Broadcast & Cloud Deployment
 
 on:
   schedule:
-    # 每天北京时间早上 06:00 自动触发 (UTC 时间 22:00)
-    - cron: '0 22 * * *'
-  workflow_dispatch: # 支持在 GitHub 网页上随时一键手动测试触发
+    # 双重保险，避开全球整点塞车高峰：
+    # 第一次触发：北京时间 05:35 (UTC 21:35)
+    # 第二次备用：北京时间 06:15 (UTC 22:15)
+    - cron: '35 21 * * *'
+    - cron: '15 22 * * *'
+  workflow_dispatch: # 支持手动点击随时触发
 
 permissions:
   contents: write
