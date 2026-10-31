@@ -6,11 +6,11 @@
     "lead_title": "做微型'夜间促单智能客服'，个人单兵作战年入 180 万的完整 SOP 拆解",
     "quote_of_the_day": "未来属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。",
     "summary_text": "这里是全球AI前沿与权威要闻播报。今天是2026-10-31。直接进入今天的内容汇编。\n\n首先分享今天的今日金句：未来不属于只懂死记硬背代码的技术员，而是属于能看清真实世界具体痛点、指挥 AI 虚拟军队把事情解决到底的超级个体。\n\n这句话的核心在于，在智能体时代，技术本身的垄断已被打破，谁能深入具体的商业痛点、用工作流把琐碎执行全部自动化，谁就能构建自己的现金流护城河。\n\n接下来深度拆解今日主打一人公司搞钱案例：做微型'夜间促单智能客服'，个人单兵作战年入 180 万的完整 SOP 拆解。\n\n第一部分，业务切入场景与用户痛点。许多中小型出海独立站与跨境电商卖家面临严重的夜间跑单痛点：因欧美买家...",
-    "markdown_content": "# 全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-10-31)\n\n> **发布日期**：2026-10-31 &nbsp;|&nbsp; **内容属性**：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报\n\n---\n\n## 💡 今日金句 (Quote of the Day)\n\n> ### 🌟 **「未来不属于只懂死记硬背代码的技术员，而是属于能看清真实世界具体痛点、指挥 AI 虚拟军队把事情解决到底的超级个体。」**\n\n---\n\n## 💰 一人公司搞钱案例深度拆解\n\n### 【本期课题】做微型'夜间促单智能客服'，个人单兵作战年入 180 万的完整 SOP 拆解\n\n#### 1. 业务切入场景与核心痛点\n许多中小型出海独立站与跨境电商卖家面临严重的夜间跑单痛点：因欧美买家与国内存在 8 到 12 小时时区差，海外买家在深夜浏览商品时常有尺寸、运费或材质疑问。由于无人即时答复，夜间加购后的放弃下单率高达 35% 以上；而雇佣三班倒人工客服每月单人成本高达 6000 到 8000 元，对微型卖家负担沉重且难以保证应答质量。\n\n#### 2. 商业模式与产品极简设计\n一位独立开发者针对这一极细分痛点，开发了一款 7x24 小时不知疲倦的'夜间促单智能体'。产品形态极简，不开发庞大复杂的管理后台，仅以轻量插件形式嵌入卖家店铺。该智能体能通读全店几百款商品手册与退货条款，支持多语种流利交流；更关键的是具备'犹豫心理识别'能力，当买家在结算页面停留超过 90 秒时，主动推送定制优惠券促成支付。采用纯月度订阅制：基础版 299 元/月，进阶版 699 元/月，提供 7 天免费试用并在试用期承诺为卖家挽回订单。\n\n#### 3. 全套 AI 工具链与自动化 SOP\n1. 知识库与数据层：利用开源框架 FastGPT / Dify 搭建专属知识库，一键导入商品详情页链接与常见售后问答，实现零幻觉检索；\n2. 大模型与情绪判断层：调度 Claude 3.5 Sonnet 处理高情商商品导购多轮对话，结合轻量级模型快速识别买家砍价与犹豫意图；\n3. 自动化业务流：利用开源自动化工具 n8n 或 Make 搭建 Webhook 管道，当用户在前端咨询时自动查询 Shopify 库存，成单后即时推送至店主飞书/Telegram；\n4. 支付结算系统：接入 Stripe 周期性自动扣款，实现全流程无人值守运营。\n\n#### 4. 流量获客与盈利变现闭环\n1. 冷启动获客：深入出海卖家社群与独立站论坛，不直接推销软件，而是提供'免费帮店铺测试 7 天，挽回订单全归店主'的零风险方案；\n2. 转化留存：在首周用真实的挽回订单数据（平均每家店首周多赚 800~1500 美元）直接说服店主签约，首批 20 家客户转介绍率达 45%；\n3. 盈利数据：全团队仅 1 人运营，目前稳定服务 320 家付费客户，单月净利润突破 15 万元人民币，云端服务器与 API 成本不足 8000 元，净利润率超过 94%。\n\n#### 5. 普通人低门槛复制实操指南\n1. 严禁做'大而全的通用客服'：专挑'客单价高、退货率低、有现成商品库'的垂直赛道（如独立设计师首饰、户外骑行装备、定制手工品）；\n2. 不要从零造轮子写前端：熟练使用 Dify 或 n8n 开源低代码基座，3 天内就能搭好首个可跑通的原型；\n3. 核心是卖'算得过来账的生意增量'：跟老板谈合作不要讲复杂的 AI 架构，只讲'我能帮你把每晚白白跑掉的客户截留下来'，能帮客户赚钱的工具永远不愁付费。\n\n---\n\n## 🤖 全球 AI 与 Agent 前沿要点 (3-5条精选)\n\n### 📌 【AI Agent】Getting Smarter, Not Just Faster\n- **① 一句话内容摘要**：This event summary was created by Claude with light editing by Tim O’Reilly, based on a transcript of the event. On October 15, 2026, Tim O’Reilly hos\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【AI Agent】This Week in AI: Agents Rewrite the Rules\n- **① 一句话内容摘要**：AI agents dominated the news this week, from security exploits that unfolded in hours to new tools that let agents shop, manage transactions, and cond\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【AI Agent】Who Governs What an Agent Learns?\n- **① 一句话内容摘要**：The following article originally appeared on Tim O’Brien’s Medium blog and is being republished here with the author’s permission. I think we’re missi\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【AI Agent】Nvidia weighs playing the cosigner for Nscale’s AI data center in West Virginia\n- **① 一句话内容摘要**：When investors get nervous about AI spending, it helps to have the chipmaker that sells the chips offer to cosign the loan.\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【一人公司】Serbia just elected the world's brainiest parliament\n- **① 一句话内容摘要**：Comments\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【一人公司】Molly(Signal fork) has not been updated since 3 months and is vulnerable\n- **① 一句话内容摘要**：Comments\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【一人公司】We Took over ChatGPT Accounts\n- **① 一句话内容摘要**：Comments\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n---\n\n## 📰 过去 24 小时三大权威平台【要闻】全量清单（已去重）\n\n### 🇨🇳 【学习强国 · 头条新闻】（共 3 条）\n1. **学习卡丨“人不负青山，青山定不负人”** - *<p style=\"text-indent: 2em;\">生态环境是关系党的使命宗旨的重大政治问题，也是关系民生的重大社会问题。</p> <p style=\"text-indent: 2em;\">习近平总书记多次指出，必须站在中华民族永续发展根本大计的高度，尊重自然、顺应自然、保护自然，建设人与自然*\n2. **镜观·足迹｜呵护千山万水 擘画永续发展** - *<p style=\"text-indent: 2em;\">大美中国，江山如画。</p> <p style=\"text-indent: 2em;\">党的十八大以来，习近平总书记的考察足迹遍及神州大地。祁连山麓、坝上林海，秦岭深处、黄河之滨，总书记在大江奔涌处谋划千秋大计，在山川锦绣间擘画生态蓝图。一系*\n3. **学习手记 | “环境就是民生”** - *<p style=\"text-align: center;\"><img src=\"/mediafile/pic/BIG/20250605/17/9933949940602324585.jpg\" alt=\"\"></p> <p style=\"text-indent: 2em;\">6月5日是世界环境日，也*\n\n### 🌐 【参考消息 · 今日要闻】（共 3 条）\n1. **消息人士：日本修订“安保三文件” 欲将国防与经济增长挂钩** - *来源: 参考消息APP·今日要闻*\n2. **澳旅游局局长：“中国是我们领先的客源市场之一”** - *来源: 参考消息APP·今日要闻*\n3. **民调显示多数韩国受访者支持加强对华合作** - *来源: 参考消息APP·今日要闻*\n\n### 📈 【新浪财经 · 首页要闻】（共 3 条）\n1. **海通国际：美高梅中国第三季度业绩略胜预期** - *来源: 新浪财经APP·今日要闻*\n2. **大摩：潍柴动力维持“增持”评级 目标价46港元** - *来源: 新浪财经APP·今日要闻*\n3. **花旗：中信银行维持“买入”评级 目标价9.78港元** - *来源: 新浪财经APP·今日要闻*\n\n### 🎙️ 【喜马拉雅 · 10分钟新闻早餐】\n1. **喜马拉雅10分钟新闻早餐：全国多地气温骤降迎初冬，秋粮收购进度超四成，各地菜篮子供应量足价稳** - *今天清晨播音聚焦全国民生消费与天气变化，油价迎来年内新一轮微调，秋收储粮稳步推进，各地保障冬季供暖与蔬菜物流绿色通道畅通。*\n\n---\n\n## 🔗 权威来源与原文索引\n\n1. [AI Agent] [Getting Smarter, Not Just Faster]() - *O'Reilly AI*\n2. [AI Agent] [This Week in AI: Agents Rewrite the Rules]() - *O'Reilly AI*\n3. [AI Agent] [Who Governs What an Agent Learns?]() - *O'Reilly AI*\n4. [AI Agent] [Nvidia weighs playing the cosigner for Nscale’s AI data center in West Virginia]() - *TechCrunch AI*\n5. [一人公司] [Serbia just elected the world's brainiest parliament]() - *Indie Hackers*\n6. [一人公司] [Molly(Signal fork) has not been updated since 3 months and is vulnerable]() - *Indie Hackers*\n7. [一人公司] [We Took over ChatGPT Accounts]() - *Indie Hackers*\n8. [新浪财经] [海通国际：美高梅中国第三季度业绩略胜预期](https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqr3728895.shtml) - *新浪财经APP·今日要闻*\n9. [新浪财经] [大摩：潍柴动力维持“增持”评级 目标价46港元](https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqp7277896.shtml) - *新浪财经APP·今日要闻*\n10. [新浪财经] [花旗：中信银行维持“买入”评级 目标价9.78港元](https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqk4712435.shtml) - *新浪财经APP·今日要闻*\n11. [参考消息] [消息人士：日本修订“安保三文件” 欲将国防与经济增长挂钩]() - *参考消息APP·今日要闻*\n12. [参考消息] [澳旅游局局长：“中国是我们领先的客源市场之一”]() - *参考消息APP·今日要闻*\n13. [参考消息] [民调显示多数韩国受访者支持加强对华合作]() - *参考消息APP·今日要闻*\n14. [学习强国] [学习卡丨“人不负青山，青山定不负人”]() - *学习强国APP·重要新闻*\n15. [学习强国] [镜观·足迹｜呵护千山万水 擘画永续发展]() - *学习强国APP·重要新闻*\n16. [学习强国] [学习手记 | “环境就是民生”]() - *学习强国APP·重要新闻*\n17. [喜马拉雅新闻早餐] [喜马拉雅10分钟新闻早餐：全国多地气温骤降迎初冬，秋粮收购进度超四成，各地菜篮子供应量足价稳](https://www.ximalaya.com) - *喜马拉雅APP·新闻早餐*",
-    "audio_url": "audio/newscast_2026-10-31.mp3?v=1793482410",
-    "audio_duration": 882,
-    "audio_duration_str": "14:42",
-    "file_size_bytes": 3311856,
+    "markdown_content": "# 全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-10-31)\n\n> **发布日期**：2026-10-31 &nbsp;|&nbsp; **内容属性**：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报\n\n---\n\n## 💡 今日金句 (Quote of the Day)\n\n> ### 🌟 **「未来不属于只懂死记硬背代码的技术员，而是属于能看清真实世界具体痛点、指挥 AI 虚拟军队把事情解决到底的超级个体。」**\n\n---\n\n## 💰 一人公司搞钱案例深度拆解\n\n### 【本期课题】做微型'夜间促单智能客服'，个人单兵作战年入 180 万的完整 SOP 拆解\n\n#### 1. 业务切入场景与核心痛点\n许多中小型出海独立站与跨境电商卖家面临严重的夜间跑单痛点：因欧美买家与国内存在 8 到 12 小时时区差，海外买家在深夜浏览商品时常有尺寸、运费或材质疑问。由于无人即时答复，夜间加购后的放弃下单率高达 35% 以上；而雇佣三班倒人工客服每月单人成本高达 6000 到 8000 元，对微型卖家负担沉重且难以保证应答质量。\n\n#### 2. 商业模式与产品极简设计\n一位独立开发者针对这一极细分痛点，开发了一款 7x24 小时不知疲倦的'夜间促单智能体'。产品形态极简，不开发庞大复杂的管理后台，仅以轻量插件形式嵌入卖家店铺。该智能体能通读全店几百款商品手册与退货条款，支持多语种流利交流；更关键的是具备'犹豫心理识别'能力，当买家在结算页面停留超过 90 秒时，主动推送定制优惠券促成支付。采用纯月度订阅制：基础版 299 元/月，进阶版 699 元/月，提供 7 天免费试用并在试用期承诺为卖家挽回订单。\n\n#### 3. 全套 AI 工具链与自动化 SOP\n1. 知识库与数据层：利用开源框架 FastGPT / Dify 搭建专属知识库，一键导入商品详情页链接与常见售后问答，实现零幻觉检索；\n2. 大模型与情绪判断层：调度 Claude 3.5 Sonnet 处理高情商商品导购多轮对话，结合轻量级模型快速识别买家砍价与犹豫意图；\n3. 自动化业务流：利用开源自动化工具 n8n 或 Make 搭建 Webhook 管道，当用户在前端咨询时自动查询 Shopify 库存，成单后即时推送至店主飞书/Telegram；\n4. 支付结算系统：接入 Stripe 周期性自动扣款，实现全流程无人值守运营。\n\n#### 4. 流量获客与盈利变现闭环\n1. 冷启动获客：深入出海卖家社群与独立站论坛，不直接推销软件，而是提供'免费帮店铺测试 7 天，挽回订单全归店主'的零风险方案；\n2. 转化留存：在首周用真实的挽回订单数据（平均每家店首周多赚 800~1500 美元）直接说服店主签约，首批 20 家客户转介绍率达 45%；\n3. 盈利数据：全团队仅 1 人运营，目前稳定服务 320 家付费客户，单月净利润突破 15 万元人民币，云端服务器与 API 成本不足 8000 元，净利润率超过 94%。\n\n#### 5. 普通人低门槛复制实操指南\n1. 严禁做'大而全的通用客服'：专挑'客单价高、退货率低、有现成商品库'的垂直赛道（如独立设计师首饰、户外骑行装备、定制手工品）；\n2. 不要从零造轮子写前端：熟练使用 Dify 或 n8n 开源低代码基座，3 天内就能搭好首个可跑通的原型；\n3. 核心是卖'算得过来账的生意增量'：跟老板谈合作不要讲复杂的 AI 架构，只讲'我能帮你把每晚白白跑掉的客户截留下来'，能帮客户赚钱的工具永远不愁付费。\n\n---\n\n## 🤖 全球 AI 与 Agent 前沿要点 (3-5条精选)\n\n### 📌 【AI Agent】Getting Smarter, Not Just Faster\n- **① 一句话内容摘要**：This event summary was created by Claude with light editing by Tim O’Reilly, based on a transcript of the event. On October 15, 2026, Tim O’Reilly hos\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【AI Agent】This Week in AI: Agents Rewrite the Rules\n- **① 一句话内容摘要**：AI agents dominated the news this week, from security exploits that unfolded in hours to new tools that let agents shop, manage transactions, and cond\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【AI Agent】Who Governs What an Agent Learns?\n- **① 一句话内容摘要**：The following article originally appeared on Tim O’Brien’s Medium blog and is being republished here with the author’s permission. I think we’re missi\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【AI Agent】Nvidia weighs playing the cosigner for Nscale’s AI data center in West Virginia\n- **① 一句话内容摘要**：When investors get nervous about AI spending, it helps to have the chipmaker that sells the chips offer to cosign the loan.\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【一人公司】Serbia just elected the world's brainiest parliament\n- **① 一句话内容摘要**：Comments\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【一人公司】Molly(Signal fork) has not been updated since 3 months and is vulnerable\n- **① 一句话内容摘要**：Comments\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n### 📌 【一人公司】We Took over ChatGPT Accounts\n- **① 一句话内容摘要**：Comments\n- **② 为什么值得关注**：前沿突破降低个体研发门槛，推动超级个体敏捷创业。\n\n---\n\n## 📰 过去 24 小时三大权威平台【要闻】全量清单（已去重）\n\n### 🇨🇳 【学习强国 · 头条新闻】（共 3 条）\n1. **学习卡丨“人不负青山，青山定不负人”** - *<p style=\"text-indent: 2em;\">生态环境是关系党的使命宗旨的重大政治问题，也是关系民生的重大社会问题。</p> <p style=\"text-indent: 2em;\">习近平总书记多次指出，必须站在中华民族永续发展根本大计的高度，尊重自然、顺应自然、保护自然，建设人与自然*\n2. **镜观·足迹｜呵护千山万水 擘画永续发展** - *<p style=\"text-indent: 2em;\">大美中国，江山如画。</p> <p style=\"text-indent: 2em;\">党的十八大以来，习近平总书记的考察足迹遍及神州大地。祁连山麓、坝上林海，秦岭深处、黄河之滨，总书记在大江奔涌处谋划千秋大计，在山川锦绣间擘画生态蓝图。一系*\n3. **学习手记 | “环境就是民生”** - *<p style=\"text-align: center;\"><img src=\"/mediafile/pic/BIG/20250605/17/9933949940602324585.jpg\" alt=\"\"></p> <p style=\"text-indent: 2em;\">6月5日是世界环境日，也*\n\n### 🌐 【参考消息 · 今日要闻】（共 3 条）\n1. **130名持马来西亚护照人员涉嫌网络诈骗在巴基斯坦被捕** - *来源: 参考消息APP·今日要闻*\n2. **《大道同行——孙中山诞辰160周年纪念图片展》在马来西亚开幕** - *来源: 参考消息APP·今日要闻*\n3. **消息人士：日本修订“安保三文件” 欲将国防与经济增长挂钩** - *来源: 参考消息APP·今日要闻*\n\n### 📈 【新浪财经 · 首页要闻】（共 3 条）\n1. **花旗：潍柴动力维持“买入”评级 目标价50港元** - *来源: 新浪财经APP·今日要闻*\n2. **花旗：渣打集团目标价升至230.8港元 上调盈利预测看好近期动能** - *来源: 新浪财经APP·今日要闻*\n3. **花旗：百威亚太维持“买入”评级 目标价8.7港元** - *来源: 新浪财经APP·今日要闻*\n\n### 🎙️ 【喜马拉雅 · 10分钟新闻早餐】\n1. **喜马拉雅10分钟新闻早餐：全国多地气温骤降迎初冬，秋粮收购进度超四成，各地菜篮子供应量足价稳** - *今天清晨播音聚焦全国民生消费与天气变化，油价迎来年内新一轮微调，秋收储粮稳步推进，各地保障冬季供暖与蔬菜物流绿色通道畅通。*\n\n---\n\n## 🔗 权威来源与原文索引\n\n1. [AI Agent] [Getting Smarter, Not Just Faster]() - *O'Reilly AI*\n2. [AI Agent] [This Week in AI: Agents Rewrite the Rules]() - *O'Reilly AI*\n3. [AI Agent] [Who Governs What an Agent Learns?]() - *O'Reilly AI*\n4. [AI Agent] [Nvidia weighs playing the cosigner for Nscale’s AI data center in West Virginia]() - *TechCrunch AI*\n5. [一人公司] [Serbia just elected the world's brainiest parliament]() - *Indie Hackers*\n6. [一人公司] [Molly(Signal fork) has not been updated since 3 months and is vulnerable]() - *Indie Hackers*\n7. [一人公司] [We Took over ChatGPT Accounts]() - *Indie Hackers*\n8. [新浪财经] [花旗：潍柴动力维持“买入”评级 目标价50港元](https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqk4723499.shtml) - *新浪财经APP·今日要闻*\n9. [新浪财经] [花旗：渣打集团目标价升至230.8港元 上调盈利预测看好近期动能](https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqk4723065.shtml) - *新浪财经APP·今日要闻*\n10. [新浪财经] [花旗：百威亚太维持“买入”评级 目标价8.7港元](https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqr3735321.shtml) - *新浪财经APP·今日要闻*\n11. [参考消息] [130名持马来西亚护照人员涉嫌网络诈骗在巴基斯坦被捕]() - *参考消息APP·今日要闻*\n12. [参考消息] [《大道同行——孙中山诞辰160周年纪念图片展》在马来西亚开幕]() - *参考消息APP·今日要闻*\n13. [参考消息] [消息人士：日本修订“安保三文件” 欲将国防与经济增长挂钩]() - *参考消息APP·今日要闻*\n14. [学习强国] [学习卡丨“人不负青山，青山定不负人”]() - *学习强国APP·重要新闻*\n15. [学习强国] [镜观·足迹｜呵护千山万水 擘画永续发展]() - *学习强国APP·重要新闻*\n16. [学习强国] [学习手记 | “环境就是民生”]() - *学习强国APP·重要新闻*\n17. [喜马拉雅新闻早餐] [喜马拉雅10分钟新闻早餐：全国多地气温骤降迎初冬，秋粮收购进度超四成，各地菜篮子供应量足价稳](https://www.ximalaya.com) - *喜马拉雅APP·新闻早餐*",
+    "audio_url": "audio/newscast_2026-10-31.mp3?v=1793483967",
+    "audio_duration": 889,
+    "audio_duration_str": "14:49",
+    "file_size_bytes": 3341952,
     "category_summary": {
       "今日金句": "未来不属于只懂死记硬背代码的技术员，而是属于能看清真实世界具体痛点、指挥 AI 虚拟军队把事情解决到底的超级个体。",
       "搞钱案例": "做微型'夜间促单智能客服'，个人单兵作战年入 180 万的完整 SOP 拆解",
@@ -63,37 +63,37 @@
         "url": ""
       },
       {
-        "title": "海通国际：美高梅中国第三季度业绩略胜预期",
+        "title": "花旗：潍柴动力维持“买入”评级 目标价50港元",
         "category": "新浪财经",
         "source_name": "新浪财经APP·今日要闻",
-        "url": "https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqr3728895.shtml"
+        "url": "https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqk4723499.shtml"
       },
       {
-        "title": "大摩：潍柴动力维持“增持”评级 目标价46港元",
+        "title": "花旗：渣打集团目标价升至230.8港元 上调盈利预测看好近期动能",
         "category": "新浪财经",
         "source_name": "新浪财经APP·今日要闻",
-        "url": "https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqp7277896.shtml"
+        "url": "https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqk4723065.shtml"
       },
       {
-        "title": "花旗：中信银行维持“买入”评级 目标价9.78港元",
+        "title": "花旗：百威亚太维持“买入”评级 目标价8.7港元",
         "category": "新浪财经",
         "source_name": "新浪财经APP·今日要闻",
-        "url": "https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqk4712435.shtml"
+        "url": "https://finance.sina.com.cn/stock/hkstock/hkgg/2026-10-31/doc-inixcsqr3735321.shtml"
+      },
+      {
+        "title": "130名持马来西亚护照人员涉嫌网络诈骗在巴基斯坦被捕",
+        "category": "参考消息",
+        "source_name": "参考消息APP·今日要闻",
+        "url": ""
+      },
+      {
+        "title": "《大道同行——孙中山诞辰160周年纪念图片展》在马来西亚开幕",
+        "category": "参考消息",
+        "source_name": "参考消息APP·今日要闻",
+        "url": ""
       },
       {
         "title": "消息人士：日本修订“安保三文件” 欲将国防与经济增长挂钩",
-        "category": "参考消息",
-        "source_name": "参考消息APP·今日要闻",
-        "url": ""
-      },
-      {
-        "title": "澳旅游局局长：“中国是我们领先的客源市场之一”",
-        "category": "参考消息",
-        "source_name": "参考消息APP·今日要闻",
-        "url": ""
-      },
-      {
-        "title": "民调显示多数韩国受访者支持加强对华合作",
         "category": "参考消息",
         "source_name": "参考消息APP·今日要闻",
         "url": ""
@@ -124,7 +124,7 @@
       }
     ],
     "status": "completed",
-    "created_at": "2026-10-31 21:33:30"
+    "created_at": "2026-10-31 21:59:27"
   },
   {
     "id": 20261030,
