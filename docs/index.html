@@ -370,9 +370,17 @@
       renderFlashes(report);
       renderSources(report.sources || []);
 
-      // 音频源挂载 (自动解析相对路径或绝对路径)
+      // 音频源挂载 (自动附加时间戳，彻底击穿手机端与浏览器强缓存)
       if (report.audio_url) {
-        audio.src = report.audio_url;
+        const cacheBuster = report.created_at ? encodeURIComponent(report.created_at) : Date.now();
+        const finalUrl = report.audio_url.includes('?v=') 
+          ? report.audio_url 
+          : `${report.audio_url}?v=${cacheBuster}`;
+        
+        if (audio.src !== finalUrl) {
+          audio.src = finalUrl;
+          audio.load();
+        }
       }
 
       setupMediaSession(report);
