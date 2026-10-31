@@ -113,9 +113,9 @@
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
         </span>
-        <span id="bannerText">每天 05:18 / 05:48 云端自动生成 · 今日播客已就绪</span>
+        <span id="bannerText">每天 06:18 / 06:48 云端自动生成 · 今日播客已就绪</span>
       </div>
-      <span class="text-[10px] text-slate-400 font-mono">云希 · 搞钱播客</span>
+      <span class="text-[10px] text-slate-400 font-mono">权威要闻 · 商业拆解</span>
     </div>
 
     <!-- 核心内容容器 -->
@@ -250,7 +250,7 @@
           </div>
           <div class="truncate">
             <div id="playerTitle" class="text-xs font-bold text-white truncate">每日调查播客</div>
-            <div id="playerSubtitle" class="text-[10px] text-slate-400 truncate">普通话高保真 · 科技早咖啡</div>
+            <div id="playerSubtitle" class="text-[10px] text-slate-400 truncate">普通话高保真 · 全球AI与权威要闻</div>
           </div>
         </div>
 
@@ -370,17 +370,12 @@
       renderFlashes(report);
       renderSources(report.sources || []);
 
-      // 音频源挂载 (自动附加时间戳，彻底击穿手机端与浏览器强缓存)
+      // 音频源挂载 (自动挂载音频直链，安全防护加载)
       if (report.audio_url) {
-        const cacheBuster = report.created_at ? encodeURIComponent(report.created_at) : Date.now();
-        const finalUrl = report.audio_url.includes('?v=') 
-          ? report.audio_url 
-          : `${report.audio_url}?v=${cacheBuster}`;
-        
-        if (audio.src !== finalUrl) {
-          audio.pause();
-          audio.src = finalUrl;
-          audio.currentTime = 0;
+        const audioSrc = report.audio_url;
+        // 只有当音频源变更时才重新赋值加载
+        if (!audio.src || !audio.src.includes(audioSrc.split('?')[0])) {
+          audio.src = audioSrc;
           audio.load();
         }
       }
@@ -507,9 +502,13 @@
 
     function togglePlay() {
       if (audio.paused) {
-        audio.play().catch(e => console.log('Play err:', e));
+        audio.play().then(() => updatePlayUI(true)).catch(err => {
+          console.error('播放失败:', err);
+          updatePlayUI(false);
+        });
       } else {
         audio.pause();
+        updatePlayUI(false);
       }
     }
 

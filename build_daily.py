@@ -94,7 +94,7 @@ async def build_today_report():
         json.dump(kept_reports, f, ensure_ascii=False, indent=2)
 
     # 自动清理 14 天之前的旧 MP3 文件
-    valid_audio_files = {Path(r["audio_url"]).name for r in kept_reports if "audio_url" in r}
+    valid_audio_files = {Path(r["audio_url"].split("?")[0]).name for r in kept_reports if "audio_url" in r}
     for mp3_file in DOCS_AUDIO_DIR.glob("*.mp3"):
         if mp3_file.name not in valid_audio_files:
             try:
