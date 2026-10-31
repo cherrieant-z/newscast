@@ -97,13 +97,11 @@ class TTSEngine:
         # 中文播客语速加标点停顿约每秒 3.7 字
         estimated_sec = int(char_count / 3.7)
         
-        # 若能从文件大小校验（Edge-TTS 默认音频约 48kbps，即 6KB/s）
+        # 优先从真实生成的 MP3 文件大小与码率计算真实精准时长（Edge-TTS 为 24kHz 48kbps，即 6000 字节/秒）
         if os.path.exists(file_path):
             file_size_bytes = os.path.getsize(file_path)
             if file_size_bytes > 50000:
-                duration_from_size = int(file_size_bytes / 6000)
-                # 两者综合校准
-                return max(duration_from_size, estimated_sec, 60)
+                return int(file_size_bytes / 6000)
 
         return max(estimated_sec, 60)
 
