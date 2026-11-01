@@ -195,76 +195,112 @@ class NewsSummarizer:
         构建口语化、无废话、全量逐条朗读的播报底稿。
         严格落实用户要求：
         1. 删去所有寒暄性质内容（无'端上咖啡'，无'我是老朋友云希'，直奔主题）。
-        2. 今日金句开篇。
-        3. 一人公司搞钱案例深度拆解（讲透模式、痛点、SOP、获客、利润）。
-        4. 全球 AI 与一人公司前沿要点（摘要 + 为什么值得关注）。
-        5. 学习强国头条新闻（逐条完整播报）。
-        6. 参考消息今日要闻（逐条完整播报）。
-        7. 新浪财经核心要闻（逐条完整播报）。
-        8. 喜马拉雅新闻早餐（今日未出则跳过）。
-        9. 不限时长，全量朗读。
+        2. 全程纯中文朗读，严禁出现任何英文单词或英文缩写。
+        3. 今日金句开篇。
+        4. 一人公司搞钱案例深度拆解（讲透模式、痛点、SOP标准实操流程、获客、利润）。
+        5. 全球人工智能与一人公司前沿要点（摘要 + 为什么值得关注）。
+        6. 学习强国头条新闻（逐条完整播报）。
+        7. 参考消息今日要闻（逐条完整播报）。
+        8. 新浪财经核心要闻（逐条完整播报）。
+        9. 喜马拉雅新闻早餐（今日未出则跳过）。
+        10. 不限时长，全量朗读。
         """
+        spoken_quote = quote.replace("AI", "人工智能")
+        spoken_lead = lead_title.replace("SOP", "标准实操流程").replace("AI", "人工智能")
+
+        # 将案例部分中的概念进行适度优化，保留业界通用的标准工具与品牌原名（如 Claude, Dify, n8n, Shopify 等）
+        clean_pain = case_pain.replace("7x24", "全天候24").replace("7*24", "全天候24")
+        clean_model = case_model.replace("7x24", "全天候24").replace("7*24", "全天候24")
+        
+        clean_stack = (
+            case_stack
+            .replace("AI", "人工智能")
+            .replace(chr(10), " ")
+        )
+        
+        clean_rev = (
+            case_rev
+            .replace("API", "接口调用")
+            .replace(chr(10), " ")
+        )
+        
+        clean_guide = (
+            case_guide
+            .replace("AI", "人工智能")
+            .replace(chr(10), " ")
+        )
+
         parts = [
-            f"这里是全球AI前沿与权威要闻播报。今天是{date_str}。直接进入今天的内容汇编。",
-            f"首先分享今天的今日金句：{quote}",
+            f"这里是全球人工智能前沿与权威要闻播报。今天是{date_str}。直接进入今天的内容汇编。",
+            f"首先分享今天的今日金句：{spoken_quote}",
             "这句话的核心在于，在智能体时代，技术本身的垄断已被打破，谁能深入具体的商业痛点、用工作流把琐碎执行全部自动化，谁就能构建自己的现金流护城河。"
         ]
 
         # 1. 一人公司搞钱案例深度拆解
         parts.extend([
-            f"接下来深度拆解今日主打一人公司搞钱案例：{lead_title}。",
-            f"第一部分，业务切入场景与用户痛点。{case_pain}",
-            f"第二部分，商业模式与极简产品设计。{case_model}",
-            f"第三部分，全套 AI 工具链与自动化操作流程。{case_stack.replace(chr(10), ' ')}",
-            f"第四部分，获客流量与变现路径。{case_rev.replace(chr(10), ' ')}",
-            f"第五部分，普通人可落地的实操建议。{case_guide.replace(chr(10), ' ')}"
+            f"接下来深度拆解今日主打一人公司搞钱案例：{spoken_lead}。",
+            f"第一部分，业务切入场景与用户痛点。{clean_pain}",
+            f"第二部分，商业模式与极简产品设计。{clean_model}",
+            f"第三部分，全套人工智能工具链与自动化操作流程。{clean_stack}",
+            f"第四部分，获客流量与变现路径。{clean_rev}",
+            f"第五部分，普通人可落地的实操建议。{clean_guide}"
         ])
 
-        # 2. 全球 AI 行业与一人公司前沿要点
-        parts.append("接下来播报今天全球 AI 行业与一人公司方向的重要动态：")
+        # 2. 全球人工智能行业与一人公司前沿要点
+        parts.append("接下来播报今天全球人工智能行业与一人公司方向的重要动态：")
         
         ai_items = collected_data.get("AI Agent", [])
         for i, item in enumerate(ai_items, 1):
+            title_spoken = item['title'].replace("AI", "人工智能").replace("Agent", "智能体")
+            summary_spoken = item.get('summary', '').replace("AI", "人工智能").replace("Agent", "智能体")
+            why_spoken = item.get('why_matter', '').replace("AI", "人工智能").replace("Agent", "智能体")
             parts.append(
-                f"第{i}条，AI智能体方向，{item['title']}。内容摘要：{item['summary']}。为什么值得关注：{item.get('why_matter', '')}"
+                f"第{i}条，人工智能智能体方向，{title_spoken}。内容摘要：{summary_spoken}。为什么值得关注：{why_spoken}"
             )
 
         opc_items = collected_data.get("一人公司", [])
         for i, item in enumerate(opc_items, 1):
+            title_spoken = item['title'].replace("AI", "人工智能").replace("OPC", "一人公司").replace("SaaS", "软件服务")
+            summary_spoken = item.get('summary', '').replace("AI", "人工智能").replace("OPC", "一人公司")
+            why_spoken = item.get('why_matter', '').replace("AI", "人工智能").replace("OPC", "一人公司")
             parts.append(
-                f"一人公司方向第{i}条，{item['title']}。内容摘要：{item['summary']}。为什么值得关注：{item.get('why_matter', '')}"
+                f"一人公司方向第{i}条，{title_spoken}。内容摘要：{summary_spoken}。为什么值得关注：{why_spoken}"
             )
 
         # 3. 学习强国 头条新闻（逐条完整播报）
         xuexi_items = collected_data.get("学习强国", [])
         if xuexi_items:
-            parts.append(f"接下来完整播报学习强国 APP 过去二十四小时头条新闻，共{len(xuexi_items)}条，逐条播报：")
+            parts.append(f"接下来完整播报学习强国客户端过去二十四小时头条新闻，共{len(xuexi_items)}条，逐条播报：")
             for i, it in enumerate(xuexi_items, 1):
-                parts.append(f"第{i}条，{it['title']}。{it.get('summary', '')}")
+                t_sp = it['title'].replace("AI", "人工智能")
+                s_sp = it.get('summary', '').replace("AI", "人工智能")
+                parts.append(f"第{i}条，{t_sp}。{s_sp}")
 
         # 4. 参考消息 今日要闻（逐条完整播报）
         cankao_items = collected_data.get("参考消息", [])
         if cankao_items:
-            parts.append(f"接下来完整播报参考消息 APP 过去二十四小时要闻，共{len(cankao_items)}条，逐条播报：")
+            parts.append(f"接下来完整播报参考消息客户端过去二十四小时要闻，共{len(cankao_items)}条，逐条播报：")
             for i, it in enumerate(cankao_items, 1):
-                parts.append(f"第{i}条，{it['title']}。")
+                t_sp = it['title'].replace("AI", "人工智能")
+                parts.append(f"第{i}条，{t_sp}。")
 
         # 5. 新浪财经 核心要闻（逐条完整播报）
         sina_items = collected_data.get("新浪财经", [])
         if sina_items:
-            parts.append(f"接下来完整播报新浪财经 APP 首页要闻板块，共{len(sina_items)}条，逐条播报：")
+            parts.append(f"接下来完整播报新浪财经客户端首页要闻板块，共{len(sina_items)}条，逐条播报：")
             for i, it in enumerate(sina_items, 1):
-                parts.append(f"第{i}条，{it['title']}。")
+                t_sp = it['title'].replace("PMI", "采购经理指数").replace("AI", "人工智能").replace("A股", "国内A股")
+                parts.append(f"第{i}条，{t_sp}。")
 
         # 6. 喜马拉雅 10分钟新闻早餐（如果当天有内容则播报）
         xm_items = collected_data.get("喜马拉雅新闻早餐", [])
         if xm_items:
-            parts.append("接下来播报喜马拉雅10分钟新闻早餐今日节目：")
+            parts.append("接下来播报喜马拉雅新闻早餐今日节目：")
             for it in xm_items:
                 parts.append(f"{it['title']}。{it.get('summary', '')}")
 
         # 结尾
-        parts.append(f"以上为{date_str}全球AI资讯、一人公司商业拆解与三大平台要闻完整播报。全文详细图文与来源索引已在屏幕呈现，感谢收听。")
+        parts.append(f"以上为{date_str}全球人工智能资讯、一人公司商业拆解与三大平台要闻完整播报。全文详细图文与来源索引已在屏幕呈现，感谢收听。")
 
         return "\n\n".join(parts)
 
@@ -280,7 +316,7 @@ class NewsSummarizer:
 4. **全球AI与一人公司要闻**：每条包含①一句话内容摘要（含来源/关键事实）；②为什么值得关注。
 5. **学习强国、参考消息、新浪财经**：必须完整逐条播报标题，已去重，不能省略。
 6. **喜马拉雅新闻早餐**：若无当天内容则自动跳过。
-7. **语言**：中文。
+7. **纯中文与音频要求**：全文主要采用中文，特别是语音播报稿（tts_script）必须全部使用地道中文，严禁出现任何英文单词或英文缩写（例如：AI一律写为人工智能，SOP写为标准实操流程，PMI写为采购经理指数，API写为接口，APP写为客户端，所有品牌与技术名词使用规范中文翻译），保证语音播报纯正流利。
 
 输出 JSON：
 {{

@@ -6,6 +6,89 @@ from typing import Tuple
 import edge_tts
 from app.config import settings, STORAGE_DIR
 
+def _make_en_pattern(word: str) -> str:
+    # 采用前后零宽断言，确保即使紧贴中文字符（如 全球AI、10月PMI为）也能精准匹配
+    escaped = re.escape(word)
+    return rf'(?i)(?<![a-zA-Z]){escaped}(?![a-zA-Z])'
+
+# 英文缩写与特定概念中英对照转换词典（注意分寸：只转换念字母别扭的缩写与宏观概念，知名工具与模型名称如 Claude、OpenAI、Dify、Shopify 完整保留原汁原味）
+ENGLISH_TO_CHINESE_MAP = [
+    # 完整通用概念
+    ('One Person Company', '一人公司'),
+    ('Quote of the Day', '今日金句'),
+    ('Computer Use', '计算机控制操作'),
+    ('Open Source', '开源技术'),
+    ('AI Agent', '人工智能智能体'),
+    ('AI Agents', '人工智能智能体'),
+
+    # 宏观经济与金融商业缩写（听众听英文缩写费解，转换为规范中文）
+    ('PMI', '采购经理指数'),
+    ('GDP', '国内生产总值'),
+    ('CPI', '居民消费价格指数'),
+    ('PPI', '工业生产者出厂价格指数'),
+    ('IPO', '首次公开募股'),
+    ('CEO', '首席执行官'),
+    ('CTO', '首席技术官'),
+    ('CFO', '首席财务官'),
+    ('COO', '首席运营官'),
+    ('FED', '美联储'),
+    ('Fed', '美联储'),
+    ('SEC', '美国证券交易委员会'),
+    ('OPEC', '石油输出国组织'),
+    ('WTO', '世界贸易组织'),
+    ('WHO', '世界卫生组织'),
+    ('IMF', '国际货币基金组织'),
+    ('NATO', '北约'),
+    ('EVs', '电动汽车'),
+    ('EV', '电动汽车'),
+    ('ARR', '年度经常性收入'),
+    ('MRR', '月度经常性收入'),
+    ('GMV', '成交总额'),
+    ('ROI', '投资回报率'),
+    ('DAU', '日活跃用户数'),
+    ('MAU', '月活跃用户数'),
+
+    # 常见行业通用缩写（避免朗读逐字母拼读产生违和感）
+    ('AI', '人工智能'),
+    ('AGI', '通用人工智能'),
+    ('Agent', '智能体'),
+    ('Agents', '智能体'),
+    ('SOP', '标准实操流程'),
+    ('APIs', '应用程序接口'),
+    ('API', '接口'),
+    ('SaaS', '软件服务'),
+    ('PaaS', '平台服务'),
+    ('IaaS', '基础设施服务'),
+    ('OPC', '一人公司'),
+    ('LLMs', '大语言模型'),
+    ('LLM', '大语言模型'),
+    ('Prompt', '提示词'),
+    ('Prompts', '提示词'),
+    ('Tokens', '字符单元'),
+    ('Token', '字符单元'),
+    ('Apps', '客户端应用'),
+    ('App', '客户端'),
+    ('APP', '客户端'),
+    ('GPUs', '图形算力芯片'),
+    ('GPU', '图形算力芯片'),
+    ('CPUs', '中央处理器'),
+    ('CPU', '中央处理器'),
+    ('PC', '电脑'),
+    ('OS', '操作系统'),
+    ('UI', '用户界面'),
+    ('UX', '交互体验'),
+    ('WiFi', '无线网络'),
+    ('Wi-Fi', '无线网络'),
+    ('5G', '五代移动通信'),
+    ('4G', '四代移动通信'),
+    ('B2B', '企业端业务'),
+    ('B2C', '消费者业务'),
+    ('A股', '国内A股'),
+    ('B站', '哔哩哔哩'),
+]
+
+COMPILED_PATTERNS = [(re.compile(_make_en_pattern(word)), repl) for word, repl in ENGLISH_TO_CHINESE_MAP]
+
 class TTSEngine:
     """
     负责将新闻底稿转化为高拟真度普通话语音 MP3 文件。
@@ -68,22 +151,28 @@ class TTSEngine:
     def _optimize_text_for_podcast(self, text: str) -> str:
         """
         为播客式朗读优化文本：
-        1. 移除 Markdown 杂音标记（星号、方括号、井号、反引号等）
-        2. 移除裸 URL 与英文技术缩写后的杂质
+        1. 移除 Markdown 杂音标记（星号、方括号、井号、反引号等）与 URL
+        2. 将别扭的缩写与宏观概念（如 PMI、AI、SOP、API 等）转换为地道中文，知名工具模型名称（如 Claude, Shopify, Dify 等）自然保留
         3. 优化断句标点，让长句自然分段，产生如主播呼吸般的生活感停顿
         """
         t = text
-        # 移除 Markdown 格式字符
-        t = re.sub(r'[*#_`~>\[\]]', '', t)
+        # 1. 移除 Markdown 格式字符与链接
         t = re.sub(r'https?://\S+', '', t)
+        t = re.sub(r'&nbsp;?', ' ', t)
+        t = re.sub(r'[*#_`~>\[\]\(\)]', '', t)
         
-        # 将连续英文或过于紧凑的逗号保留为自然停顿
-        # 将冒号适度替换为逗号或语气自然停顿
-        t = t.replace("：", "，").replace(":", "，")
+        # 2. 预处理常见含数字与英文字符的表达
+        t = re.sub(r'(?i)7\s*[x*×]\s*24\s*小时?', '全天候24小时', t)
         
-        # 规整多余空白与换行
+        # 3. 批量缩写与概念精准转换（知名品牌与工具如 Claude, OpenAI, Dify, Shopify 适度保留原汁原味）
+        for pattern, repl in COMPILED_PATTERNS:
+            t = pattern.sub(repl, t)
+
+        # 4. 将冒号转换为停顿逗号，优化自然分句停顿
+        t = t.replace("：", "，").replace(":", "，").replace(";", "；")
+        
+        # 5. 规整多余空白与换行
         lines = [line.strip() for line in t.split("\n") if line.strip()]
-        # 段落之间保留自然空行与标点
         cleaned = "\n\n".join(lines)
         return cleaned
 
