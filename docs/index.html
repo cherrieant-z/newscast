@@ -160,7 +160,7 @@
         <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
           <div class="text-xs text-slate-400 flex items-center gap-1">
             <i data-lucide="headphones" class="w-3.5 h-3.5 text-sky-400"></i>
-            云希 · 清晨闲聊风复盘播客
+            高保真普通话 · 商业深度拆解与权威要闻
           </div>
           <button id="btnPlayMain" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:brightness-110 active:scale-95 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all">
             <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
@@ -595,7 +595,7 @@
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: report.lead_title || report.title,
-          artist: '每日深度调查与科技前沿播客 (云希)',
+          artist: '每日商业深度拆解与权威要闻播报',
           album: `NewsCast · ${report.date_str}`,
           artwork: [
             { src: './static/icons/icon.svg', sizes: '512x512', type: 'image/svg+xml' }
