@@ -287,7 +287,8 @@ class NewsSummarizer:
         风格要点：口语化开场、案例故事化、每条新闻配一句“人话解读”、结尾给一个可动手的小建议。
         全程纯中文，术语大白话化，知名品牌与工具原名保留。
         """
-        spoken_quote = safe_ai_replace(quote)
+        # 金句末尾自带的句号先剥掉，避免与模板句号拼成「。。」双句号
+        spoken_quote = safe_ai_replace(quote).strip().rstrip("。！？!?；;，,、 ")
         spoken_lead = safe_ai_replace(lead_title.replace("SOP", "标准实操流程"))
 
         # 案例正文做适度口语化清理，保留 Claude / Dify / n8n / Shopify 等业界通称

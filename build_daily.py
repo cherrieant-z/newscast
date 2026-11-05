@@ -165,9 +165,14 @@ async def build_today_report():
     # 过滤掉同日期的旧记录
     existing_reports = [r for r in existing_reports if r.get("date_str") != date_str]
 
-    # 提取今日金句
-    quote_match = re.search(r'🌟\s*「([^」]+)」', markdown_content)
-    quote = quote_match.group(1) if quote_match else "未来属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。"
+    # 提取今日金句（正文里是 `🌟 **「…」**` 格式，需跳过加粗符号等再匹配）
+    quote_match = re.search(r'🌟[^「]*「([^」]+)」', markdown_content)
+    # 兜底优先用 summarizer 已算好的正确金句，避免正则失配时退回到写死的固定句
+    quote = (
+        quote_match.group(1)
+        if quote_match
+        else ((cat_summary or {}).get("今日金句") or "未来属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。")
+    )
 
     # 生成案例卡片 HTML
     case_html = build_case_html(markdown_content)
