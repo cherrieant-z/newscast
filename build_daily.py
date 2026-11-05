@@ -4,6 +4,7 @@ import json
 import shutil
 import asyncio
 import datetime
+import email.utils
 from pathlib import Path
 from app.collector import collector
 from app.summarizer import summarizer
@@ -19,6 +20,76 @@ DOCS_STATIC_DIR = DOCS_DIR / "static"
 DOCS_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 (DOCS_STATIC_DIR / "icons").mkdir(parents=True, exist_ok=True)
+
+def _xml_escape(s: str) -> str:
+    """转义 XML 特殊字符，保证 RSS 合法"""
+    if not s:
+        return ""
+    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+             .replace('"', "&quot;").replace("'", "&apos;"))
+
+
+def _strip_html_text(text: str) -> str:
+    """把 Markdown/HTML 内容压成纯文本，用于播客描述"""
+    if not text:
+        return ""
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'!\[[^\]]*\]\([^)]*\)', ' ', text)
+    text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
+    text = re.sub(r'[#*_`>|]', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def write_podcast_xml(reports: list) -> None:
+    """
+    生成播客订阅 RSS（podcast.xml），可订阅到 Apple Podcasts / 小宇宙 / 喜马拉雅。
+    音频 enclosure 用绝对 URL，方便播客 App 直接下载。
+    """
+    base_url = os.environ.get("PODCAST_BASE_URL", "https://cherrieant-z.github.io/newscast/").rstrip("/") + "/"
+    icon_url = base_url + "static/icons/icon.svg"
+
+    items = []
+    for r in reports:
+        audio_rel = r.get("audio_url", "").split("?")[0]
+        audio_abs = base_url + audio_rel.lstrip("/")
+        title = r.get("title", "")
+        desc = _strip_html_text(r.get("markdown_content", ""))[:400]
+        pub = r.get("created_at", "")
+        try:
+            pub_rfc = email.utils.format_datetime(datetime.datetime.strptime(pub, "%Y-%m-%d %H:%M:%S"))
+        except Exception:
+            pub_rfc = email.utils.format_datetime(datetime.datetime.utcnow())
+        guid = r.get("date_str", "")
+        dur = r.get("audio_duration", 0) or 0
+        size = r.get("file_size_bytes", 0) or 0
+        items.append(
+            f"""    <item>\n      <title>{_xml_escape(title)}</title>\n      <description>{_xml_escape(desc)}</description>\n      <enclosure url="{_xml_escape(audio_abs)}" length="{size}" type="audio/mpeg"/>\n      <guid isPermaLink="false">{_xml_escape(guid)}</guid>\n      <pubDate>{pub_rfc}</pubDate>\n      <itunes:duration>{dur}</itunes:duration>\n    </item>"""
+        )
+
+    rss = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel>
+  <title>搞钱情报 · 每日 AI 与一人公司早报</title>
+  <link>{base_url}</link>
+  <description>每天早晨，用大白话给你讲全球 AI 动态、一人公司搞钱案例与权威要闻，助力你迅速搞钱。</description>
+  <language>zh-cn</language>
+  <itunes:author>搞钱情报</itunes:author>
+  <itunes:explicit>false</itunes:explicit>
+  <itunes:image href="{icon_url}"/>
+  <itunes:category text="Technology"/>
+  <image>
+    <url>{icon_url}</url>
+    <title>搞钱情报</title>
+    <link>{base_url}</link>
+  </image>
+{chr(10).join(items)}
+</channel>
+</rss>
+"""
+    (DOCS_DIR / "podcast.xml").write_text(rss, encoding="utf-8")
+    print(f"  播客 RSS 已生成: {DOCS_DIR / 'podcast.xml'}，共 {len(items)} 期")
+
 
 def build_case_html(md_text: str) -> str:
     m = re.search(r'## 💰 一人公司搞钱案例深度拆解\s+### 【本期课题】(.*?)(?=---\s*\n## |\n## 🤖|$)', md_text, re.DOTALL)
@@ -138,6 +209,10 @@ async def build_today_report():
                 print(f"  已清理超期历史音频: {mp3_file.name}")
             except Exception:
                 pass
+
+    # 生成播客订阅 RSS（podcast.xml），支持订阅到 Apple Podcasts / 小宇宙 / 喜马拉雅
+    print("\n[5/5] 正在生成播客订阅 RSS (podcast.xml)...")
+    write_podcast_xml(kept_reports)
 
     # 同步静态前端与 PWA 资源到 docs/
     sync_static_assets()

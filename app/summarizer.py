@@ -80,6 +80,34 @@ def safe_ai_replace(text: str) -> str:
         return ""
     return re.sub(r'(?i)(?<![a-zA-Z])AI(?![a-zA-Z])', '人工智能', text)
 
+
+def plain_talk_guide(category: str, idx: int) -> str:
+    """给真实新闻配一句“人话解读”，只给理解角度、不编造新闻事实"""
+    guides = {
+        "AI Agent": [
+            "说人话就是，机器能替我们干的重复活儿，越来越多了。",
+            "对普通人来说，重点是留意它背后有没有你能上手的新机会。",
+            "它最大的意义，是让一个人能撬动过去一整个团队才做得成的事。",
+        ],
+        "一人公司": [
+            "这条的关键不在技术多牛，而在里面藏着普通人能照抄的赚钱路子。",
+            "一个人就能把它跑起来，说明创业门槛正在悄悄变低。",
+            "对想搞钱的你来说，值得琢磨的是它怎么获客、怎么收钱。",
+        ],
+    }
+    pool = guides.get(category, ["值得你留个心。"])
+    return pool[idx % len(pool)]
+
+
+def today_action(has_ai: bool, has_opc: bool) -> str:
+    """结尾给一个今天就能动手的小建议"""
+    if has_opc:
+        return "挑今天提到的一条搞钱路子，问自己一句：我能不能用更低的成本，先做个最小版本试试看？"
+    if has_ai:
+        return "挑今天最让你心动的一条 AI 动态，花三分钟搜一下原文，想一想它能不能用在你手头正在做的事上。"
+    return "今天先记住一句金句，把它写进手机备忘录，睡前再看一眼。"
+
+
 class NewsSummarizer:
     """
     负责将多源资讯合成为：
@@ -179,14 +207,14 @@ class NewsSummarizer:
 
         # 展开 AI Agent & 一人公司
         for cat in ["AI Agent", "一人公司"]:
-            for it in collected_data.get(cat, []):
+            for idx, it in enumerate(collected_data.get(cat, [])):
                 why = it.get('why_matter', '').strip()
                 if not why:
-                    why = "前沿突破显著降低了个体开发者的研发门槛，推动超级个体敏捷创业与业务闭环。"
+                    why = plain_talk_guide(cat, idx)
                 md_lines.extend([
                     f"### 📌 【{cat}】{it['title']}",
                     f"- **① 一句话内容摘要**：{it.get('summary', it['title'])}",
-                    f"- **② 为什么值得关注**：{why}",
+                    f"- **② 人话解读**：{why}",
                     ""
                 ])
 
@@ -255,113 +283,98 @@ class NewsSummarizer:
         collected_data: Dict[str, List[Dict[str, Any]]]
     ) -> str:
         """
-        构建口语化、无废话、全量逐条朗读的播报底稿。
-        严格落实用户要求：
-        1. 删去所有寒暄性质内容（无'端上咖啡'，无'我是老朋友云希'，直奔主题）。
-        2. 全程纯中文朗读，避免别扭死板的拼读字母，知名工具和品牌原汁原味保留。
-        3. 今日金句开篇。
-        4. 一人公司搞钱案例深度拆解（讲透模式、痛点、SOP标准实操流程、获客、利润）。
-        5. 全球人工智能与一人公司前沿要点（摘要 + 为什么值得关注）。
-        6. 学习强国头条新闻（逐条完整播报）。
-        7. 参考消息今日要闻（逐条完整播报）。
-        8. 新浪财经核心要闻（逐条完整播报）。
-        9. 喜马拉雅新闻早餐（今日未出则跳过）。
-        10. 不限时长，全量朗读。
+        构建轻松有趣、技术小白也能听懂的播报底稿。
+        风格要点：口语化开场、案例故事化、每条新闻配一句“人话解读”、结尾给一个可动手的小建议。
+        全程纯中文，术语大白话化，知名品牌与工具原名保留。
         """
         spoken_quote = safe_ai_replace(quote)
         spoken_lead = safe_ai_replace(lead_title.replace("SOP", "标准实操流程"))
 
-        # 将案例部分中的概念进行适度优化，保留业界通用的标准工具与品牌原名（如 Claude, Dify, n8n, Shopify 等）
+        # 案例正文做适度口语化清理，保留 Claude / Dify / n8n / Shopify 等业界通称
         clean_pain = case_pain.replace("7x24", "全天候24").replace("7*24", "全天候24")
         clean_model = case_model.replace("7x24", "全天候24").replace("7*24", "全天候24")
-        
         clean_stack = safe_ai_replace(case_stack).replace(chr(10), " ")
         clean_rev = case_rev.replace("API", "接口调用").replace(chr(10), " ")
         clean_guide = safe_ai_replace(case_guide).replace(chr(10), " ")
 
+        ai_items = collected_data.get("AI Agent", [])
+        opc_items = collected_data.get("一人公司", [])
+
         parts = [
-            f"这里是全球人工智能前沿与权威要闻播报。今天是{date_str}。直接进入今天的内容汇编。",
-            f"首先分享今天的今日金句：{spoken_quote}",
-            "这句话的核心在于，在智能体时代，技术本身的垄断已被打破，谁能深入具体的商业痛点、用工作流把琐碎执行全部自动化，谁就能构建自己的现金流护城河。"
+            f"早上好，欢迎收听今天的搞钱情报。我已经把全球 AI 圈和一人公司圈里，最值得看的几件事，翻译成了大白话，咱们直接开始。",
+            f"先送你今天的一句话：{spoken_quote}。这句话放在搞钱这件事上，特别应景。",
         ]
 
-        # 1. 一人公司搞钱案例深度拆解
+        # 1. 一人公司搞钱案例：故事化五段
         parts.extend([
-            f"接下来深度拆解今日主打一人公司搞钱案例：{spoken_lead}。",
-            f"第一部分，业务切入场景与用户痛点。{clean_pain}",
-            f"第二部分，商业模式与极简产品设计。{clean_model}",
-            f"第三部分，全套人工智能工具链与自动化操作流程。{clean_stack}",
-            f"第四部分，获客流量与变现路径。{clean_rev}",
-            f"第五部分，普通人可落地的实操建议。{clean_guide}"
+            f"接下来，聊一个今天主推的一人公司案例：{spoken_lead}。别急着走，我把它拆成五段讲给你听。",
+            f"第一，它解决了什么让人头疼的问题？{clean_pain}",
+            f"第二，它是怎么赚钱的？{clean_model}",
+            f"第三，它用了哪些工具？放心，都不贵。{clean_stack}",
+            f"第四，它到底赚到了多少？{clean_rev}",
+            f"第五，普通人怎么抄作业？{clean_guide}",
         ])
 
-        # 2. 全球人工智能行业与一人公司前沿要点
-        parts.append("接下来播报今天全球人工智能行业与一人公司方向的重要动态：")
-        
-        ai_items = collected_data.get("AI Agent", [])
-        for i, item in enumerate(ai_items, 1):
-            title_spoken = safe_ai_replace(item['title']).replace("Agent", "智能体")
-            summary_spoken = safe_ai_replace(item.get('summary', '')).replace("Agent", "智能体")
-            
-            # 严格防空：确保“为什么值得关注”后面必须有实质性语音内容
-            why = item.get('why_matter', '').strip()
-            if not why:
-                why = "该突破大幅降低了个体开发者的研发门槛，为超级个体搭建闭环变现业务提供了高性价比的技术底座。"
-            why_spoken = safe_ai_replace(why).replace("Agent", "智能体")
-            
-            parts.append(
-                f"第{i}条，人工智能智能体方向，{title_spoken}。内容摘要：{summary_spoken}。为什么值得关注：{why_spoken}。"
-            )
+        # 2. 全球 AI 动态（真实抓取，配人话解读）
+        if ai_items:
+            parts.append("好，接下来是过去 24 小时，AI 圈最值得你留意的几条动态。")
+            for i, item in enumerate(ai_items, 1):
+                title_spoken = safe_ai_replace(item['title']).replace("Agent", "智能体")
+                summary_spoken = safe_ai_replace(item.get('summary', '')).replace("Agent", "智能体")
+                if item.get('is_fallback'):
+                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}")
+                else:
+                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}。{plain_talk_guide('AI Agent', i - 1)}")
+        else:
+            parts.append("今天 AI 圈的实时动态暂时没抓到，咱们先跳过，不影响后面内容。")
 
-        opc_items = collected_data.get("一人公司", [])
-        for i, item in enumerate(opc_items, 1):
-            title_spoken = safe_ai_replace(item['title']).replace("OPC", "一人公司").replace("SaaS", "软件服务")
-            summary_spoken = safe_ai_replace(item.get('summary', '')).replace("OPC", "一人公司")
-            
-            # 严格防空：确保“为什么值得关注”后面必须有实质性语音内容
-            why = item.get('why_matter', '').strip()
-            if not why:
-                why = "该商业模式验证了极小切口垂直痛点的强大变现能力，为个人单兵创业提供了可直接复制的现金流范式。"
-            why_spoken = safe_ai_replace(why).replace("OPC", "一人公司")
-            
-            parts.append(
-                f"一人公司方向第{i}条，{title_spoken}。内容摘要：{summary_spoken}。为什么值得关注：{why_spoken}。"
-            )
+        # 3. 一人公司 / 独立开发者动态
+        if opc_items:
+            parts.append("再来看一人公司和独立开发者圈子的动向，这里往往藏着普通人能抄的近路。")
+            for i, item in enumerate(opc_items, 1):
+                title_spoken = safe_ai_replace(item['title']).replace("OPC", "一人公司").replace("SaaS", "软件服务")
+                summary_spoken = safe_ai_replace(item.get('summary', '')).replace("OPC", "一人公司")
+                if item.get('is_fallback'):
+                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}")
+                else:
+                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}。{plain_talk_guide('一人公司', i - 1)}")
 
-        # 3. 学习强国 头条新闻（逐条完整播报）
+        # 4. 学习强国 / 权威国内要闻
         xuexi_items = collected_data.get("学习强国", [])
         if xuexi_items:
-            parts.append(f"接下来完整播报学习强国客户端过去二十四小时头条新闻，共{len(xuexi_items)}条，逐条播报：")
+            parts.append(f"国内权威要闻方面，今天共有 {len(xuexi_items)} 条，逐条给你过一遍：")
             for i, it in enumerate(xuexi_items, 1):
                 t_sp = safe_ai_replace(it['title'])
-                s_sp = safe_ai_replace(it.get('summary', ''))
-                parts.append(f"第{i}条，{t_sp}。{s_sp}")
+                parts.append(f"第{i}条，{t_sp}。")
+        else:
+            parts.append("国内权威要闻今天暂未获取到，咱们跳过这一段。")
 
-        # 4. 参考消息 今日要闻（逐条完整播报）
+        # 5. 参考消息 国际要闻
         cankao_items = collected_data.get("参考消息", [])
         if cankao_items:
-            parts.append(f"接下来完整播报参考消息客户端过去二十四小时要闻，共{len(cankao_items)}条，逐条播报：")
+            parts.append(f"国际方面，参考消息今天有 {len(cankao_items)} 条要闻，逐条过：")
             for i, it in enumerate(cankao_items, 1):
                 t_sp = safe_ai_replace(it['title'])
                 parts.append(f"第{i}条，{t_sp}。")
 
-        # 5. 新浪财经 核心要闻（逐条完整播报）
+        # 6. 新浪财经 要闻
         sina_items = collected_data.get("新浪财经", [])
         if sina_items:
-            parts.append(f"接下来完整播报新浪财经客户端首页要闻板块，共{len(sina_items)}条，逐条播报：")
+            parts.append(f"财经方面，新浪财经今天有 {len(sina_items)} 条要闻，捡重点的几条：")
             for i, it in enumerate(sina_items, 1):
                 t_sp = safe_ai_replace(it['title']).replace("PMI", "采购经理指数").replace("A股", "国内A股")
                 parts.append(f"第{i}条，{t_sp}。")
 
-        # 6. 喜马拉雅 10分钟新闻早餐（如果当天有内容则播报）
+        # 7. 喜马拉雅 10分钟新闻早餐
         xm_items = collected_data.get("喜马拉雅新闻早餐", [])
         if xm_items:
-            parts.append("接下来播报喜马拉雅新闻早餐今日节目：")
+            parts.append("另外，喜马拉雅的十分钟新闻早餐今天更新了：")
             for it in xm_items:
                 parts.append(f"{it['title']}。{it.get('summary', '')}")
 
-        # 结尾
-        parts.append(f"以上为{date_str}全球人工智能资讯、一人公司商业拆解与三大平台要闻完整播报。全文详细图文与来源索引已在屏幕呈现，感谢收听。")
+        # 8. 结尾：给一个今天就能动手的小建议
+        parts.append(f"以上就是今天的全部内容。最后送你一个可以立刻动手的小建议：{today_action(bool(ai_items), bool(opc_items))}")
+        parts.append("明天同一时间，不见不散。")
 
         return "\n\n".join(parts)
 
