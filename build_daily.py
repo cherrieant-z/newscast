@@ -20,6 +20,38 @@ DOCS_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 (DOCS_STATIC_DIR / "icons").mkdir(parents=True, exist_ok=True)
 
+def build_case_html(md_text: str) -> str:
+    m = re.search(r'## 💰 一人公司搞钱案例深度拆解\s+### 【本期课题】(.*?)(?=---\s*\n## |\n## 🤖|$)', md_text, re.DOTALL)
+    if not m:
+        return ""
+    text = m.group(1).strip()
+    sections = re.split(r'\n####\s*', text)
+    cards = []
+    badges = [
+        ('bg-sky-500/20 text-sky-300 border-sky-500/40', '痛点洞察'),
+        ('bg-emerald-500/20 text-emerald-300 border-emerald-500/40', '商业模式'),
+        ('bg-purple-500/20 text-purple-300 border-purple-500/40', '工具链 SOP'),
+        ('bg-amber-500/20 text-amber-300 border-amber-500/40', '变现闭环'),
+        ('bg-rose-500/20 text-rose-300 border-rose-500/40', '实操建议')
+    ]
+    for i, sec in enumerate(sections[1:]):
+        lines = sec.strip().split('\n', 1)
+        title = lines[0].strip()
+        body = lines[1].strip() if len(lines) > 1 else ''
+        badge_style, badge_name = badges[i] if i < len(badges) else ('bg-slate-700 text-slate-300 border-slate-600', '拆解')
+        body_html = '<br>'.join(line.strip() for line in body.split('\n') if line.strip())
+        cards.append(f'''<div class="rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm">
+  <div class="flex items-center justify-between gap-2">
+    <h4 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5 leading-snug">
+      <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+      {title}
+    </h4>
+    <span class="text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium {badge_style}">{badge_name}</span>
+  </div>
+  <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">{body_html}</p>
+</div>''')
+    return '\n'.join(cards)
+
 async def build_today_report():
     # 获取北京时间（UTC+8）当前日期
     utc_now = datetime.datetime.now(datetime.timezone.utc)
@@ -66,6 +98,9 @@ async def build_today_report():
     quote_match = re.search(r'🌟\s*「([^」]+)」', markdown_content)
     quote = quote_match.group(1) if quote_match else "未来属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。"
 
+    # 生成案例卡片 HTML
+    case_html = build_case_html(markdown_content)
+
     # 插入今日新记录到首位
     new_record = {
         "id": int(cst_now.strftime("%Y%m%d")),
@@ -74,6 +109,7 @@ async def build_today_report():
         "lead_title": lead_title,
         "quote_of_the_day": quote,
         "summary_text": tts_script[:300] + "...",
+        "case_html": case_html,
         "markdown_content": markdown_content,
         "audio_url": f"audio/{audio_filename}?v={int(cst_now.timestamp())}",
         "audio_duration": duration_sec,
