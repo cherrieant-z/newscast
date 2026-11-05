@@ -100,6 +100,7 @@
       <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="CASE">💰 搞钱案例拆解</button>
       <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="AI">🤖 AI Agent</button>
       <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="OPC">🚀 一人公司(OPC)</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="NEWS">🇨🇳 权威要闻</button>
     </div>
   </nav>
 
@@ -345,6 +346,43 @@
       }
     }
 
+    function formatCaseToHtml(mdText) {
+      if (!mdText) return '<p class="text-xs text-slate-400">暂无实战案例详情</p>';
+      const match = mdText.match(/## 💰 一人公司搞钱案例深度拆解[\s\S]*?### 【本期课题】([\s\S]*?)(?:---|## 🤖|$)/);
+      if (!match) {
+        return '<div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 text-xs text-slate-300 leading-relaxed whitespace-pre-line">' + mdText.slice(0, 1500) + '</div>';
+      }
+      const rawText = match[1].trim();
+      const sections = rawText.split(/\n####\s*/);
+      const badges = [
+        ['bg-sky-500/20 text-sky-300 border-sky-500/40', '痛点洞察'],
+        ['bg-emerald-500/20 text-emerald-300 border-emerald-500/40', '商业模式'],
+        ['bg-purple-500/20 text-purple-300 border-purple-500/40', '工具链 SOP'],
+        ['bg-amber-500/20 text-amber-300 border-amber-500/40', '变现闭环'],
+        ['bg-rose-500/20 text-rose-300 border-rose-500/40', '实操建议']
+      ];
+      let cardsHtml = '';
+      for (let i = 1; i < sections.length; i++) {
+        const lines = sections[i].trim().split('\n');
+        const title = lines[0].replace(/^#+\s*/, '').trim();
+        const bodyLines = lines.slice(1).map(l => l.trim()).filter(Boolean);
+        const body = bodyLines.join('<br>');
+        const [badgeStyle, badgeName] = badges[i - 1] || ['bg-slate-700 text-slate-300 border-slate-600', '拆解'];
+        cardsHtml += `
+          <div class="rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5 leading-snug">
+                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                ${title}
+              </h4>
+              <span class="text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium ${badgeStyle}">${badgeName}</span>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">${body}</p>
+          </div>`;
+      }
+      return cardsHtml || '<p class="text-xs text-slate-400">正在生成实战案例拆解...</p>';
+    }
+
     function renderReport(report) {
       currentReport = report;
       document.getElementById('topDateStr').innerText = report.date_str + ' · 晨间搞钱特辑';
@@ -357,14 +395,12 @@
         document.getElementById('quoteText').innerText = '“' + report.quote_of_the_day.replace(/[“”「」]/g, '') + '”';
       }
 
-      // 渲染主打案例与 Markdown
-      if (window.marked && report.markdown_content) {
-        const parts = report.markdown_content.split('## ⚡ 过去 24 小时');
-        if (parts.length > 1) {
-          document.getElementById('leadContent').innerHTML = marked.parse(parts[0]);
-        } else {
-          document.getElementById('leadContent').innerHTML = marked.parse(report.markdown_content);
-        }
+      // 渲染主打案例 (优先采用预渲染 HTML 卡片，次级采用本地高容错解析器)
+      const leadEl = document.getElementById('leadContent');
+      if (report.case_html && report.case_html.trim()) {
+        leadEl.innerHTML = report.case_html;
+      } else {
+        leadEl.innerHTML = formatCaseToHtml(report.markdown_content);
       }
 
       renderFlashes(report);
@@ -381,7 +417,9 @@
       }
 
       setupMediaSession(report);
-      lucide.createIcons();
+      if (window.lucide) {
+        lucide.createIcons();
+      }
     }
 
     function renderFlashes(report) {
@@ -480,22 +518,43 @@
 
     function filterCategory(cat) {
       const leadSec = document.getElementById('sectionLead');
+      const flashesSec = document.getElementById('sectionFlashes');
+      const sourcesSec = document.getElementById('sectionSources');
       const cards = document.querySelectorAll('.flash-card');
 
       if (cat === 'ALL') {
         leadSec.style.display = 'block';
+        if (flashesSec) flashesSec.style.display = 'block';
+        if (sourcesSec) sourcesSec.style.display = 'block';
         cards.forEach(c => c.style.display = 'block');
-      } else if (cat === 'LEAD') {
+      } else if (cat === 'CASE' || cat === 'LEAD') {
         leadSec.style.display = 'block';
+        if (flashesSec) flashesSec.style.display = 'none';
+        if (sourcesSec) sourcesSec.style.display = 'none';
         cards.forEach(c => c.style.display = 'none');
-      } else {
+      } else if (cat === 'AI') {
         leadSec.style.display = 'none';
+        if (flashesSec) flashesSec.style.display = 'block';
+        if (sourcesSec) sourcesSec.style.display = 'none';
         cards.forEach(c => {
-          if (c.getAttribute('data-category') === cat) {
-            c.style.display = 'block';
-          } else {
-            c.style.display = 'none';
-          }
+          const cCat = c.getAttribute('data-category') || '';
+          c.style.display = (cCat.includes('AI') || cCat.includes('Agent')) ? 'block' : 'none';
+        });
+      } else if (cat === 'OPC') {
+        leadSec.style.display = 'none';
+        if (flashesSec) flashesSec.style.display = 'block';
+        if (sourcesSec) sourcesSec.style.display = 'none';
+        cards.forEach(c => {
+          const cCat = c.getAttribute('data-category') || '';
+          c.style.display = (cCat.includes('一人公司') || cCat.includes('OPC')) ? 'block' : 'none';
+        });
+      } else if (cat === 'NEWS') {
+        leadSec.style.display = 'none';
+        if (flashesSec) flashesSec.style.display = 'block';
+        if (sourcesSec) sourcesSec.style.display = 'block';
+        cards.forEach(c => {
+          const cCat = c.getAttribute('data-category') || '';
+          c.style.display = (cCat.includes('学习强国') || cCat.includes('参考消息') || cCat.includes('新浪财经') || cCat.includes('喜马拉雅')) ? 'block' : 'none';
         });
       }
     }
