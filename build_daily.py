@@ -113,13 +113,13 @@ def build_case_html(md_text: str) -> str:
         body_html = '<br>'.join(line.strip() for line in body.split('\n') if line.strip())
         cards.append(f'''<div class="rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm">
   <div class="flex items-center justify-between gap-2">
-    <h4 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5 leading-snug">
-      <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+    <h4 class="text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug">
+      <span class="w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0"></span>
       {title}
     </h4>
-    <span class="text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium {badge_style}">{badge_name}</span>
+    <span class="text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 {badge_style}">{badge_name}</span>
   </div>
-  <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">{body_html}</p>
+  <p class="text-[15px] text-slate-200 leading-[1.8] font-normal">{body_html}</p>
 </div>''')
     return '\n'.join(cards)
 
@@ -127,11 +127,41 @@ async def build_today_report():
     # 获取北京时间（UTC+8）当前日期
     utc_now = datetime.datetime.now(datetime.timezone.utc)
     cst_now = utc_now + datetime.timedelta(hours=8)
-    date_str = cst_now.strftime("%Y-%m-%d")
+
+    # 早报归属日：以北京时间 19:00 为日界。
+    # 定时任务实际在凌晨 2~5 点跑，若直接取当天日期，凌晨跑出来的会被记成「当天」，
+    # 而它其实是给「今天早上的听众」准备的，一晚生成的内容必须记到次日，
+    # 否则用户早上打开看到的是昨天的日期，会以为没更新。
+    report_day = cst_now + datetime.timedelta(hours=5)
+    date_str = report_day.strftime("%Y-%m-%d")
+
     print(f"==================================================")
     print(f"  [GitHub Actions Pipeline] 开始生成今日早报与音频")
-    print(f"  北京时间日期: {date_str}")
+    print(f"  实际生成时刻: {cst_now.strftime('%Y-%m-%d %H:%M:%S')}（北京时间）")
+    print(f"  本期归属日期: {date_str}")
+    print(f"  触发方式: {os.getenv('GITHUB_EVENT_NAME', 'local')}")
     print(f"==================================================")
+
+    # 先读取既有存档：判断本期是否已经生成过，避免三个兜底时间点重复合成音频
+    reports_file = DOCS_DATA_DIR / "reports.json"
+    existing_reports = []
+    if reports_file.exists():
+        try:
+            with open(reports_file, "r", encoding="utf-8") as f:
+                existing_reports = json.load(f)
+        except Exception:
+            existing_reports = []
+
+    # 手动触发（workflow_dispatch / 本地运行）永远强制重生成；定时触发才做幂等跳过
+    force = os.getenv("GITHUB_EVENT_NAME", "").strip() in ("", "workflow_dispatch")
+    if not force:
+        done_rec = next((r for r in existing_reports if r.get("date_str") == date_str), None)
+        if done_rec:
+            done_audio = Path(str(done_rec.get("audio_url", "")).split("?")[0]).name
+            if done_audio and (DOCS_AUDIO_DIR / done_audio).exists():
+                print(f"  {date_str} 的早报已于 {done_rec.get('created_at')} 生成且音频完好，本次跳过。")
+                return
+            print(f"  {date_str} 有记录但音频缺失，继续重新生成。")
 
     # 1. 采集资讯
     print("\n[1/4] 正在抓取 AI, OPC, 国际经济, YouTube, X, TikTok 重点资讯...")
@@ -153,14 +183,6 @@ async def build_today_report():
 
     # 4. 更新 docs/data/reports.json
     print("\n[4/4] 正在更新静态站点数据源...")
-    reports_file = DOCS_DATA_DIR / "reports.json"
-    existing_reports = []
-    if reports_file.exists():
-        try:
-            with open(reports_file, "r", encoding="utf-8") as f:
-                existing_reports = json.load(f)
-        except Exception:
-            existing_reports = []
 
     # 过滤掉同日期的旧记录
     existing_reports = [r for r in existing_reports if r.get("date_str") != date_str]
@@ -179,7 +201,7 @@ async def build_today_report():
 
     # 插入今日新记录到首位
     new_record = {
-        "id": int(cst_now.strftime("%Y%m%d")),
+        "id": int(report_day.strftime("%Y%m%d")),
         "date_str": date_str,
         "title": title,
         "lead_title": lead_title,

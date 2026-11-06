@@ -1,4 +1,4 @@
-const CACHE_NAME = 'newscast-pwa-v2';
+const CACHE_NAME = 'newscast-pwa-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -37,7 +37,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 针对静态 HTML/CSS/JS：缓存优先，后台自动拉取更新 (Stale-while-revalidate)
+  // 页面文档：网络优先。
+  // 之前用「缓存优先」，改了页面手机上却一直显示旧版，因为第一次打开永远先拿缓存。
+  // 改成网络优先后，每次打开都是最新的，断网时才退回缓存。
+  if (event.request.mode === 'navigate' || event.request.url.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 其他静态资源（图标、CSS、JS）：缓存优先，后台自动更新
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {

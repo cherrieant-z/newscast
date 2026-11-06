@@ -67,26 +67,26 @@
   <header class="sticky top-0 z-40 backdrop-blur-md bg-[#090d16]/85 border-b border-slate-800/80 px-4 py-3">
     <div class="max-w-xl mx-auto flex items-center justify-between">
       <div class="flex items-center space-x-2.5">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 flex-shrink-0">
           <i data-lucide="radio" class="w-5 h-5 text-white"></i>
         </div>
         <div>
-          <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
+          <h1 class="text-[15px] font-bold tracking-tight text-white flex items-center gap-1.5">
             NewsCast
-            <span class="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30">每日播客</span>
+            <span class="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">每日播客</span>
           </h1>
-          <p id="topDateStr" class="text-[11px] text-slate-400">正在同步今日简报...</p>
+          <p id="topDateStr" class="text-[12.5px] text-slate-400 mt-0.5">正在同步今日简报...</p>
         </div>
       </div>
 
       <!-- 右侧操作区：往期列表 & PWA安装 -->
       <div class="flex items-center space-x-2">
-        <button id="btnHistory" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 transition-all border border-slate-700/60 flex items-center gap-1 text-xs">
-          <i data-lucide="calendar" class="w-3.5 h-3.5 text-sky-400"></i>
+        <button id="btnHistory" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 transition-all border border-slate-700/60 flex items-center gap-1.5 text-[13px]">
+          <i data-lucide="calendar" class="w-4 h-4 text-sky-400"></i>
           <span>往期</span>
         </button>
-        <button id="btnPwaInstall" class="hidden p-2 rounded-xl bg-sky-600/20 text-sky-400 border border-sky-500/30 text-xs items-center gap-1">
-          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+        <button id="btnPwaInstall" class="hidden px-2.5 py-2 rounded-xl bg-sky-600/20 text-sky-400 border border-sky-500/30 text-[13px] items-center gap-1.5">
+          <i data-lucide="download" class="w-4 h-4"></i>
           <span>安装</span>
         </button>
       </div>
@@ -94,14 +94,14 @@
   </header>
 
   <!-- 领域分类横向滑动胶囊栏 -->
-  <nav class="sticky top-[57px] z-30 bg-[#090d16]/95 border-b border-slate-800/60 backdrop-blur-sm">
+  <nav id="categoryNav" class="sticky top-[60px] z-30 bg-[#090d16]/95 border-b border-slate-800/60 backdrop-blur-sm">
     <div class="max-w-xl mx-auto px-4 py-2.5 overflow-x-auto no-scrollbar flex items-center space-x-2" id="categoryTabs">
-      <button class="cat-pill active px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-sky-500 text-white transition-all shadow-sm shadow-sky-500/30" data-cat="ALL">全部情报</button>
-      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="CASE">💰 搞钱案例拆解</button>
-      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="MACRO">🌍 宏观大势</button>
-      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="AI">🤖 AI Agent</button>
-      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="OPC">🚀 一人公司(OPC)</button>
-      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="NEWS">🇨🇳 权威要闻</button>
+      <button class="cat-pill active px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-sky-500 text-white transition-all shadow-sm shadow-sky-500/30" data-cat="ALL">全部情报</button>
+      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="CASE">💰 搞钱案例拆解</button>
+      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="MACRO">🌍 宏观大势</button>
+      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="AI">🤖 AI Agent</button>
+      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="OPC">🚀 一人公司(OPC)</button>
+      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="NEWS">📋 要闻存档</button>
     </div>
   </nav>
 
@@ -109,30 +109,47 @@
   <main class="max-w-xl mx-auto px-4 pt-4 pb-44 space-y-5">
 
     <!-- 顶部状态提示横幅 -->
-    <div id="statusBanner" class="p-3 rounded-2xl bg-gradient-to-r from-sky-950/40 via-indigo-950/30 to-purple-950/40 border border-sky-800/30 text-xs flex items-center justify-between text-sky-200">
-      <div class="flex items-center space-x-2">
-        <span class="flex h-2 w-2 relative">
+    <div id="statusBanner" class="px-3.5 py-3 rounded-2xl bg-gradient-to-r from-sky-950/40 via-indigo-950/30 to-purple-950/40 border border-sky-800/30 text-[13px] flex items-center justify-between gap-2 text-sky-100">
+      <div class="flex items-center space-x-2 min-w-0">
+        <span class="flex h-2 w-2 relative flex-shrink-0">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
         </span>
-        <span id="bannerText">每天 06:18 / 06:48 云端自动生成 · 今日播客已就绪</span>
+        <span id="bannerText" class="truncate">6:00 前自动更新 · 正在同步</span>
       </div>
-      <span class="text-[10px] text-slate-400 font-mono">权威要闻 · 商业拆解</span>
+      <span class="text-[12px] text-slate-400 font-mono flex-shrink-0"><span id="issueNo">-</span> 期</span>
     </div>
+
+    <!-- 全球市场行情卡：打开页面时实时拉取，弥补音频内容截止到前一晚的时间差 -->
+    <section id="sectionMarket" class="rounded-3xl bg-slate-900/70 border border-slate-800/80 p-4">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <h3 class="text-[16px] font-bold text-slate-100 flex items-center gap-2">
+          <i data-lucide="trending-up" class="w-[18px] h-[18px] text-sky-400"></i>
+          全球市场 · 最新收盘
+        </h3>
+        <span id="marketStamp" class="text-[12px] text-slate-400 font-mono">读取中</span>
+      </div>
+      <div id="marketGrid" class="grid grid-cols-3 gap-2">
+        <div class="col-span-3 py-6 text-center text-[13px] text-slate-500">正在读取行情…</div>
+      </div>
+      <p class="text-[12.5px] text-slate-400 leading-[1.7] mt-3">
+        行情是此刻的实时数据；音频在前一晚生成，不含最新一夜的变动。
+      </p>
+    </section>
 
     <!-- 核心内容容器 -->
     <div id="contentContainer" class="space-y-5">
 
       <!-- 0. 今日金句卡片 (Quote of the Day) -->
       <section id="sectionQuote" class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/30 border border-amber-500/30 p-4 shadow-xl">
-        <div class="flex items-center justify-between gap-2 mb-2">
-          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-            <i data-lucide="sparkles" class="w-3 h-3 text-amber-300"></i>
+        <div class="flex items-center justify-between gap-2 mb-2.5">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
             今日晨间金句
           </span>
-          <span class="text-[10px] text-slate-400 font-mono">Quote of the Day</span>
+          <span class="text-[11.5px] text-slate-400 font-mono">Quote of the Day</span>
         </div>
-        <blockquote id="quoteText" class="text-sm font-semibold text-amber-100/90 leading-relaxed italic pl-1 border-l-2 border-amber-400/60 my-1">
+        <blockquote id="quoteText" class="text-[17px] font-semibold text-amber-100/95 leading-[1.8] pl-3 border-l-2 border-amber-400/60 my-1">
           “未来不是属于会写代码的人，而是属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。”
         </blockquote>
       </section>
@@ -142,31 +159,31 @@
         <div class="absolute -right-10 -top-10 w-40 h-40 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div class="flex items-center justify-between gap-2 mb-3">
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-            <i data-lucide="banknote" class="w-3.5 h-3.5"></i>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+            <i data-lucide="banknote" class="w-4 h-4"></i>
             一人公司搞钱案例深度拆解
           </span>
-          <span id="leadMetaTime" class="text-[11px] text-slate-400 font-medium">约 8-10 分钟播客</span>
+          <span id="leadMetaTime" class="text-[12px] text-slate-400 font-medium flex-shrink-0">约 8 分钟</span>
         </div>
 
-        <h2 id="leadTitle" class="text-lg sm:text-xl font-bold leading-snug text-white tracking-tight mb-3">
+        <h2 id="leadTitle" class="text-[20px] sm:text-[22px] font-bold leading-snug text-white tracking-tight mb-3">
           深度搞钱案例拆解
         </h2>
 
         <!-- 主打调查展开正文 -->
-        <div id="leadContent" class="text-sm leading-relaxed text-slate-300 space-y-3 prose prose-invert prose-p:my-2 prose-headings:text-slate-100 max-w-none">
+        <div id="leadContent" class="text-[15px] leading-[1.8] text-slate-200 space-y-3 prose prose-invert prose-p:my-2 prose-headings:text-slate-100 max-w-none">
           正在加载一人公司实战案例...
         </div>
 
         <!-- 播放此条快捷按钮 -->
-        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
-          <div class="text-xs text-slate-400 flex items-center gap-1">
-            <i data-lucide="headphones" class="w-3.5 h-3.5 text-sky-400"></i>
-            高保真普通话 · 商业深度拆解与权威要闻
+        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
+          <div class="text-[12.5px] text-slate-400 flex items-center gap-1.5 min-w-0">
+            <i data-lucide="headphones" class="w-4 h-4 text-sky-400 flex-shrink-0"></i>
+            <span class="truncate">普通话播报 · 可锁屏收听</span>
           </div>
-          <button id="btnPlayMain" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:brightness-110 active:scale-95 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all">
-            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
-            <span>收听完整音频</span>
+          <button id="btnPlayMain" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:brightness-110 active:scale-95 text-white text-[13.5px] font-semibold flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all flex-shrink-0">
+            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+            <span>收听音频</span>
           </button>
         </div>
       </section>
@@ -174,11 +191,11 @@
       <!-- 2. 分类资讯速览流 -->
       <section id="sectionFlashes" class="space-y-3.5">
         <div class="flex items-center justify-between px-1">
-          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+          <h3 class="text-[16px] font-bold text-slate-100 flex items-center gap-2">
+            <i data-lucide="zap" class="w-[18px] h-[18px] text-amber-400"></i>
             过去 24 小时重点简讯
           </h3>
-          <span class="text-[11px] text-slate-400" id="flashCountBadge">共 6 大领域</span>
+          <span class="text-[12px] text-slate-400 flex-shrink-0" id="flashCountBadge">共 6 大领域</span>
         </div>
 
         <div id="flashCardList" class="space-y-3">
@@ -188,12 +205,12 @@
 
       <!-- 3. 权威来源索引与原文直达卡片 -->
       <section id="sectionSources" class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-4 space-y-3">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-            权威数据来源与原文索引
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="text-[13.5px] font-semibold text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+            权威来源与原文索引
           </h3>
-          <span class="text-[10px] text-slate-400">点击直达原始报道</span>
+          <span class="text-[12px] text-slate-400 flex-shrink-0">点击直达原文</span>
         </div>
         <div id="sourceLinksList" class="space-y-2">
           <!-- 动态渲染外链 -->
@@ -227,14 +244,14 @@
       
       <!-- 进度条与时间显示 -->
       <div class="flex items-center space-x-2.5">
-        <span id="playerCurrentTime" class="text-[10px] font-mono text-slate-400 w-8 text-right">00:00</span>
+        <span id="playerCurrentTime" class="text-[11.5px] font-mono text-slate-400 w-9 text-right">00:00</span>
         <div class="relative flex-1 flex items-center cursor-pointer group py-1" id="progressContainer">
           <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div id="progressBar" class="h-full bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full w-0 transition-all duration-100"></div>
           </div>
           <input type="range" id="progressRange" min="0" max="100" value="0" step="0.1" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
         </div>
-        <span id="playerTotalTime" class="text-[10px] font-mono text-slate-400 w-8">10:00</span>
+        <span id="playerTotalTime" class="text-[11.5px] font-mono text-slate-400 w-9">10:00</span>
       </div>
 
       <!-- 播放器核心控制栏 -->
@@ -251,8 +268,8 @@
             <i id="waveIconStatic" data-lucide="mic" class="w-5 h-5 text-white"></i>
           </div>
           <div class="truncate">
-            <div id="playerTitle" class="text-xs font-bold text-white truncate">每日调查播客</div>
-            <div id="playerSubtitle" class="text-[10px] text-slate-400 truncate">普通话高保真 · 全球AI与权威要闻</div>
+            <div id="playerTitle" class="text-[13.5px] font-semibold text-white truncate">每日调查播客</div>
+            <div id="playerSubtitle" class="text-[11.5px] text-slate-400 truncate">普通话播报 · 全球 AI 与商业拆解</div>
           </div>
         </div>
 
@@ -271,7 +288,7 @@
             <i data-lucide="rotate-cw" class="w-4 h-4"></i>
           </button>
 
-          <button id="btnSpeed" title="调整播报倍速" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-sky-400 font-mono text-xs font-semibold">
+          <button id="btnSpeed" title="调整播报倍速" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-sky-400 font-mono text-[13px] font-semibold">
             1.0x
           </button>
         </div>
@@ -327,6 +344,76 @@
       return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
+    // ---------- 全球市场行情卡 ----------
+    // 东方财富公开行情接口：允许跨域、无需密钥、国内直连。音频在前一晚生成，
+    // 看不到最新一夜的变动，所以打开页面时实时补一次，让眼睛和耳朵各管一半。
+    const MARKET_ITEMS = [
+      { secid: '100.DJIA',  name: '道琼斯' },
+      { secid: '100.NDX',   name: '纳斯达克' },
+      { secid: '100.SPX',   name: '标普500' },
+      { secid: '1.000001',  name: '上证指数' },
+      { secid: '0.399006',  name: '创业板指' },
+      { secid: '101.GC00Y', name: '黄金' }
+    ];
+
+    function formatPrice(v) {
+      if (typeof v !== 'number' || isNaN(v)) return '—';
+      return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    async function loadMarket() {
+      const grid = document.getElementById('marketGrid');
+      const stamp = document.getElementById('marketStamp');
+      if (!grid) return;
+      try {
+        const ids = MARKET_ITEMS.map(i => i.secid).join(',');
+        const url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&fields=f2,f3,f4,f12,f13,f14&secids=' + encodeURIComponent(ids);
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        const rows = (data && data.data && data.data.diff) || [];
+        if (!rows.length) throw new Error('接口无数据');
+
+        const byCode = {};
+        rows.forEach(r => { byCode[r.f13 + '.' + r.f12] = r; });
+
+        grid.innerHTML = MARKET_ITEMS.map(it => {
+          const r = byCode[it.secid];
+          if (!r) return '';
+          const pct = parseFloat(r.f3);
+          const hasPct = !isNaN(pct);
+          // 涨红跌绿，跟国内看盘习惯一致
+          const color = (!hasPct || pct === 0) ? '#94a3b8' : (pct > 0 ? '#f87171' : '#4ade80');
+          const change = (!hasPct || pct === 0)
+            ? '持平'
+            : (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(2) + '%';
+          return `
+            <div class="rounded-2xl bg-slate-800/60 border border-slate-700/60 px-2 py-3 text-center">
+              <div class="text-[12.5px] text-slate-300 truncate mb-1.5">${it.name}</div>
+              <div class="text-[15px] font-bold text-slate-100 font-mono tabular-nums leading-tight">${formatPrice(r.f2)}</div>
+              <div class="text-[13px] font-semibold font-mono tabular-nums mt-1" style="color:${color}">${change}</div>
+            </div>`;
+        }).join('');
+
+        if (stamp) {
+          const now = new Date();
+          stamp.innerText = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' 更新';
+        }
+      } catch (e) {
+        // 拉不到就整张卡隐藏，宁可少一块，也不显示报错或占位
+        const sec = document.getElementById('sectionMarket');
+        if (sec) sec.style.display = 'none';
+        console.warn('[行情] 读取失败，已隐藏行情卡：', e);
+      }
+    }
+
+    // 导航吸顶位置跟着 header 实际高度走，避免不同机型字号渲染差异造成缝隙
+    function syncNavOffset() {
+      const header = document.querySelector('header');
+      const nav = document.getElementById('categoryNav');
+      if (header && nav) nav.style.top = header.offsetHeight + 'px';
+    }
+
     // 双模加载器：优先加载静态 data/reports.json (GitHub Pages)，备选本地 FastAPI /api
     async function loadReports() {
       try {
@@ -335,6 +422,8 @@
           const list = await staticResp.json();
           if (Array.isArray(list) && list.length > 0) {
             allReports = list;
+            const issueNo = document.getElementById('issueNo');
+            if (issueNo) issueNo.innerText = list.length;
             renderReport(allReports[0]);
             renderHistoryModal(allReports);
             return;
@@ -354,10 +443,10 @@
     }
 
     function formatCaseToHtml(mdText) {
-      if (!mdText) return '<p class="text-xs text-slate-400">暂无实战案例详情</p>';
+      if (!mdText) return '<p class="text-[14px] text-slate-400">暂无实战案例详情</p>';
       const match = mdText.match(/## 💰 一人公司搞钱案例深度拆解[\s\S]*?### 【本期课题】([\s\S]*?)(?:---|## 🤖|$)/);
       if (!match) {
-        return '<div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 text-xs text-slate-300 leading-relaxed whitespace-pre-line">' + mdText.slice(0, 1500) + '</div>';
+        return '<div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 text-[14px] text-slate-300 leading-[1.8] whitespace-pre-line">' + mdText.slice(0, 1500) + '</div>';
       }
       const rawText = match[1].trim();
       const sections = rawText.split(/\n####\s*/);
@@ -378,20 +467,36 @@
         cardsHtml += `
           <div class="rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm">
             <div class="flex items-center justify-between gap-2">
-              <h4 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5 leading-snug">
-                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+              <h4 class="text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug">
+                <span class="w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0"></span>
                 ${title}
               </h4>
-              <span class="text-[10px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium ${badgeStyle}">${badgeName}</span>
+              <span class="text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 ${badgeStyle}">${badgeName}</span>
             </div>
-            <p class="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">${body}</p>
+            <p class="text-[15px] text-slate-200 leading-[1.8] font-normal">${body}</p>
           </div>`;
       }
-      return cardsHtml || '<p class="text-xs text-slate-400">正在生成实战案例拆解...</p>';
+      return cardsHtml || '<p class="text-[14px] text-slate-400">正在生成实战案例拆解...</p>';
+    }
+
+    // 顶部横幅如实反映「今天有没有新内容」，避免用户以为没更新
+    function updateBanner(report) {
+      const el = document.getElementById('bannerText');
+      if (!el || !report) return;
+      const now = new Date();
+      const today = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      if (report.date_str === today) {
+        el.innerText = '今日已就绪 · 6:00 前自动更新';
+      } else {
+        el.innerText = '今日未更新 · 最新 ' + report.date_str.slice(5);
+      }
     }
 
     function renderReport(report) {
       currentReport = report;
+      updateBanner(report);
       document.getElementById('topDateStr').innerText = report.date_str + ' · 晨间搞钱特辑';
       document.getElementById('leadTitle').innerText = report.lead_title || report.title;
       document.getElementById('leadMetaTime').innerText = `时长约 ${report.audio_duration_str || '08:30'}`;
@@ -442,17 +547,17 @@
 
         card.innerHTML = `
           <div class="flex items-center justify-between gap-2">
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border ${colorClass}">
+            <span class="px-2.5 py-1 rounded-full text-[11.5px] font-semibold border ${colorClass}">
               ${item.category}
             </span>
-            <span class="text-[11px] text-slate-400 font-mono">${item.source_name || '权威信源'}</span>
+            <span class="text-[12px] text-slate-400 font-mono truncate">${item.source_name || '权威信源'}</span>
           </div>
-          <h4 class="text-sm font-semibold text-slate-100 leading-snug">${item.title}</h4>
-          ${item.why_matter ? `<p class="text-[12px] text-slate-400 leading-relaxed border-l-2 border-slate-700 pl-2">${item.why_matter}</p>` : ''}
+          <h4 class="text-[16px] font-semibold text-slate-100 leading-[1.6]">${item.title}</h4>
+          ${item.why_matter ? `<p class="text-[14px] text-slate-300 leading-[1.75] border-l-2 border-slate-600 pl-3">${item.why_matter}</p>` : ''}
           <div class="flex items-center justify-end pt-1">
-            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[11px] font-medium text-sky-400 hover:text-sky-300 active:scale-95 transition-all">
+            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-sky-400 hover:text-sky-300 active:scale-95 transition-all py-1">
               <span>查看原文</span>
-              <i data-lucide="external-link" class="w-3 h-3"></i>
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
             </a>
           </div>
         `;
@@ -465,13 +570,13 @@
       list.innerHTML = '';
       sources.forEach((s, idx) => {
         const item = document.createElement('div');
-        item.className = 'text-xs text-slate-400 flex items-center justify-between gap-2 py-1 border-b border-slate-800/40 last:border-none';
+        item.className = 'text-[13px] text-slate-400 flex items-center justify-between gap-3 py-2 border-b border-slate-800/40 last:border-none';
         item.innerHTML = `
-          <div class="truncate flex items-center gap-1.5">
-            <span class="font-mono text-slate-400">${idx + 1}.</span>
+          <div class="truncate flex items-center gap-2 min-w-0">
+            <span class="font-mono text-slate-500 text-[12px] flex-shrink-0">${idx + 1}.</span>
             <span class="text-slate-300 truncate">${s.title}</span>
           </div>
-          <a href="${s.url}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline flex-shrink-0 text-[11px]">
+          <a href="${s.url}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline flex-shrink-0 text-[12px]">
             ${s.source_name}
           </a>
         `;
@@ -486,11 +591,11 @@
         const item = document.createElement('div');
         item.className = 'pt-2.5 first:pt-0 cursor-pointer hover:bg-slate-800/40 p-2 rounded-xl transition-all';
         item.innerHTML = `
-          <div class="flex items-center justify-between text-xs mb-1">
-            <span class="font-bold text-sky-400">${r.date_str}</span>
+          <div class="flex items-center justify-between text-[12.5px] mb-1">
+            <span class="font-semibold text-sky-400">${r.date_str}</span>
             <span class="text-slate-400 font-mono">${r.audio_duration_str}</span>
           </div>
-          <p class="text-xs font-semibold text-slate-200 line-clamp-1">${r.lead_title || r.title}</p>
+          <p class="text-[14px] font-medium text-slate-200 line-clamp-1">${r.lead_title || r.title}</p>
         `;
         item.addEventListener('click', () => {
           renderReport(r);
@@ -712,6 +817,9 @@
     });
 
     loadReports();
+    loadMarket();
+    syncNavOffset();
+    window.addEventListener('resize', syncNavOffset);
     lucide.createIcons();
   </script>
 </body>
