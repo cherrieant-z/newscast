@@ -81,30 +81,251 @@ def safe_ai_replace(text: str) -> str:
     return re.sub(r'(?i)(?<![a-zA-Z])AI(?![a-zA-Z])', '人工智能', text)
 
 
-def plain_talk_guide(category: str, idx: int) -> str:
-    """给真实新闻配一句“人话解读”，只给理解角度、不编造新闻事实"""
-    guides = {
-        "AI Agent": [
-            "说人话就是，机器能替我们干的重复活儿，越来越多了。",
-            "对普通人来说，重点是留意它背后有没有你能上手的新机会。",
-            "它最大的意义，是让一个人能撬动过去一整个团队才做得成的事。",
-        ],
-        "一人公司": [
-            "这条的关键不在技术多牛，而在里面藏着普通人能照抄的赚钱路子。",
-            "一个人就能把它跑起来，说明创业门槛正在悄悄变低。",
-            "对想搞钱的你来说，值得琢磨的是它怎么获客、怎么收钱。",
-        ],
-    }
-    pool = guides.get(category, ["值得你留个心。"])
-    return pool[idx % len(pool)]
+def _cue_hit(text: str, kw: str) -> bool:
+    """关键词命中：纯字母词走词边界，避免误判"""
+    if not text or not kw:
+        return False
+    if kw.isascii() and kw.isalpha():
+        return re.search(rf'(?<![a-z]){re.escape(kw)}(?![a-z])', text) is not None
+    return kw in text
 
 
-def today_action(has_ai: bool, has_opc: bool) -> str:
-    """结尾给一个今天就能动手的小建议"""
+# ============================================================
+# 定向解读（P0-3）
+# 旧做法是按板块轮播三句通用话，能套在任意一条新闻后面，等于没说。
+# 新做法是按标题里真正出现的信号词给判断：匹配不上就整段不写，绝不凑字数。
+# ============================================================
+AI_READING_CUES = [
+    (("融资", "投资", "估值", "天使轮", "a轮", "b轮", "c轮", "投了", "领投", "获投", "数千万"),
+     "有钱在往这个方向押注，说明它不只是个概念了；顺着它找能落地的具体环节，比追热点实在"),
+    (("发布", "推出", "上线", "开源", "开放"),
+     "这是已经能直接上手的东西，花二十分钟试一遍，比看十篇评测有用"),
+    (("裁员", "收缩", "下滑", "亏损", "倒闭"),
+     "这条赛道在挤水分，如果你在做类似的事，先想想自己那部分会不会被替掉"),
+    (("收购", "并购", "合并"),
+     "格局在往头部收，小玩家的出路是做它看不上的极细分，或者早点找出口"),
+    (("降价", "成本下降", "便宜", "免费", "价格战"),
+     "成本在往下走，原本算不过账的小生意，可能现在就成立了"),
+    (("监管", "规定", "法案", "合规", "治理", "标准"),
+     "规则开始明确了，红线清楚反而是好事，可以放心投入"),
+    (("芯片", "算力", "数据中心", "服务器", "显卡"),
+     "底层供给在变，做上层应用的盯紧这块，它直接决定你的成本"),
+    (("机器人", "具身", "机械臂"),
+     "它替掉的是具体岗位，不是整个行业；看看你手上有没有这类环节"),
+    (("模型", "大模型", "参数", "推理"),
+     "能力又往前走了一步，把你现在做不好的那件事重新丢给它试一次"),
+    (("编程", "代码", "开发"),
+     "写代码的门槛又降了一档，不会写的人也能做出能跑的东西了"),
+    (("智能体", "agent", "工作流", "自动化"),
+     "这一层最值得先动手，它把一堆单点工具串成能自己跑完的流程"),
+]
+
+OPC_READING_CUES = [
+    (("月入", "年入", "营收", "收入", "利润", "流水"),
+     "它把钱的数字摆出来了，别只盯着数字，重点看客户是谁、从哪来"),
+    (("变现", "付费", "订阅", "会员", "收费"),
+     "收钱的闭环它跑通了，把收费方式拆出来，看能不能套到你手上的技能"),
+    (("定价", "客单价", "涨价"),
+     "定价是利润的命门，对照一下自己的报价，很可能定低了"),
+    (("获客", "流量", "涨粉", "投放", "引流"),
+     "这条最值钱，它讲清了客户从哪来，渠道是可以直接抄的"),
+    (("自动化", "工作流", "工具", "效率", "sop"),
+     "它省的是时间成本，把工具组合记下来，这套能复用到别的生意上"),
+    (("出海", "跨境", "海外", "独立站", "亚马逊"),
+     "海外的好处是同类竞争少、客单价高，难处在收款和沟通，先把这两块解决"),
+    (("副业", "业余", "兼职"),
+     "这条路不要求你辞职，先算算每周能投入几小时，再决定做多重"),
+    (("自由职业", "接单", "外包"),
+     "靠技能直接换钱，先看它的技能你能不能在一个月内练到可交付"),
+    (("独立开发", "一人公司", "solo", "indie"),
+     "一个人把产品做出来了，重点看它怎么找到第一批用户，那是最难的一步"),
+    (("小众", "垂类", "细分"),
+     "小切口的好处是大公司看不上，坏处是天花板有限，适合先跑通再扩"),
+]
+
+
+def targeted_reading(category: str, title: str, summary: str = "") -> str:
+    """
+    给一条真实新闻配针对性解读；没有可对应的信号就返回空字符串。
+    只看标题：摘要里常混着正文片段，拿它匹配信号词会错配（曾出现过讲做工具却配上「收入」解读）。
+    """
+    text = (title or "").lower()
+    cues = AI_READING_CUES if category == "AI Agent" else OPC_READING_CUES
+    for kws, reading in cues:
+        if any(_cue_hit(text, k) for k in kws):
+            return reading
+    return ""
+
+
+# ============================================================
+# 宏观大势解读：每个域给「这意味着什么 + 你该怎么做」
+# 同样按信号词细分，避免四条听下来都像同一句模板。
+# ============================================================
+MACRO_READING = {
+    "money": {
+        "default": (
+            "钱的价格在变，借钱的成本和手里现金的价值都会跟着动",
+            "先算一遍自己每月的还款额，再决定是提前还债还是多留现金",
+        ),
+        "cues": [
+            (("降准",), "银行能放出来的钱变多了，市场资金会宽松一些",
+             "有房贷或经营贷的，留意重定价和置换机会；想小成本启动生意的，这时候借钱相对便宜"),
+            (("降息",), "借钱的利息在往下走",
+             "要贷款的话别急着签长约，先看看还有没有更低的窗口"),
+            (("lpr",), "贷款利率的基准在调整",
+             "浮动利率的贷款，明年月供可能跟着变，提前算一遍现金流"),
+            (("净回笼", "净投放"), "央行在往市场里收钱或者放钱",
+             "收钱的时候，借钱和融资都会更紧一点，有扩张计划的可以先缓一缓"),
+            (("逆回购", "mlf"), "央行在调节市场上的短期资金量",
+             "这种操作只影响短期的资金松紧；钱紧的时候回款会变慢，短期理财收益会略高一点"),
+            (("加息",), "借钱的成本在往上走",
+             "先把利率最高的那笔债还掉，扩张计划可以放慢半拍"),
+            (("汇率", "人民币"), "人民币的强弱在变，直接改写进出口的价格",
+             "做出口的，人民币偏弱时报价更有竞争力；做进口或买海外服务的，成本会变高"),
+            (("社融",), "企业和个人借钱的意愿在变，这是经济冷热的先行指标",
+             "社融回暖说明生意人敢借钱扩张了，你所在行业的订单可能跟着起来"),
+            (("m2", "流动性"), "市场里的钱在变多或者变紧",
+             "钱紧的时候回款会变慢，账上至少多留两个月的现金"),
+            (("存款",), "存款的收益在变",
+             "如果只靠存款吃利息，得接受收益率继续往下走，考虑做点分散"),
+            (("国债", "债券"), "国债收益率是市场对未来的定价",
+             "收益率往下走说明大家在担心增长，做生意的可以先保守一点"),
+            (("银行", "信贷", "贷款"), "银行的放贷节奏和定价在调整",
+             "这时候多问两家银行的报价，往往能省出真金白银"),
+        ],
+    },
+    "market": {
+        "default": (
+            "资产价格在剧烈波动，这类波动会直接反映到你的账户上",
+            "先看一眼自己持仓的成本线，别在情绪最激动的时候做买卖决定",
+        ),
+        "cues": [
+            (("美股", "纳指", "道指", "标普"), "海外股市在剧烈波动，会顺着跨境基金和港股通传到你的账户",
+             "持有海外基金的，先别在最恐慌的时候加仓；做外贸的，美元流动性收紧会传导到账期"),
+            (("a股", "上证", "深证", "创业板", "科创板", "北交所"), "国内股市在放量波动",
+             "有仓位的先看清自己的成本线和止损位；没仓位的，别在情绪最激动的时候进场"),
+            (("港股", "恒指"), "港股对全球资金更敏感，涨跌往往比 A 股更剧烈",
+             "如果你两边都有仓位，把港股的仓位留得比你以为的更宽一点"),
+            (("黄金",), "避险资金在往黄金走",
+             "黄金涨通常说明大家在担心，这时候降杠杆比追涨更划算"),
+            (("原油",), "油价在动，运输和原料成本会跟着走",
+             "做电商和制造的，提前锁一段运价，或者把包邮门槛往上调一档"),
+            (("比特币",), "加密资产在放大市场的风险偏好",
+             "它涨跌都很猛，别用生活必需的钱去碰"),
+            (("美债",), "美债收益率是全球资产的定价锚",
+             "它一涨，全球高估值资产都会承压，你手上的基金会跟着波动"),
+            (("基金",), "基金的表现跟着市场在变",
+             "先看自己买的是宽基还是行业主题，行业主题的波动要按能承受更大回撤来算"),
+        ],
+    },
+    "demand": {
+        "default": (
+            "大家愿不愿意花钱在变，这直接决定你的东西好不好卖",
+            "先看一眼自己最近三个月的复购率，再判断要不要扩张",
+        ),
+        "cues": [
+            (("cpi",), "物价在变，直接关系到你的成本和客户的购买力",
+             "CPI 在涨，你的进货和服务成本也会慢慢涨，定价要提前留出空间"),
+            (("ppi",), "出厂价在变，上游成本已经开始往下游传导",
+             "做制造或转卖的，留意上游报价，别签太长的固定价合同"),
+            (("社零", "消费", "零售"), "大家愿不愿意掏钱，是你生意最直接的温度计",
+             "消费在回暖就值得加大投放；在走弱就先守住老客户和复购"),
+            (("楼市", "房地产", "房价", "购房"), "房地产还牵着很多家庭的资产负债表",
+             "买房先看成交量和挂牌价，别只看单价；做家居建材的，需求会滞后反应"),
+            (("就业", "失业率", "招聘"), "找工作的人多不多，直接决定你招人的成本和自己的议价空间",
+             "招人变容易说明供给充足，可以挑更合适的人；想跳槽的，先看这个数再谈薪"),
+            (("工资", "收入"), "居民的收入预期在变，这是所有消费的底座",
+             "收入预期变差时，高客单生意会先受影响，低客单刚需反而更稳"),
+            (("养老", "社保", "医保"), "社保和医保的规则在调整，直接关系你的长期现金流",
+             "自由职业者要盯住自己的缴费方式，别断缴影响长期待遇"),
+            (("生育", "人口"), "人口结构在变，很多生意的客群会跟着迁移",
+             "做母婴、教育、房产的，得提前想清楚五年后的客群在哪"),
+            (("旅游", "餐饮", "家政"), "线下消费的热度在变",
+             "做本地生意的，跟着人流和客单价走，比看大盘更准"),
+        ],
+    },
+    "business": {
+        "default": (
+            "生意的规则和环境在变，有的门在开，有的门在收",
+            "对照一下自己做的事在开门的那边还是收门的那边，再决定要不要调整",
+        ),
+        "cues": [
+            (("关税", "贸易", "经贸"), "关税和贸易规则在变，跨境生意的成本要重算",
+             "做出口的，先算一遍加税后的毛利，再看要不要换市场或者换品类"),
+            (("出口", "外贸", "进口"), "外部需求的冷热，直接决定很多工厂和贸易商的订单",
+             "有外贸客户的盯紧账期；想接外贸单的，靠响应速度和服务取胜"),
+            (("补贴", "降费"), "这是真金白银在减负",
+             "符合条件就去申请，很多补贴没人领只是因为不知道"),
+            (("减税", "退税", "增值税", "所得税"), "税负在调整，省下来的就是纯利润",
+             "查一下自己行业今年有没有新的抵扣项，一年能省不少"),
+            (("监管", "不正当竞争", "反内卷", "价格战"), "规则在收紧，靠低价硬拼的空间会被压缩",
+             "先看清红线再动手，把合规成本提前算进模型里"),
+            (("反垄断", "平台经济"), "平台规则在被约束，小玩家的议价空间可能变大",
+             "如果你被平台抽成压得难受，留意这类政策带来的变化"),
+            (("民营经济", "中小企业", "小微企业", "个体工商户"), "政策在给中小经营者松绑",
+             "融资、税费、社保这三块每年都有新政策，值得花半天研究"),
+            (("产业", "制造", "产能", "智能制造"), "产业在往某些方向集中，也在淘汰某些环节",
+             "顺着政策倾斜的方向找位置，比逆着风硬做省力得多"),
+            (("订单", "供应链"), "订单的流向就是钱在往哪走",
+             "跟着订单找自己的位置，比凭空想需求靠谱"),
+        ],
+    },
+    "tech": {
+        "default": (
+            "技术又往前走了一段，能做的事比上个月更多",
+            "挑一件你手上最耗时的事，先试着让它替你跑一遍",
+        ),
+        "cues": [
+            (("人工智能", "ai", "大模型"), "这是门槛最低、扩散最快的一次技术红利",
+             "不用等它成熟，现在就挑一件每天重复两小时的事，试着让它接管"),
+            (("芯片", "半导体", "算力"), "算力和硬件在变，做应用的你的成本结构会跟着变",
+             "盯紧这块的报价，它会直接吃掉或者放大你的毛利"),
+            (("机器人", "具身"), "机器人从展示走向落地，替代的是具体岗位",
+             "如果你的工作里有大量重复搬运和操作，这是最该提前准备的方向"),
+            (("新能源", "光伏", "储能", "电池"), "这条赛道产能和价格波动都很大",
+             "想进去的话别做重资产环节，做配套服务和渠道更轻"),
+            (("低空", "商业航天", "量子"), "新赛道的政策刚放开，早期机会往往在这里",
+             "留意本地的试点政策，早进场的人赚的是信息差"),
+            (("数据要素",), "数据正在被确权和定价",
+             "手里有行业数据的，先想想它能不能变成可交易的东西"),
+            (("创新药",), "医药的审批和支付方式在变",
+             "这类赛道周期长、门槛高，个人更适合做周边服务而不是研发"),
+            (("科技", "研发", "科技创新"), "研发投入在往某些方向集中",
+             "看钱投到哪一环，那一环的用人需求和外包订单会先起来"),
+        ],
+    },
+}
+
+
+def macro_reading(domain: str, title: str) -> Tuple[str, str]:
+    """返回 (这意味着什么, 你该怎么做)"""
+    cfg = MACRO_READING.get(domain)
+    if not cfg:
+        return "", ""
+    t = (title or "").lower()
+    for kws, meaning, action in cfg["cues"]:
+        if any(_cue_hit(t, k) for k in kws):
+            return meaning, action
+    return cfg["default"]
+
+
+def today_action(has_ai: bool, has_opc: bool, domains: List[str] = None) -> str:
+    """结尾给一个今天就能动手的具体动作，优先扣住当天出现的大势信号"""
+    domains = domains or []
+    if "money" in domains:
+        return "花十分钟算一下你现在所有负债的实际利率，看看有没有更便宜的置换空间——这一步几乎人人可做，省下的是确定的钱。"
+    if "market" in domains:
+        return "打开你的基金和股票账户，算一下浮亏占你总资产多少——如果这个比例让你睡不好，说明仓位比你以为的更重，先减到能睡着的水平再说。"
+    if "demand" in domains:
+        return "翻一下你最近三个月的成交记录，算算老客户复购占多少——这个数字比任何宏观预测都更能告诉你下一步该扩张还是该守。"
+    if "business" in domains:
+        return "查一下你所在行业今年有没有能申请的补贴或税收优惠，很多钱放在那儿没人领，只是不知道。"
+    if "tech" in domains:
+        return "挑一件你每天重复超过一小时的事，今天就试着用工具替它跑一遍，跑通了你会回不去。"
     if has_opc:
         return "挑今天提到的一条搞钱路子，问自己一句：我能不能用更低的成本，先做个最小版本试试看？"
     if has_ai:
-        return "挑今天最让你心动的一条 AI 动态，花三分钟搜一下原文，想一想它能不能用在你手头正在做的事上。"
+        return "挑今天最让你心动的一条动态，花三分钟搜一下原文，想一想它能不能用在你手头正在做的事上。"
     return "今天先记住一句金句，把它写进手机备忘录，睡前再看一眼。"
 
 
@@ -146,20 +367,29 @@ class NewsSummarizer:
         case_revenue_and_traffic = cur_case["revenue"]
         case_beginner_guide = cur_case["guide"]
 
-        # 整理来源列表（权威去重展示）
+        # 整理来源列表（权威去重展示），并把解读带进卡片，让手机端也能直接读到
         all_sources: List[Dict[str, str]] = []
         for cat, items in collected_data.items():
             for item in items:
+                note = (item.get("why_matter") or "").strip()
+                if cat == "宏观大势":
+                    meaning, action = macro_reading(item.get("domain", ""), item["title"])
+                    label = item.get("domain_label", "")
+                    note = f"{label}｜{meaning}。你该怎么做：{action}"
+                elif cat in ("AI Agent", "一人公司") and not item.get("is_fallback"):
+                    note = note or targeted_reading(cat, item["title"], item.get("summary", ""))
                 all_sources.append({
                     "title": item["title"],
                     "category": cat,
                     "source_name": item.get("source_name", "权威来源"),
-                    "url": item.get("url", "#")
+                    "url": item.get("url", "#"),
+                    "why_matter": note,
                 })
 
         category_summary: Dict[str, str] = {
             "今日金句": quote_of_the_day,
             "搞钱案例": lead_title,
+            "宏观大势": f"今日识别 {len(collected_data.get('宏观大势', []))} 个跟决策有关的信号",
             "学习强国": f"头条新闻共 {len(collected_data.get('学习强国', []))} 条",
             "参考消息": f"国际要闻共 {len(collected_data.get('参考消息', []))} 条",
             "新浪财经": f"核心要闻共 {len(collected_data.get('新浪财经', []))} 条",
@@ -207,21 +437,38 @@ class NewsSummarizer:
 
         # 展开 AI Agent & 一人公司
         for cat in ["AI Agent", "一人公司"]:
-            for idx, it in enumerate(collected_data.get(cat, [])):
-                why = it.get('why_matter', '').strip()
-                if not why:
-                    why = plain_talk_guide(cat, idx)
+            for it in collected_data.get(cat, []):
+                why = it.get('why_matter', '').strip() or targeted_reading(cat, it['title'], it.get('summary', ''))
+                md_lines.append(f"### 📌 【{cat}】{it['title']}")
+                md_lines.append(f"- **① 一句话内容摘要**：{it.get('summary', it['title'])}")
+                if why:
+                    md_lines.append(f"- **② 人话解读**：{why}")
+                md_lines.append("")
+
+        # 今日宏观大势：每条给「事实 + 影响 + 行动」，取代原先的逐条念标题
+        macro_items = collected_data.get("宏观大势", [])
+        if macro_items:
+            md_lines.extend([
+                "---",
+                "",
+                "## 🌍 今日宏观大势（从时政 / 国际 / 财经中筛出跟你决策有关的信号）",
+                ""
+            ])
+            for it in macro_items:
+                meaning, action = macro_reading(it.get("domain", ""), it["title"])
                 md_lines.extend([
-                    f"### 📌 【{cat}】{it['title']}",
-                    f"- **① 一句话内容摘要**：{it.get('summary', it['title'])}",
-                    f"- **② 人话解读**：{why}",
+                    f"### 【{it.get('domain_label', '大势')}】{it['title']}",
+                    f"- **发生了什么**：{it.get('summary', it['title'])}",
+                    f"- **这意味着什么**：{meaning}",
+                    f"- **你该怎么做**：{action}",
+                    f"- *来源：{it.get('source_name', '')}*",
                     ""
                 ])
 
         md_lines.extend([
             "---",
             "",
-            "## 📰 过去 24 小时三大权威平台【要闻】全量清单（已去重）",
+            "## 📰 过去 24 小时三大平台【要闻】全量清单（音频不再逐条朗读，留档备查）",
             ""
         ])
 
@@ -263,19 +510,19 @@ class NewsSummarizer:
             "## 🔗 权威来源与原文索引",
             ""
         ])
-        for idx, src in enumerate(all_sources[:20], 1):
+        for idx, src in enumerate(all_sources[:60], 1):
             md_lines.append(f"{idx}. [{src['category']}] [{src['title']}]({src['url']}) - *{src['source_name']}*")
 
         markdown_content = "\n".join(md_lines)
 
-        # 构建无寒暄、全量逐条朗读的语音播报底稿
+        # 构建播报底稿：案例 + 前沿动态 + 宏观大势解读
         tts_script = self._build_spoken_script(
             date_str, quote_of_the_day, lead_title, 
             case_pain_point, case_model, case_tech_stack, case_revenue_and_traffic, case_beginner_guide,
             collected_data
         )
 
-        return title, lead_title, markdown_content, tts_script, all_sources[:20], category_summary
+        return title, lead_title, markdown_content, tts_script, all_sources[:60], category_summary
 
     def _build_spoken_script(
         self, date_str: str, quote: str, lead_title: str,
@@ -316,65 +563,78 @@ class NewsSummarizer:
             f"第五，普通人怎么抄作业？{clean_guide}",
         ])
 
-        # 2. 全球 AI 动态（真实抓取，配人话解读）
+        def speak_with_reading(category: str, item: Dict[str, Any], idx: int) -> str:
+            """一条新闻 = 标题 + 摘要 +（有信号才给的）定向解读"""
+            t_sp = (safe_ai_replace(item['title'])
+                    .replace("Personal Agent", "个人智能体")
+                    .replace("Agent", "智能体").replace("OPC", "一人公司").replace("SaaS", "软件服务"))
+            s_sp = (safe_ai_replace(item.get('summary', ''))
+                    .replace("Agent", "智能体").replace("OPC", "一人公司")).rstrip("。；;，,、 ")
+            reading = "" if item.get('is_fallback') else targeted_reading(
+                category, item['title'], item.get('summary', '')
+            )
+            head = f"第{idx}条，{t_sp}。{s_sp}"
+            return f"{head}。要我说，{reading}。" if reading else f"{head}。"
+
+        # 2. 全球 AI 动态（真实抓取；解读按信号词定向生成，写不出就不写）
         if ai_items:
             parts.append("好，接下来是过去 24 小时，AI 圈最值得你留意的几条动态。")
             for i, item in enumerate(ai_items, 1):
-                title_spoken = safe_ai_replace(item['title']).replace("Agent", "智能体")
-                summary_spoken = safe_ai_replace(item.get('summary', '')).replace("Agent", "智能体")
-                if item.get('is_fallback'):
-                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}")
-                else:
-                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}。{plain_talk_guide('AI Agent', i - 1)}")
+                parts.append(speak_with_reading("AI Agent", item, i))
         else:
             parts.append("今天 AI 圈的实时动态暂时没抓到，咱们先跳过，不影响后面内容。")
 
         # 3. 一人公司 / 独立开发者动态
         if opc_items:
-            parts.append("再来看一人公司和独立开发者圈子的动向，这里往往藏着普通人能抄的近路。")
+            parts.append("再来看一人公司和独立开发者圈子的动向，这里通常藏着普通人能抄的近路。")
             for i, item in enumerate(opc_items, 1):
-                title_spoken = safe_ai_replace(item['title']).replace("OPC", "一人公司").replace("SaaS", "软件服务")
-                summary_spoken = safe_ai_replace(item.get('summary', '')).replace("OPC", "一人公司")
-                if item.get('is_fallback'):
-                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}")
-                else:
-                    parts.append(f"第{i}条，{title_spoken}。{summary_spoken}。{plain_talk_guide('一人公司', i - 1)}")
+                parts.append(speak_with_reading("一人公司", item, i))
 
-        # 4. 学习强国 / 权威国内要闻
-        xuexi_items = collected_data.get("学习强国", [])
-        if xuexi_items:
-            parts.append(f"国内权威要闻方面，今天共有 {len(xuexi_items)} 条，逐条给你过一遍：")
-            for i, it in enumerate(xuexi_items, 1):
-                t_sp = safe_ai_replace(it['title'])
-                parts.append(f"第{i}条，{t_sp}。")
+        # 4. 宏观大势：不念标题，只讲「发生了什么 / 这意味着什么 / 你该怎么做」
+        macro_items = collected_data.get("宏观大势", [])
+        if macro_items:
+            if len(macro_items) < 3:
+                parts.append(
+                    "接下来这一段聊大环境。今天真正值得说的信号不多，我不给你凑数，只讲这几条。"
+                )
+            else:
+                parts.append(
+                    "接下来这一段，是今天最该留意的几个大环境信号。"
+                    "我不给你念标题，只讲三件事：发生了什么，这说明什么，以及落到你身上该怎么办。"
+                )
+            for i, it in enumerate(macro_items, 1):
+                label = it.get("domain_label") or "大势"
+                title_spoken = safe_ai_replace(it["title"]).rstrip("。；;，,、 ")
+                meaning, action = macro_reading(it.get("domain", ""), it["title"])
+                parts.append(
+                    f"第{i}条，看{label}。{title_spoken}。这意味着，{meaning}。落到你身上，{action}。"
+                )
         else:
-            parts.append("国内权威要闻今天暂未获取到，咱们跳过这一段。")
+            parts.append("今天没筛出特别值得说的大环境信号，这一段就跳过，不给你凑数。")
 
-        # 5. 参考消息 国际要闻
-        cankao_items = collected_data.get("参考消息", [])
-        if cankao_items:
-            parts.append(f"国际方面，参考消息今天有 {len(cankao_items)} 条要闻，逐条过：")
-            for i, it in enumerate(cankao_items, 1):
-                t_sp = safe_ai_replace(it['title'])
-                parts.append(f"第{i}条，{t_sp}。")
+        # 5. 其余要闻不再逐条朗读，完整清单留在网页备查
+        backlog = (
+            len(collected_data.get("学习强国", []))
+            + len(collected_data.get("参考消息", []))
+            + len(collected_data.get("新浪财经", []))
+        )
+        if backlog:
+            parts.append(
+                f"另外，政策、国际、财经三个渠道今天还有 {backlog} 条要闻，"
+                "我没逐条念，全部整理在页面上的清单里，想细看随时能翻到。"
+            )
 
-        # 6. 新浪财经 要闻
-        sina_items = collected_data.get("新浪财经", [])
-        if sina_items:
-            parts.append(f"财经方面，新浪财经今天有 {len(sina_items)} 条要闻，捡重点的几条：")
-            for i, it in enumerate(sina_items, 1):
-                t_sp = safe_ai_replace(it['title']).replace("PMI", "采购经理指数").replace("A股", "国内A股")
-                parts.append(f"第{i}条，{t_sp}。")
-
-        # 7. 喜马拉雅 10分钟新闻早餐
+        # 6. 喜马拉雅 10分钟新闻早餐
         xm_items = collected_data.get("喜马拉雅新闻早餐", [])
         if xm_items:
-            parts.append("另外，喜马拉雅的十分钟新闻早餐今天更新了：")
-            for it in xm_items:
-                parts.append(f"{it['title']}。{it.get('summary', '')}")
+            parts.append("对了，喜马拉雅的十分钟新闻早餐今天也更新了，想听更长版本的可以去听。")
 
-        # 8. 结尾：给一个今天就能动手的小建议
-        parts.append(f"以上就是今天的全部内容。最后送你一个可以立刻动手的小建议：{today_action(bool(ai_items), bool(opc_items))}")
+        # 7. 结尾：给一个今天就能动手的具体动作
+        domains = [it.get("domain", "") for it in macro_items]
+        parts.append(
+            "以上就是今天的全部内容。最后给你一件今天就能动手的事："
+            f"{today_action(bool(ai_items), bool(opc_items), domains)}"
+        )
         parts.append("明天同一时间，不见不散。")
 
         return "\n\n".join(parts)
@@ -389,16 +649,17 @@ class NewsSummarizer:
 2. **今日金句**：一句发人深省、充满行动力的一人公司搞钱金句。
 3. **一人公司搞钱案例深度拆解**：讲透业务模式、痛点、全套AI工具链、变现路径、新手如何抄作业。
 4. **全球AI与一人公司要闻**：每条包含①一句话内容摘要（含来源/关键事实）；②为什么值得关注。
-5. **学习强国、参考消息、新浪财经**：必须完整逐条播报标题，已去重，不能省略。
-6. **喜马拉雅新闻早餐**：若无当天内容则自动跳过。
-7. **纯中文与音频要求**：全文主要采用中文，特别是语音播报稿（tts_script）必须全部使用地道中文，严禁出现任何英文长句或生硬缩写，保证语音播报纯正流利。
+5. **宏观大势（重点）**：从时政、国际、财经三源里挑出真正跟个人决策有关的信号，归入「钱的价格、你的钱袋子、大家敢不敢花钱、生意好不好做、技术在往哪走」五个域，每域最多一条。每条必须按「发生了什么 / 这意味着什么 / 你该怎么做」三句来写。严禁逐条念标题，严禁写能套在任何新闻后面的空话。外事会见、军事冲突、体育文娱、人事表彰一律不进播报，但仍要完整列在 markdown 清单里留档。
+6. **其余要闻**：音频里只用一句话交代「还有 N 条整理在页面清单里」，不要逐条朗读。
+7. **喜马拉雅新闻早餐**：若无当天内容则自动跳过。
+8. **纯中文与音频要求**：全文主要采用中文，特别是语音播报稿（tts_script）必须全部使用地道中文，严禁出现任何英文长句或生硬缩写，保证语音播报纯正流利。
 
 输出 JSON：
 {{
   "title": "全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 ({date_str})",
   "lead_title": "今日搞钱案例标题",
   "markdown_content": "完整结构化 Markdown",
-  "tts_script": "全量逐条朗读的语音播报稿，严禁省略简讯标题，无寒暄",
+  "tts_script": "语音播报稿：案例五段 + AI 与一人公司逐条（每条带定向解读）+ 宏观大势四条（发生了什么/这意味着什么/你该怎么做）+ 一句可动手的事",
   "category_summary": {{"今日金句": "...", "搞钱案例": "...", "学习强国": "...", "新浪财经": "...", "参考消息": "...", "喜马早餐": "..."}}
 }}
 """
@@ -429,7 +690,7 @@ class NewsSummarizer:
                     content.get("lead_title", "今日一人公司搞钱案例深度拆解"),
                     content.get("markdown_content", ""),
                     content.get("tts_script", ""),
-                    all_sources[:20],
+                    all_sources[:60],
                     content.get("category_summary", {})
                 )
         raise RuntimeError("LLM call failed")

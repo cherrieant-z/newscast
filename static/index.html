@@ -98,6 +98,7 @@
     <div class="max-w-xl mx-auto px-4 py-2.5 overflow-x-auto no-scrollbar flex items-center space-x-2" id="categoryTabs">
       <button class="cat-pill active px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-sky-500 text-white transition-all shadow-sm shadow-sky-500/30" data-cat="ALL">全部情报</button>
       <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="CASE">💰 搞钱案例拆解</button>
+      <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="MACRO">🌍 宏观大势</button>
       <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="AI">🤖 AI Agent</button>
       <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="OPC">🚀 一人公司(OPC)</button>
       <button class="cat-pill px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="NEWS">🇨🇳 权威要闻</button>
@@ -292,7 +293,13 @@
       '国际经济': 'bg-blue-500/15 text-blue-400 border-blue-500/30',
       'YouTube': 'bg-red-500/15 text-red-400 border-red-500/30',
       'X': 'bg-slate-500/20 text-slate-300 border-slate-500/30',
-      'TikTok': 'bg-pink-500/15 text-pink-400 border-pink-500/30'
+      'TikTok': 'bg-pink-500/15 text-pink-400 border-pink-500/30',
+      'AI Agent': 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+      '一人公司': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      '宏观大势': 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+      '新浪财经': 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+      '参考消息': 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+      '学习强国': 'bg-red-500/15 text-red-400 border-red-500/30'
     };
 
     const audio = document.getElementById('audioElement');
@@ -441,6 +448,7 @@
             <span class="text-[11px] text-slate-400 font-mono">${item.source_name || '权威信源'}</span>
           </div>
           <h4 class="text-sm font-semibold text-slate-100 leading-snug">${item.title}</h4>
+          ${item.why_matter ? `<p class="text-[12px] text-slate-400 leading-relaxed border-l-2 border-slate-700 pl-2">${item.why_matter}</p>` : ''}
           <div class="flex items-center justify-end pt-1">
             <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[11px] font-medium text-sky-400 hover:text-sky-300 active:scale-95 transition-all">
               <span>查看原文</span>
@@ -547,6 +555,14 @@
         cards.forEach(c => {
           const cCat = c.getAttribute('data-category') || '';
           c.style.display = (cCat.includes('一人公司') || cCat.includes('OPC')) ? 'block' : 'none';
+        });
+      } else if (cat === 'MACRO') {
+        leadSec.style.display = 'none';
+        if (flashesSec) flashesSec.style.display = 'block';
+        if (sourcesSec) sourcesSec.style.display = 'none';
+        cards.forEach(c => {
+          const cCat = c.getAttribute('data-category') || '';
+          c.style.display = cCat.includes('宏观大势') ? 'block' : 'none';
         });
       } else if (cat === 'NEWS') {
         leadSec.style.display = 'none';

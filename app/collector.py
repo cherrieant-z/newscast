@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 CATEGORIES = [
     "AI Agent",
     "一人公司",
+    "宏观大势",
     "新浪财经",
     "参考消息",
     "学习强国",
@@ -64,6 +65,201 @@ def is_similar_title(t1: str, t2: str) -> bool:
     return jaccard > 0.72
 
 
+def _kw_hit(text: str, kw: str) -> bool:
+    """关键词命中判断：纯字母词走词边界，避免 detail 被判定为命中 ai"""
+    if not text or not kw:
+        return False
+    if kw.isascii() and kw.isalpha():
+        return re.search(rf'(?<![a-z]){re.escape(kw)}(?![a-z])', text) is not None
+    return kw in text
+
+
+def _hits_any(text: str, keywords) -> bool:
+    return any(_kw_hit(text, kw) for kw in keywords)
+
+
+# ============================================================
+# 相关性闸门（P0-1）：只让「真的跟 AI / 一人公司有关」的内容进来
+# 起因：36氪、少数派都是全站 RSS，里面混着游戏、菜谱、设计、奶茶加盟，
+#      不过闸就会把这些当新闻念给听众。
+# 原则：标题或摘要命中任一关键词才放行。宁可少，不要凑。
+# ============================================================
+AI_GATE_KEYWORDS = [
+    "人工智能", "大模型", "智能体", "生成式", "多模态", "算力", "芯片", "半导体",
+    "算法", "机器学习", "深度学习", "推理", "智能驾驶", "具身", "机器人", "自动化",
+    "编程助手", "代码生成", "开源模型", "训练", "微调", "推理成本",
+    "ai", "gpt", "claude", "llm", "agent", "aigc", "openai", "deepseek", "qwen",
+    "gemini", "copilot", "midjourney", "sora", "nvidia", "anthropic", "llama",
+    "英伟达", "豆包", "通义", "文心", "kimi", "智谱", "月之暗面", "minimax",
+]
+
+OPC_GATE_KEYWORDS = [
+    "独立开发", "一人公司", "超级个体", "副业", "变现", "营收", "月入", "年入",
+    "赚钱", "被动收入", "付费", "定价", "客单价", "获客", "流量",
+    "转化率", "复购", "留存", "毛利", "利润", "现金流", "创业", "接单",
+    "自由职业", "出海", "跨境", "电商", "选品", "小众", "垂类", "效率工具",
+    "工作流", "自动化", "sop", "saas", "indie", "solo", "remote", "freelance",
+    "stripe", "shopify",
+]
+
+# 少数派等生活类源里跟「搞钱」无关的题材，命中即丢弃
+OPC_BLOCK_KEYWORDS = [
+    "菜谱", "蒸菜", "食谱", "美食", "家常", "烘焙", "探店", "好饭", "厨房",
+    "游记", "出行装备", "壁纸", "表情包", "字体", "输入法", "键盘", "耳机",
+    "显示器", "相机", "摄影", "影音", "观影", "书单", "日历", "桌面美化",
+]
+
+
+# ============================================================
+# 宏观大势：不砍掉时政与国际，而是换一种用法（替代方案的核心）
+#
+# 现状问题：学习强国 10 条 + 参考消息 15 条逐条念标题，占 34% 篇幅、零解读，
+#          其中大量是外事会见、军事冲突、体育赛事，对个人决策没有任何指向。
+#
+# 替代做法：
+#   1) 三源（政策 / 国际 / 财经）合并，先剔除「跟个人行动无关」的类型
+#   2) 留下的信号归入 4 个「大势域」，每域只取 1 条最有代表性的
+#   3) 每条给出「这意味着什么 + 你该怎么做」，取代念标题
+#   4) 被剔除的内容不进音频，但仍完整保留在网页清单里备查
+# ============================================================
+MACRO_DOMAINS = {
+    "money":    "钱的价格",
+    "market":   "你的钱袋子",
+    "demand":   "大家敢不敢花钱",
+    "business": "生意好不好做",
+    "tech":     "技术在往哪走",
+}
+MACRO_DOMAIN_ORDER = ["money", "market", "demand", "business", "tech"]
+
+# 关键词 -> 大势域。命中次数最多的域即为该条信号的归属。
+MACRO_KEYWORDS = [
+    # 域 1：钱的价格（货币、信贷、汇率、债市）
+    ("降准", "money"), ("降息", "money"), ("加息", "money"), ("降lpr", "money"),
+    ("lpr", "money"), ("利率", "money"), ("货币政策", "money"), ("流动性", "money"),
+    ("逆回购", "money"), ("mlf", "money"), ("社融", "money"), ("m2", "money"),
+    ("信贷", "money"), ("贷款", "money"), ("存款", "money"), ("汇率", "money"),
+    ("人民币", "money"), ("央行", "money"), ("国债", "money"), ("债券", "money"),
+    ("银行", "money"), ("货币", "money"), ("外汇", "money"),
+
+    # 域 1.5：你的钱袋子（大盘与资产价格，直接冲击个人持仓）
+    ("美股", "market"), ("纳指", "market"), ("道指", "market"), ("标普", "market"),
+    ("港股", "market"), ("恒指", "market"), ("a股", "market"), ("上证", "market"),
+    ("深证", "market"), ("创业板", "market"), ("科创板", "market"), ("北交所", "market"),
+    ("黄金", "market"), ("原油", "market"), ("比特币", "market"), ("基金", "market"),
+    ("美债", "market"), ("美元指数", "market"), ("大宗商品", "market"),
+
+    # 域 2：大家敢不敢花钱（消费、物价、楼市、就业、收入、社保）
+    ("消费", "demand"), ("社零", "demand"), ("cpi", "demand"), ("ppi", "demand"),
+    ("物价", "demand"), ("通胀", "demand"), ("通缩", "demand"), ("楼市", "demand"),
+    ("房地产", "demand"), ("房价", "demand"), ("房贷", "demand"), ("购房", "demand"),
+    ("就业", "demand"), ("失业率", "demand"), ("招聘", "demand"), ("工资", "demand"),
+    ("收入", "demand"), ("生育", "demand"), ("人口", "demand"), ("养老", "demand"),
+    ("医保", "demand"), ("社保", "demand"), ("零售", "demand"), ("旅游", "demand"),
+    ("餐饮", "demand"), ("家政", "demand"), ("教育", "demand"),
+
+    # 域 3：生意好不好做（产业政策、外贸、监管、补贴）
+    ("产业", "business"), ("制造", "business"), ("外贸", "business"), ("出口", "business"),
+    ("进口", "business"), ("关税", "business"), ("经贸", "business"), ("贸易", "business"),
+    ("民营经济", "business"), ("中小企业", "business"), ("小微企业", "business"),
+    ("减税", "business"), ("退税", "business"), ("补贴", "business"), ("降费", "business"),
+    ("监管", "business"), ("反垄断", "business"), ("平台经济", "business"),
+    ("创业", "business"), ("个体工商户", "business"), ("营商环境", "business"),
+    ("订单", "business"), ("供应链", "business"), ("产能", "business"),
+    ("价格战", "business"), ("反内卷", "business"), ("不正当竞争", "business"),
+    ("营商环境", "business"), ("增值税", "business"), ("所得税", "business"),
+
+    # 域 4：技术在往哪走
+    ("人工智能", "tech"), ("大模型", "tech"), ("芯片", "tech"), ("半导体", "tech"),
+    ("算力", "tech"), ("新能源", "tech"), ("光伏", "tech"), ("储能", "tech"),
+    ("电池", "tech"), ("机器人", "tech"), ("低空", "tech"), ("量子", "tech"),
+    ("数据要素", "tech"), ("智能制造", "tech"), ("科技创新", "tech"), ("科技", "tech"),
+    ("研发", "tech"), ("算法", "tech"), ("创新药", "tech"), ("商业航天", "tech"),
+    ("ai", "tech"),
+]
+
+# 跟个人决策无关的类型：外事礼仪、人事表彰、军事冲突、国际政坛、体育文娱
+# 命中即剔除（哪怕同时含经济词，因为这类标题信息量太低、无法给出行动指向）
+MACRO_NEGATIVE = [
+    "会见", "会谈", "致电", "贺信", "慰问", "会见外宾",
+    "签署命令", "授予", "追授", "表彰", "荣誉称号", "座谈会", "集体学习",
+    "听取汇报", "调研", "考察", "任免", "任命", "被查", "落马", "双开",
+    "纪律审查", "开除党籍", "受贿", "受审", "判刑",
+    "军事", "演习", "军演", "导弹", "战机", "航母", "空袭", "交火",
+    "战火", "宣战", "冲突升级", "停火", "伤亡",
+    "就职", "宣誓", "当选", "选举", "总统", "首相", "外长", "大使",
+    "领事", "弹劾", "议会", "执政党",
+    "奥运", "亚运", "冬奥", "世界杯", "足球", "篮球", "乒乓", "夺冠",
+    "比赛", "联赛", "明星", "演员", "歌手", "婚礼", "离婚", "去世",
+    "逝世", "追悼", "演唱会", "综艺", "票房",
+    # 转述性、表态性国际新闻：信息很碎，给不出任何个人行动指向
+    "俄媒", "美媒", "英媒", "日媒", "韩媒", "外媒", "据报道", "报道称",
+    "呼吁", "警告", "谴责", "指责", "抨击", "抗议", "回应称", "声称",
+    "扬言", "放话", "喊话", "爆料", "辟谣",
+    # 突发社会/安全事件：属新闻，但不构成可判断的趋势信号
+    "黑客", "攻击", "泄露", "诈骗", "被捕", "受审", "维权", "投诉", "事故",
+]
+
+
+def _macro_domain_of(title: str) -> str:
+    """判断一条时政/财经标题属于哪个大势域；跟个人决策无关则返回空串"""
+    t = (title or "").lower()
+    if not t:
+        return ""
+    # 先剔除明确无关的类型
+    if _hits_any(t, MACRO_NEGATIVE):
+        return ""
+    score: Dict[str, int] = {}
+    for kw, dom in MACRO_KEYWORDS:
+        if _kw_hit(t, kw):
+            score[dom] = score.get(dom, 0) + 1
+    if not score:
+        return ""
+    # 命中次数最多的域胜出；打平按固定顺序（钱 -> 需求 -> 生意 -> 技术）
+    return max(score.items(), key=lambda kv: (kv[1], -MACRO_DOMAIN_ORDER.index(kv[0])))[0]
+
+
+def build_macro_trends(pools: Dict[str, List[Dict[str, Any]]], exclude_titles: List[str] = None) -> List[Dict[str, Any]]:
+    """
+    把时政 / 国际 / 财经三源合并，筛出跟个人决策有关的信号，每个大势域只取 1 条。
+    取数时优先选择尚未用过的来源，避免四条全来自同一家。
+    """
+    exclude_titles = exclude_titles or []
+    candidates: Dict[str, List[Dict[str, Any]]] = {d: [] for d in MACRO_DOMAIN_ORDER}
+
+    for cat in ("学习强国", "新浪财经", "参考消息"):
+        for it in pools.get(cat, []):
+            title = it.get("title", "")
+            if not title:
+                continue
+            if any(is_similar_title(title, ex) for ex in exclude_titles):
+                continue
+            dom = _macro_domain_of(title)
+            if dom:
+                candidates[dom].append(it)
+
+    used_sources = set()
+    trends: List[Dict[str, Any]] = []
+    for dom in MACRO_DOMAIN_ORDER:
+        pool = candidates[dom]
+        if not pool:
+            continue
+        chosen = next((it for it in pool if it.get("source_name") not in used_sources), pool[0])
+        used_sources.add(chosen.get("source_name"))
+        trends.append({
+            "title": chosen["title"],
+            "category": "宏观大势",
+            "domain": dom,
+            "domain_label": MACRO_DOMAINS[dom],
+            "summary": chosen.get("summary", chosen["title"]),
+            "why_matter": "",
+            "source_name": chosen.get("source_name", ""),
+            "url": chosen.get("url", ""),
+            "published_at": chosen.get("published_at", ""),
+            "is_fallback": False,
+        })
+    return trends
+
+
 # ============================================================
 # 通用 RSS / Atom 解析（用标准库，不引入额外依赖）
 # ============================================================
@@ -99,7 +295,66 @@ def _strip_html(text: str) -> str:
     text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
     text = text.replace('&quot;', '"').replace('&#39;', "'").replace('&ldquo;', '"').replace('&rdquo;', '"')
     text = re.sub(r'\s+', ' ', text).strip()
+    # 中文标点前后不留空格，避免「。 一笔」这种断句被读成两截
+    text = re.sub(r'\s*([。！？；：，、])\s*', r'\1', text)
     return text
+
+
+# 摘要里的推广 / 版权模板句：不清理会被当成正文念出来
+# （上一版就曾把「查看全文，本文为会员文章，订阅后可阅读全文」原样播出去）
+SUMMARY_NOISE_PATTERNS = [
+    "查看全文", "本文为会员文章", "订阅后可阅读全文", "会员文章", "付费阅读",
+    "阅读原文", "点击查看", "扫码", "扫描二维码", "关注公众号", "本文来自",
+    "题图来自", "头图来自", "图片来源", "如有侵权", "转载请注明", "原文链接",
+    "责任编辑", "本文作者", "编辑：", "作者：", "转载请", "版权归",
+]
+
+# 聚合类稿件：一天塞十几条杂讯，命中率低、噪声高，整条丢弃
+AGGREGATOR_NOISE = [
+    "8点1氪", "早报", "晚报", "午报", "日报", "周报", "快讯汇总", "热点汇总",
+    "一周要闻", "今日要闻", "新闻盘点", "盘前", "盘中", "收盘播报",
+]
+
+
+def _clean_summary(text: str) -> str:
+    """剔除摘要里的推广 / 付费墙 / 版权模板句"""
+    if not text:
+        return ""
+    pieces = re.split(r'(?<=[。！？!?；;])', text)
+    kept = [p for p in pieces if p.strip() and not any(n in p for n in SUMMARY_NOISE_PATTERNS)]
+    return "".join(kept).strip()
+
+
+def _is_aggregator(title: str) -> bool:
+    """判断是否为聚合类稿件（早报、快讯汇总等）"""
+    return any(n in (title or "") for n in AGGREGATOR_NOISE)
+
+
+def _shorten_summary(text: str, limit: int = 90) -> str:
+    """
+    把摘要压到一两句话。
+    36氪等源的 description 其实是正文开头，不压缩就会把整篇文章念出来。
+    """
+    if not text:
+        return ""
+    text = re.sub(r'作者\s*[|｜]\s*[^\s]{1,14}\s*编辑\s*[|｜]\s*[^\s]{1,14}', '', text)
+    text = re.sub(r'本文约?\s*\d+\s*字[，,]?\s*建议阅读\s*\d+\s*分钟', '', text)
+    text = re.sub(r'[（(]\s*(新浪财经|36氪|极客公园|爱范儿|少数派|量子位|InfoQ[^）)]*)\s*[）)]', '', text)
+    text = re.sub(r'\s+', ' ', text).strip(' ，,。')
+    if len(text) <= limit:
+        return text
+
+    out = ""
+    for piece in re.split(r'(?<=[。！？!?])', text):
+        if len(out) + len(piece) > limit:
+            break
+        out += piece
+    if out:
+        return out.strip()
+
+    head = text[:limit]
+    cut = max(head.rfind('，'), head.rfind('；'), head.rfind(','))
+    return (head[:cut] if cut > limit * 0.5 else head).rstrip('，,；; ')
 
 
 def _parse_feed_items(xml_text: str) -> List[Dict[str, str]]:
@@ -279,8 +534,8 @@ class NewsCollector:
             print(f"[Collector] 喜马拉雅抓取异常: {e}")
         return items
 
-    async def _fetch_from_sources(self, client: httpx.AsyncClient, sources: List[Dict], category: str, max_items: int = 3) -> List[Dict[str, Any]]:
-        """从一组 RSS/Atom 源抓取真实新闻，逐源降级，够数即止"""
+    async def _fetch_from_sources(self, client: httpx.AsyncClient, sources: List[Dict], category: str, max_items: int = 3, gate_keywords: List[str] = None, block_keywords: List[str] = None) -> List[Dict[str, Any]]:
+        """从一组 RSS/Atom 源抓取真实新闻；带黑名单与相关性闸门，逐源降级，够数即止"""
         items = []
         for src in sources:
             try:
@@ -292,11 +547,23 @@ class NewsCollector:
                     title = fi.get("title", "").strip()
                     if not title or len(title) < 4:
                         continue
-                    summary = fi.get("summary", "")[:220]
+                    # 聚合类稿件（早报、快讯汇总）噪声极高，整条不要
+                    if _is_aggregator(title):
+                        continue
+                    # 摘要先洗掉付费墙 / 推广模板句，再压到一两句
+                    summary = _clean_summary(fi.get("summary", "")[:400])
                     if len(summary) < 8:
                         summary = title
+                    summary = _shorten_summary(summary, 60)
+                    # 题材黑名单（生活类源里的菜谱、装备、壁纸等）
+                    if block_keywords and _hits_any(title.lower(), block_keywords):
+                        continue
                     # 过滤纯英文长句，保证中文环境纯正
                     if is_mostly_english(title) or is_mostly_english(summary):
+                        continue
+                    # 相关性闸门：只看标题判断，跟本板块无关的直接丢弃，绝不凑数。
+                    # 不能看摘要——36氪这类源的摘要是多条汇总，几乎什么词都有，会把闸门带偏。
+                    if gate_keywords and not _hits_any(title.lower(), gate_keywords):
                         continue
                     if not any(is_similar_title(title, e["title"]) for e in items):
                         items.append({
@@ -355,8 +622,13 @@ class NewsCollector:
         if not date_str:
             date_str = datetime.datetime.now().strftime("%Y-%m-%d")
 
-        ai_items = await self._fetch_from_sources(client, AI_RSS_SOURCES, "AI Agent", max_items=3)
-        opc_items = await self._fetch_from_sources(client, OPC_RSS_SOURCES, "一人公司", max_items=3)
+        ai_items = await self._fetch_from_sources(
+            client, AI_RSS_SOURCES, "AI Agent", max_items=3, gate_keywords=AI_GATE_KEYWORDS
+        )
+        opc_items = await self._fetch_from_sources(
+            client, OPC_RSS_SOURCES, "一人公司", max_items=3,
+            gate_keywords=OPC_GATE_KEYWORDS, block_keywords=OPC_BLOCK_KEYWORDS
+        )
 
         if not ai_items:
             ai_items = self._fallback_pool(date_str, "AI Agent")
@@ -414,6 +686,13 @@ class NewsCollector:
                     seen_titles.append(title)
                     deduped.append(item)
             results[cat] = deduped
+
+        # 从时政 / 国际 / 财经三源里提炼今日宏观大势（每域一条，后接影响与行动）。
+        # 注意：原始清单仍然完整保留，只是音频不再逐条念。
+        results["宏观大势"] = build_macro_trends(
+            results,
+            exclude_titles=[it["title"] for it in (results["AI Agent"] + results["一人公司"])],
+        )
 
         return results
 
