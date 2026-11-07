@@ -332,9 +332,13 @@ def today_action(has_ai: bool, has_opc: bool, domains: List[str] = None) -> str:
 class NewsSummarizer:
     """
     负责将多源资讯合成为：
-    1. 结构化 Markdown 报告（无废话、直入主题、包含今日金句 + 一人公司搞钱保姆级拆解 + 全球 AI 前沿 + 学习强国/参考消息/新浪财经要闻全量清单 + 来源索引）
-    2. 无寒暄、去重不漏、全内容逐条朗读的普通话播报底稿（语音时长不设上限，清晰顺畅播报全量头条）
+    1. 结构化 Markdown 报告（含金句 + 一人公司拆解 + AI 前沿 + 宏观大势 + 原始要闻清单留档）
+    2. 「只听就够」的普通话播报底稿：所有值得知道的内容都会念出来，
+       不留任何「去页面看」的尾巴；同时给出章节切分，供前端做跳转。
     """
+
+    # 最近一次生成的章节切分：[{label, text}]，由 _build_spoken_script 写入
+    last_chapters: List[Dict[str, str]] = []
 
     async def generate_report(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]]) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
         """
@@ -349,6 +353,7 @@ class NewsSummarizer:
         return self._generate_curated(date_str, collected_data)
 
     def _generate_curated(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]]) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
+        self.last_chapters = []
         title = f"全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 ({date_str})"
         
         # 根据日期计算天数序号，确保每日轮换完全不重样的新案例
@@ -468,7 +473,7 @@ class NewsSummarizer:
         md_lines.extend([
             "---",
             "",
-            "## 📰 过去 24 小时三大平台【要闻】全量清单（音频不再逐条朗读，留档备查）",
+            "## 📰 原始要闻清单（备查，音频里已按相关性筛过）",
             ""
         ])
 
@@ -530,9 +535,10 @@ class NewsSummarizer:
         collected_data: Dict[str, List[Dict[str, Any]]]
     ) -> str:
         """
-        构建轻松有趣、技术小白也能听懂的播报底稿。
-        风格要点：口语化开场、案例故事化、每条新闻配一句“人话解读”、结尾给一个可动手的小建议。
-        全程纯中文，术语大白话化，知名品牌与工具原名保留。
+        构建「只听就够」的播报底稿：不留任何「去页面看」的内容，
+        值得知道的全部念出来，被筛掉的明确交代一句为什么没念。
+        风格：口语化开场、案例故事化、每条新闻配一句人话解读、结尾给一个可动手的小建议。
+        同时把段落切分写进 self.last_chapters，前端据此做章节跳转。
         """
         # 金句末尾自带的句号先剥掉，避免与模板句号拼成「。。」双句号
         spoken_quote = safe_ai_replace(quote).strip().rstrip("。！？!?；;，,、 ")
@@ -547,97 +553,125 @@ class NewsSummarizer:
 
         ai_items = collected_data.get("AI Agent", [])
         opc_items = collected_data.get("一人公司", [])
+        macro_items = collected_data.get("宏观大势", [])
 
-        parts = [
-            f"早上好，欢迎收听今天的搞钱情报。我已经把全球 AI 圈和一人公司圈里，最值得看的几件事，翻译成了大白话，咱们直接开始。",
-            f"先送你今天的一句话：{spoken_quote}。这句话放在搞钱这件事上，特别应景。",
-        ]
+        # 每段既进播报稿，也作为前端章节（点了能跳到对应分钟）
+        blocks: List[Tuple[str, str]] = []
 
-        # 1. 一人公司搞钱案例：故事化五段
-        parts.extend([
-            f"接下来，聊一个今天主推的一人公司案例：{spoken_lead}。别急着走，我把它拆成五段讲给你听。",
-            f"第一，它解决了什么让人头疼的问题？{clean_pain}",
-            f"第二，它是怎么赚钱的？{clean_model}",
-            f"第三，它用了哪些工具？放心，都不贵。{clean_stack}",
-            f"第四，它到底赚到了多少？{clean_rev}",
-            f"第五，普通人怎么抄作业？{clean_guide}",
-        ])
+        def add(label: str, text: str) -> None:
+            if text and text.strip():
+                blocks.append((label, text.strip()))
+
+        try:
+            _d = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+            date_cn = f"{_d.month} 月 {_d.day} 日"
+        except Exception:
+            date_cn = date_str
+
+        # 开场：一句话交代今天听什么，并明确「不用看」
+        add("开场", (
+            f"早上好，今天是 {date_cn}。接下来这几分钟，我把全球 AI 圈、一人公司圈，"
+            "还有几个跟你钱包有关的大环境信号，全部讲给你听。"
+            "你不用看任何文字，闭上眼跟着听就行。"
+        ))
+
+        add("今日金句", f"先送你今天的一句话：{spoken_quote}。这句话放在搞钱这件事上，特别应景。")
+
+        # 1. 一人公司搞钱案例：五段各自成章，方便回头重听某一段
+        add("案例·痛点", (
+            f"接下来聊今天主推的一人公司案例：{spoken_lead}。我拆成五段讲。"
+            f"第一段，它解决了什么让人头疼的问题？{clean_pain}"
+        ))
+        add("案例·收钱", f"第二段，它是怎么把这事做成生意、怎么收钱的？{clean_model}")
+        add("案例·工具", f"第三段，它用了哪些工具？放心，都不贵。{clean_stack}")
+        add("案例·赚钱", f"第四段，它到底赚到了多少？{clean_rev}")
+        add("案例·抄作业", f"第五段，普通人怎么抄作业？{clean_guide}")
 
         def speak_with_reading(category: str, item: Dict[str, Any], idx: int) -> str:
             """一条新闻 = 标题 + 摘要 +（有信号才给的）定向解读"""
             t_sp = (safe_ai_replace(item['title'])
                     .replace("Personal Agent", "个人智能体")
-                    .replace("Agent", "智能体").replace("OPC", "一人公司").replace("SaaS", "软件服务"))
+                    .replace("Agent", "智能体").replace("OPC", "一人公司").replace("SaaS", "软件服务")
+                    .replace("丨", "，").replace("｜", "，").replace("|", "，"))
             s_sp = (safe_ai_replace(item.get('summary', ''))
-                    .replace("Agent", "智能体").replace("OPC", "一人公司")).rstrip("。；;，,、 ")
+                    .replace("Agent", "智能体").replace("OPC", "一人公司")
+                    .replace("丨", "，").replace("｜", "，")).rstrip("。；;，,、 ")
             reading = "" if item.get('is_fallback') else targeted_reading(
                 category, item['title'], item.get('summary', '')
             )
             head = f"第{idx}条，{t_sp}。{s_sp}"
+            head = re.sub(r'(人工智能|软件服务)\s+(?=[\u4e00-\u9fa5])', r'\1', head)
             return f"{head}。要我说，{reading}。" if reading else f"{head}。"
 
         # 2. 全球 AI 动态（真实抓取；解读按信号词定向生成，写不出就不写）
         if ai_items:
-            parts.append("好，接下来是过去 24 小时，AI 圈最值得你留意的几条动态。")
+            if all(it.get("is_fallback") for it in ai_items):
+                # 抓不到实时动态时，明确说成「判断」而不是冒充新闻，听着才不别扭
+                ai_lines = ["今天 AI 圈没抓到实时动态，我不硬凑新闻，给你几条半年内都不会过时的判断。"]
+            else:
+                ai_lines = ["好，案例说完了，来看看过去 24 小时，AI 圈发生了什么。"]
             for i, item in enumerate(ai_items, 1):
-                parts.append(speak_with_reading("AI Agent", item, i))
+                ai_lines.append(speak_with_reading("AI Agent", item, i))
+            add("AI 动态", "\n".join(ai_lines))
         else:
-            parts.append("今天 AI 圈的实时动态暂时没抓到，咱们先跳过，不影响后面内容。")
+            add("AI 动态", "今天 AI 圈的实时动态暂时没抓到，这段先跳过，不影响后面的内容。")
 
         # 3. 一人公司 / 独立开发者动态
         if opc_items:
-            parts.append("再来看一人公司和独立开发者圈子的动向，这里通常藏着普通人能抄的近路。")
+            if all(it.get("is_fallback") for it in opc_items):
+                opc_lines = ["再看一人公司这边。今天圈子里没大的新动静，我也不硬凑，给你三条值得记住的判断。"]
+            else:
+                opc_lines = ["再看一人公司和独立开发者那边，这里通常藏着普通人能抄的近路。"]
             for i, item in enumerate(opc_items, 1):
-                parts.append(speak_with_reading("一人公司", item, i))
+                opc_lines.append(speak_with_reading("一人公司", item, i))
+            add("一人公司动态", "\n".join(opc_lines))
 
         # 4. 宏观大势：不念标题，只讲「发生了什么 / 这意味着什么 / 你该怎么做」
-        macro_items = collected_data.get("宏观大势", [])
+        macro_lines = []
         if macro_items:
             if len(macro_items) < 3:
-                parts.append(
-                    "接下来这一段聊大环境。今天真正值得说的信号不多，我不给你凑数，只讲这几条。"
-                )
+                macro_lines.append("接下来这段聊大环境。今天真正值得说的信号不多，我不给你凑数，只讲这几条。")
             else:
-                parts.append(
-                    "接下来这一段，是今天最该留意的几个大环境信号。"
-                    "我不给你念标题，只讲三件事：发生了什么，这说明什么，以及落到你身上该怎么办。"
+                macro_lines.append(
+                    "接下来这段，是今天最该留意的几个大环境信号。我不给你念标题，"
+                    "只讲三件事：发生了什么，这意味着什么，以及落到你身上该怎么办。"
                 )
             for i, it in enumerate(macro_items, 1):
                 label = it.get("domain_label") or "大势"
-                title_spoken = safe_ai_replace(it["title"]).rstrip("。；;，,、 ")
+                title_spoken = (safe_ai_replace(it["title"])
+                                .replace("丨", "，").replace("｜", "，")
+                                .rstrip("。；;，,、！？!? "))
                 meaning, action = macro_reading(it.get("domain", ""), it["title"])
-                parts.append(
+                macro_lines.append(
                     f"第{i}条，看{label}。{title_spoken}。这意味着，{meaning}。落到你身上，{action}。"
                 )
         else:
-            parts.append("今天没筛出特别值得说的大环境信号，这一段就跳过，不给你凑数。")
+            macro_lines.append("今天没筛出特别值得说的大环境信号，这段就跳过，不给你凑数。")
 
-        # 5. 其余要闻不再逐条朗读，完整清单留在网页备查
+        # 明确交代「剩下的被筛掉了」，而不是让听众去别处翻文字
         backlog = (
             len(collected_data.get("学习强国", []))
             + len(collected_data.get("参考消息", []))
             + len(collected_data.get("新浪财经", []))
         )
         if backlog:
-            parts.append(
-                f"另外，政策、国际、财经三个渠道今天还有 {backlog} 条要闻，"
-                "我没逐条念，全部整理在页面上的清单里，想细看随时能翻到。"
+            macro_lines.append(
+                f"政策和市场那几个渠道，我今天也全过了一遍，加起来 {backlog} 条。"
+                "真正跟你判断有关的，上面已经讲完了；剩下的大多是看一眼就忘的消息，"
+                "念了只会占你时间，我就不念了。"
             )
+        add("宏观大势", "\n".join(macro_lines))
 
-        # 6. 喜马拉雅 10分钟新闻早餐
-        xm_items = collected_data.get("喜马拉雅新闻早餐", [])
-        if xm_items:
-            parts.append("对了，喜马拉雅的十分钟新闻早餐今天也更新了，想听更长版本的可以去听。")
-
-        # 7. 结尾：给一个今天就能动手的具体动作
+        # 5. 结尾：给一个今天就能动手的具体动作
         domains = [it.get("domain", "") for it in macro_items]
-        parts.append(
-            "以上就是今天的全部内容。最后给你一件今天就能动手的事："
-            f"{today_action(bool(ai_items), bool(opc_items), domains)}"
-        )
-        parts.append("明天同一时间，不见不散。")
+        add("今天动手的事", (
+            "以上就是今天的全部内容，全在这段音频里了，没有藏在别处。"
+            f"最后给你一件今天就能动手的事：{today_action(bool(ai_items), bool(opc_items), domains)}"
+            "明天同一时间，不见不散。"
+        ))
 
-        return "\n\n".join(parts)
+        self.last_chapters = [{"label": label, "text": text} for label, text in blocks]
+        return "\n\n".join(text for _, text in blocks)
 
     async def _generate_with_llm(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]]) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
         # 如果配置了 LLM，使用同样的严格原则

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>每日调查新闻与高保真语音播客</title>
-  <meta name="description" content="AI、OPC、国际经济与社媒重点资讯，每天早晨 6:00 自动生成深度调查报道与普通话高保真播客语音">
-  
+  <title>搞钱情报 · 每日语音早报</title>
+  <meta name="description" content="每天早晨 6 点前自动更新：一段听完就够的语音早报，AI 动态、一人公司拆解、宏观大势，全在音频里，不用看文字。">
+
   <!-- PWA 元数据 (采用相对路径完美适配 GitHub Pages) -->
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#090d16">
@@ -59,6 +59,11 @@
     .wave-bar:nth-child(3) { animation-delay: 0.4s; }
     .wave-bar:nth-child(4) { animation-delay: 0.1s; }
     .wave-bar:nth-child(5) { animation-delay: 0.3s; }
+    /* 折叠区箭头 */
+    details > summary { list-style: none; cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] .chev { transform: rotate(90deg); }
+    .chev { transition: transform .2s ease; }
   </style>
 </head>
 <body class="bg-[#090d16] text-slate-100 min-h-screen font-sans antialiased selection:bg-sky-500 selection:text-white">
@@ -72,10 +77,10 @@
         </div>
         <div>
           <h1 class="text-[15px] font-bold tracking-tight text-white flex items-center gap-1.5">
-            NewsCast
-            <span class="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">每日播客</span>
+            搞钱情报
+            <span class="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">语音早报</span>
           </h1>
-          <p id="topDateStr" class="text-[12.5px] text-slate-400 mt-0.5">正在同步今日简报...</p>
+          <p id="topDateStr" class="text-[12.5px] text-slate-400 mt-0.5">正在同步今日早报...</p>
         </div>
       </div>
 
@@ -93,18 +98,6 @@
     </div>
   </header>
 
-  <!-- 领域分类横向滑动胶囊栏 -->
-  <nav id="categoryNav" class="sticky top-[60px] z-30 bg-[#090d16]/95 border-b border-slate-800/60 backdrop-blur-sm">
-    <div class="max-w-xl mx-auto px-4 py-2.5 overflow-x-auto no-scrollbar flex items-center space-x-2" id="categoryTabs">
-      <button class="cat-pill active px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-sky-500 text-white transition-all shadow-sm shadow-sky-500/30" data-cat="ALL">全部情报</button>
-      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="CASE">💰 搞钱案例拆解</button>
-      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="MACRO">🌍 宏观大势</button>
-      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="AI">🤖 AI Agent</button>
-      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="OPC">🚀 一人公司(OPC)</button>
-      <button class="cat-pill px-3.5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all" data-cat="NEWS">📋 要闻存档</button>
-    </div>
-  </nav>
-
   <!-- 主内容区域 (留出底部悬浮播放器空间) -->
   <main class="max-w-xl mx-auto px-4 pt-4 pb-44 space-y-5">
 
@@ -120,7 +113,52 @@
       <span class="text-[12px] text-slate-400 font-mono flex-shrink-0"><span id="issueNo">-</span> 期</span>
     </div>
 
-    <!-- 全球市场行情卡：打开页面时实时拉取，弥补音频内容截止到前一晚的时间差 -->
+    <!-- 播放主卡：页面第一屏就是「按一下，开始听」 -->
+    <section id="sectionPlayer" class="relative overflow-hidden rounded-3xl bg-gradient-to-b from-slate-800/90 via-slate-900/95 to-slate-950 border border-sky-500/25 shadow-2xl p-5">
+      <div class="absolute -right-10 -top-12 w-44 h-44 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="flex items-center gap-4">
+        <button id="btnHeroPlay" class="relative w-[64px] h-[64px] rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-sky-500/30 active:scale-95 transition-all">
+          <i data-lucide="play" class="w-7 h-7 text-white fill-current ml-1" id="heroPlayIcon"></i>
+          <i data-lucide="pause" class="w-7 h-7 text-white fill-current hidden" id="heroPauseIcon"></i>
+        </button>
+        <div class="min-w-0">
+          <h2 class="text-[19px] font-bold leading-snug text-white">今天的语音早报</h2>
+          <p class="text-[13px] text-slate-400 mt-1.5">
+            <span id="heroDate">--</span> · 全程 <span id="heroDuration" class="text-slate-300 font-mono">--:--</span>
+          </p>
+          <p id="heroHook" class="text-[12.5px] text-slate-500 mt-1 leading-[1.6]">不用看字，戴上耳机就能听完</p>
+        </div>
+      </div>
+
+      <p id="heroCase" class="mt-3.5 text-[13px] text-slate-400 leading-[1.7] line-clamp-2"></p>
+
+      <!-- 章节：点一下跳到对应位置 -->
+      <div id="chapterWrap" class="mt-4 hidden">
+        <div class="flex items-center justify-between mb-2.5">
+          <h3 class="text-[13.5px] font-semibold text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="list" class="w-4 h-4 text-sky-400"></i>
+            章节 · 点一下跳过去
+          </h3>
+          <span class="text-[11.5px] text-slate-500">时间点为估算</span>
+        </div>
+        <div id="chapterList" class="grid grid-cols-2 gap-2"></div>
+      </div>
+
+      <!-- 文字稿折叠：想查的时候再点开，不占默认视线 -->
+      <details class="mt-4 pt-3.5 border-t border-slate-800/80">
+        <summary class="flex items-center justify-between text-[13px] text-slate-400">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
+            文字稿与原文清单（备查，不听时再点开）
+          </span>
+          <i data-lucide="chevron-right" class="chev w-4 h-4 text-slate-500"></i>
+        </summary>
+        <div id="transcript" class="mt-3 text-[14.5px] leading-[1.85] text-slate-300 space-y-2"></div>
+      </details>
+    </section>
+
+    <!-- 全球市场行情卡：打开页面时实时拉取，是页面上唯一「需要看」的东西 -->
     <section id="sectionMarket" class="rounded-3xl bg-slate-900/70 border border-slate-800/80 p-4">
       <div class="flex items-center justify-between gap-2 mb-3">
         <h3 class="text-[16px] font-bold text-slate-100 flex items-center gap-2">
@@ -133,91 +171,10 @@
         <div class="col-span-3 py-6 text-center text-[13px] text-slate-500">正在读取行情…</div>
       </div>
       <p class="text-[12.5px] text-slate-400 leading-[1.7] mt-3">
-        行情是此刻的实时数据；音频在前一晚生成，不含最新一夜的变动。
+        打开时实时读取；接口不通就显示最近一次收盘快照。音频在前一晚生成，不含最新一夜的变动。
       </p>
     </section>
 
-    <!-- 核心内容容器 -->
-    <div id="contentContainer" class="space-y-5">
-
-      <!-- 0. 今日金句卡片 (Quote of the Day) -->
-      <section id="sectionQuote" class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-indigo-950/30 border border-amber-500/30 p-4 shadow-xl">
-        <div class="flex items-center justify-between gap-2 mb-2.5">
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
-            今日晨间金句
-          </span>
-          <span class="text-[11.5px] text-slate-400 font-mono">Quote of the Day</span>
-        </div>
-        <blockquote id="quoteText" class="text-[17px] font-semibold text-amber-100/95 leading-[1.8] pl-3 border-l-2 border-amber-400/60 my-1">
-          “未来不是属于会写代码的人，而是属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。”
-        </blockquote>
-      </section>
-
-      <!-- 1. 今日主打搞钱案例深度拆解卡片 -->
-      <section id="sectionLead" class="relative overflow-hidden rounded-3xl bg-gradient-to-b from-slate-800/90 via-slate-900/90 to-slate-950 border border-sky-500/25 shadow-2xl p-5">
-        <div class="absolute -right-10 -top-10 w-40 h-40 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-        <div class="flex items-center justify-between gap-2 mb-3">
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-            <i data-lucide="banknote" class="w-4 h-4"></i>
-            一人公司搞钱案例深度拆解
-          </span>
-          <span id="leadMetaTime" class="text-[12px] text-slate-400 font-medium flex-shrink-0">约 8 分钟</span>
-        </div>
-
-        <h2 id="leadTitle" class="text-[20px] sm:text-[22px] font-bold leading-snug text-white tracking-tight mb-3">
-          深度搞钱案例拆解
-        </h2>
-
-        <!-- 主打调查展开正文 -->
-        <div id="leadContent" class="text-[15px] leading-[1.8] text-slate-200 space-y-3 prose prose-invert prose-p:my-2 prose-headings:text-slate-100 max-w-none">
-          正在加载一人公司实战案例...
-        </div>
-
-        <!-- 播放此条快捷按钮 -->
-        <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
-          <div class="text-[12.5px] text-slate-400 flex items-center gap-1.5 min-w-0">
-            <i data-lucide="headphones" class="w-4 h-4 text-sky-400 flex-shrink-0"></i>
-            <span class="truncate">普通话播报 · 可锁屏收听</span>
-          </div>
-          <button id="btnPlayMain" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:brightness-110 active:scale-95 text-white text-[13.5px] font-semibold flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all flex-shrink-0">
-            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
-            <span>收听音频</span>
-          </button>
-        </div>
-      </section>
-
-      <!-- 2. 分类资讯速览流 -->
-      <section id="sectionFlashes" class="space-y-3.5">
-        <div class="flex items-center justify-between px-1">
-          <h3 class="text-[16px] font-bold text-slate-100 flex items-center gap-2">
-            <i data-lucide="zap" class="w-[18px] h-[18px] text-amber-400"></i>
-            过去 24 小时重点简讯
-          </h3>
-          <span class="text-[12px] text-slate-400 flex-shrink-0" id="flashCountBadge">共 6 大领域</span>
-        </div>
-
-        <div id="flashCardList" class="space-y-3">
-          <!-- 动态渲染的卡片 -->
-        </div>
-      </section>
-
-      <!-- 3. 权威来源索引与原文直达卡片 -->
-      <section id="sectionSources" class="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <h3 class="text-[13.5px] font-semibold text-slate-300 flex items-center gap-1.5">
-            <i data-lucide="external-link" class="w-4 h-4"></i>
-            权威来源与原文索引
-          </h3>
-          <span class="text-[12px] text-slate-400 flex-shrink-0">点击直达原文</span>
-        </div>
-        <div id="sourceLinksList" class="space-y-2">
-          <!-- 动态渲染外链 -->
-        </div>
-      </section>
-
-    </div>
   </main>
 
   <!-- 往期历史侧边抽屉/弹窗 -->
@@ -226,7 +183,7 @@
       <div class="p-4 border-b border-slate-800 flex items-center justify-between">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <i data-lucide="history" class="w-4 h-4 text-sky-400"></i>
-          往期早报与播客存档
+          往期语音早报
         </h3>
         <button id="btnCloseHistory" class="p-2 rounded-lg hover:bg-slate-800 text-slate-300 active:scale-95 transition-all">
           <i data-lucide="x" class="w-4 h-4"></i>
@@ -241,7 +198,7 @@
   <!-- 底部悬浮音频播放器 (Sticky Floating Player) -->
   <div id="bottomPlayer" class="fixed bottom-0 left-0 right-0 z-50 p-2 sm:p-4 pointer-events-none pb-safe">
     <div class="max-w-xl mx-auto pointer-events-auto rounded-3xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 shadow-2xl shadow-black/80 px-4 py-3 flex flex-col space-y-2">
-      
+
       <!-- 进度条与时间显示 -->
       <div class="flex items-center space-x-2.5">
         <span id="playerCurrentTime" class="text-[11.5px] font-mono text-slate-400 w-9 text-right">00:00</span>
@@ -251,7 +208,7 @@
           </div>
           <input type="range" id="progressRange" min="0" max="100" value="0" step="0.1" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
         </div>
-        <span id="playerTotalTime" class="text-[11.5px] font-mono text-slate-400 w-9">10:00</span>
+        <span id="playerTotalTime" class="text-[11.5px] font-mono text-slate-400 w-9">00:00</span>
       </div>
 
       <!-- 播放器核心控制栏 -->
@@ -268,8 +225,8 @@
             <i id="waveIconStatic" data-lucide="mic" class="w-5 h-5 text-white"></i>
           </div>
           <div class="truncate">
-            <div id="playerTitle" class="text-[13.5px] font-semibold text-white truncate">每日调查播客</div>
-            <div id="playerSubtitle" class="text-[11.5px] text-slate-400 truncate">普通话播报 · 全球 AI 与商业拆解</div>
+            <div id="playerTitle" class="text-[13.5px] font-semibold text-white truncate">每日语音早报</div>
+            <div id="playerSubtitle" class="text-[11.5px] text-slate-400 truncate">AI 动态 · 一人公司 · 宏观大势</div>
           </div>
         </div>
 
@@ -304,26 +261,12 @@
     let allReports = [];
     let currentSpeedIndex = 1;
     const speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
-    const categoryColors = {
-      'AI': 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-      'OPC': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-      '国际经济': 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-      'YouTube': 'bg-red-500/15 text-red-400 border-red-500/30',
-      'X': 'bg-slate-500/20 text-slate-300 border-slate-500/30',
-      'TikTok': 'bg-pink-500/15 text-pink-400 border-pink-500/30',
-      'AI Agent': 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-      '一人公司': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-      '宏观大势': 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-      '新浪财经': 'bg-sky-500/15 text-sky-400 border-sky-500/30',
-      '参考消息': 'bg-slate-500/20 text-slate-300 border-slate-500/30',
-      '学习强国': 'bg-red-500/15 text-red-400 border-red-500/30'
-    };
 
     const audio = document.getElementById('audioElement');
     const btnPlayPause = document.getElementById('btnPlayPause');
-    const btnPlayMain = document.getElementById('btnPlayMain');
-    const playIcon = document.getElementById('playIcon');
-    const pauseIcon = document.getElementById('pauseIcon');
+    const btnHeroPlay = document.getElementById('btnHeroPlay');
+    const heroPlayIcon = document.getElementById('heroPlayIcon');
+    const heroPauseIcon = document.getElementById('heroPauseIcon');
     const progressBar = document.getElementById('progressBar');
     const progressRange = document.getElementById('progressRange');
     const playerCurrentTime = document.getElementById('playerCurrentTime');
@@ -361,9 +304,29 @@
       return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    async function loadMarket() {
+    function renderMarketRows(items, stampText) {
       const grid = document.getElementById('marketGrid');
       const stamp = document.getElementById('marketStamp');
+      if (!grid) return;
+      grid.innerHTML = items.map(it => {
+        const pct = (typeof it.pct === 'number' && !isNaN(it.pct)) ? it.pct : null;
+        // 涨红跌绿，跟国内看盘习惯一致
+        const color = (pct === null || pct === 0) ? '#94a3b8' : (pct > 0 ? '#f87171' : '#4ade80');
+        const change = (pct === null || pct === 0)
+          ? '持平'
+          : (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(2) + '%';
+        return `
+          <div class="rounded-2xl bg-slate-800/60 border border-slate-700/60 px-2 py-3 text-center">
+            <div class="text-[12.5px] text-slate-300 truncate mb-1.5">${it.name}</div>
+            <div class="text-[15px] font-bold text-slate-100 font-mono tabular-nums leading-tight">${formatPrice(it.price)}</div>
+            <div class="text-[13px] font-semibold font-mono tabular-nums mt-1" style="color:${color}">${change}</div>
+          </div>`;
+      }).join('');
+      if (stamp) stamp.innerText = stampText;
+    }
+
+    async function loadMarket() {
+      const grid = document.getElementById('marketGrid');
       if (!grid) return;
       try {
         const ids = MARKET_ITEMS.map(i => i.secid).join(',');
@@ -377,41 +340,32 @@
         const byCode = {};
         rows.forEach(r => { byCode[r.f13 + '.' + r.f12] = r; });
 
-        grid.innerHTML = MARKET_ITEMS.map(it => {
+        const items = MARKET_ITEMS.map(it => {
           const r = byCode[it.secid];
-          if (!r) return '';
+          if (!r) return null;
           const pct = parseFloat(r.f3);
-          const hasPct = !isNaN(pct);
-          // 涨红跌绿，跟国内看盘习惯一致
-          const color = (!hasPct || pct === 0) ? '#94a3b8' : (pct > 0 ? '#f87171' : '#4ade80');
-          const change = (!hasPct || pct === 0)
-            ? '持平'
-            : (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(2) + '%';
-          return `
-            <div class="rounded-2xl bg-slate-800/60 border border-slate-700/60 px-2 py-3 text-center">
-              <div class="text-[12.5px] text-slate-300 truncate mb-1.5">${it.name}</div>
-              <div class="text-[15px] font-bold text-slate-100 font-mono tabular-nums leading-tight">${formatPrice(r.f2)}</div>
-              <div class="text-[13px] font-semibold font-mono tabular-nums mt-1" style="color:${color}">${change}</div>
-            </div>`;
-        }).join('');
+          return { name: it.name, price: r.f2, pct: isNaN(pct) ? null : pct };
+        }).filter(Boolean);
+        if (!items.length) throw new Error('无可用品种');
 
-        if (stamp) {
-          const now = new Date();
-          stamp.innerText = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' 更新';
-        }
+        const now = new Date();
+        const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+        renderMarketRows(items, hhmm + ' 更新');
       } catch (e) {
-        // 拉不到就整张卡隐藏，宁可少一块，也不显示报错或占位
-        const sec = document.getElementById('sectionMarket');
-        if (sec) sec.style.display = 'none';
-        console.warn('[行情] 读取失败，已隐藏行情卡：', e);
+        // 实时接口连不上时退回收盘快照，别让这块直接消失
+        try {
+          const snapResp = await fetch('./data/market.json?t=' + Date.now(), { cache: 'no-store' });
+          if (!snapResp.ok) throw new Error('无快照');
+          const snap = await snapResp.json();
+          if (!snap || !Array.isArray(snap.items) || !snap.items.length) throw new Error('快照为空');
+          const t = (snap.updated || '').slice(5);
+          renderMarketRows(snap.items, t + ' 收盘');
+        } catch (e2) {
+          const sec = document.getElementById('sectionMarket');
+          if (sec) sec.style.display = 'none';
+          console.warn('[行情] 实时与快照均不可用，已隐藏行情卡：', e, e2);
+        }
       }
-    }
-
-    // 导航吸顶位置跟着 header 实际高度走，避免不同机型字号渲染差异造成缝隙
-    function syncNavOffset() {
-      const header = document.querySelector('header');
-      const nav = document.getElementById('categoryNav');
-      if (header && nav) nav.style.top = header.offsetHeight + 'px';
     }
 
     // 双模加载器：优先加载静态 data/reports.json (GitHub Pages)，备选本地 FastAPI /api
@@ -442,43 +396,6 @@
       }
     }
 
-    function formatCaseToHtml(mdText) {
-      if (!mdText) return '<p class="text-[14px] text-slate-400">暂无实战案例详情</p>';
-      const match = mdText.match(/## 💰 一人公司搞钱案例深度拆解[\s\S]*?### 【本期课题】([\s\S]*?)(?:---|## 🤖|$)/);
-      if (!match) {
-        return '<div class="rounded-2xl bg-slate-900/80 border border-slate-800 p-4 text-[14px] text-slate-300 leading-[1.8] whitespace-pre-line">' + mdText.slice(0, 1500) + '</div>';
-      }
-      const rawText = match[1].trim();
-      const sections = rawText.split(/\n####\s*/);
-      const badges = [
-        ['bg-sky-500/20 text-sky-300 border-sky-500/40', '痛点洞察'],
-        ['bg-emerald-500/20 text-emerald-300 border-emerald-500/40', '商业模式'],
-        ['bg-purple-500/20 text-purple-300 border-purple-500/40', '工具链 SOP'],
-        ['bg-amber-500/20 text-amber-300 border-amber-500/40', '变现闭环'],
-        ['bg-rose-500/20 text-rose-300 border-rose-500/40', '实操建议']
-      ];
-      let cardsHtml = '';
-      for (let i = 1; i < sections.length; i++) {
-        const lines = sections[i].trim().split('\n');
-        const title = lines[0].replace(/^#+\s*/, '').trim();
-        const bodyLines = lines.slice(1).map(l => l.trim()).filter(Boolean);
-        const body = bodyLines.join('<br>');
-        const [badgeStyle, badgeName] = badges[i - 1] || ['bg-slate-700 text-slate-300 border-slate-600', '拆解'];
-        cardsHtml += `
-          <div class="rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm">
-            <div class="flex items-center justify-between gap-2">
-              <h4 class="text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug">
-                <span class="w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0"></span>
-                ${title}
-              </h4>
-              <span class="text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 ${badgeStyle}">${badgeName}</span>
-            </div>
-            <p class="text-[15px] text-slate-200 leading-[1.8] font-normal">${body}</p>
-          </div>`;
-      }
-      return cardsHtml || '<p class="text-[14px] text-slate-400">正在生成实战案例拆解...</p>';
-    }
-
     // 顶部横幅如实反映「今天有没有新内容」，避免用户以为没更新
     function updateBanner(report) {
       const el = document.getElementById('bannerText');
@@ -494,29 +411,103 @@
       }
     }
 
+    // 章节列表：点一下把音频跳到该段开头
+    function renderChapters(report) {
+      const list = document.getElementById('chapterList');
+      const wrap = document.getElementById('chapterWrap');
+      if (!list || !wrap) return;
+      const chapters = Array.isArray(report.chapters) ? report.chapters : [];
+      if (!chapters.length) {
+        wrap.classList.add('hidden');
+        return;
+      }
+      wrap.classList.remove('hidden');
+      list.innerHTML = chapters.map((c, i) => `
+        <button class="chapter-chip flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-slate-800/70 border border-slate-700/70 text-slate-300 text-[13px] active:scale-95 transition-all" data-start="${c.start || 0}">
+          <span class="truncate">${c.label}</span>
+          <span class="font-mono text-[11.5px] text-sky-400 flex-shrink-0">${formatTime(c.start || 0)}</span>
+        </button>`).join('');
+
+      list.querySelectorAll('.chapter-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const start = parseFloat(btn.getAttribute('data-start')) || 0;
+          audio.currentTime = start;
+          if (audio.paused) audio.play().catch(() => {});
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      });
+      highlightChapter(audio.currentTime || 0);
+    }
+
+    // 播到哪一段，就把那一段高亮出来
+    function highlightChapter(t) {
+      const chapters = (currentReport && currentReport.chapters) || [];
+      const chips = document.querySelectorAll('.chapter-chip');
+      if (!chapters.length || !chips.length) return;
+      let active = 0;
+      chapters.forEach((c, i) => { if (t >= (c.start || 0) - 0.5) active = i; });
+      chips.forEach((chip, i) => {
+        chip.classList.toggle('bg-sky-500/25', i === active);
+        chip.classList.toggle('border-sky-500/60', i === active);
+        chip.classList.toggle('text-white', i === active);
+      });
+    }
+
+    function renderTranscript(report) {
+      const el = document.getElementById('transcript');
+      if (!el) return;
+      const md = report.markdown_content || '';
+      if (!md) {
+        el.innerHTML = '<p class="text-[14px] text-slate-500">本期暂无文字稿。</p>';
+        return;
+      }
+      try {
+        el.innerHTML = marked.parse(md);
+        // 标题和正文统一压到手机好读的尺寸
+        el.querySelectorAll('h1').forEach(h => h.className = 'text-[17px] font-bold text-white mt-3 mb-2');
+        el.querySelectorAll('h2').forEach(h => h.className = 'text-[16px] font-bold text-white mt-4 mb-2');
+        el.querySelectorAll('h3').forEach(h => h.className = 'text-[15px] font-semibold text-slate-100 mt-3 mb-1.5');
+        el.querySelectorAll('h4').forEach(h => h.className = 'text-[14.5px] font-semibold text-slate-100 mt-2 mb-1');
+        el.querySelectorAll('p').forEach(p => p.className = 'text-[14.5px] leading-[1.85] text-slate-300 my-1.5');
+        el.querySelectorAll('li').forEach(li => li.className = 'text-[14px] leading-[1.8] text-slate-300 ml-4 list-disc');
+        el.querySelectorAll('blockquote').forEach(b => b.className = 'border-l-2 border-amber-400/60 pl-3 my-2 text-amber-100/90');
+        el.querySelectorAll('hr').forEach(h => h.className = 'border-slate-800 my-3');
+        el.querySelectorAll('a').forEach(a => {
+          a.className = 'text-sky-400 break-all';
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        });
+      } catch (e) {
+        el.innerText = md.slice(0, 3000);
+      }
+    }
+
     function renderReport(report) {
       currentReport = report;
       updateBanner(report);
       document.getElementById('topDateStr').innerText = report.date_str + ' · 晨间搞钱特辑';
-      document.getElementById('leadTitle').innerText = report.lead_title || report.title;
-      document.getElementById('leadMetaTime').innerText = `时长约 ${report.audio_duration_str || '08:30'}`;
-      document.getElementById('playerTotalTime').innerText = report.audio_duration_str || '08:30';
+      document.getElementById('heroDate').innerText = report.date_str;
+      document.getElementById('heroDuration').innerText = report.audio_duration_str || '--:--';
+      document.getElementById('playerTotalTime').innerText = report.audio_duration_str || '00:00';
       document.getElementById('playerTitle').innerText = report.lead_title || report.title;
 
-      if (report.quote_of_the_day) {
-        document.getElementById('quoteText').innerText = '“' + report.quote_of_the_day.replace(/[“”「」]/g, '') + '”';
+      // 一行说清今天里面有什么，省得用户点进去才知道
+      const counts = {};
+      (report.sources || []).forEach(s => { counts[s.category] = (counts[s.category] || 0) + 1; });
+      const hookParts = [];
+      if (counts['AI Agent']) hookParts.push('AI ' + counts['AI Agent']);
+      if (counts['一人公司']) hookParts.push('一人公司 ' + counts['一人公司']);
+      if (counts['宏观大势']) hookParts.push('大势 ' + counts['宏观大势']);
+      const hookEl = document.getElementById('heroHook');
+      if (hookEl) hookEl.innerText = hookParts.length ? hookParts.join(' · ') : '不用看字，戴上耳机就能听完';
+
+      const caseEl = document.getElementById('heroCase');
+      if (caseEl) {
+        caseEl.innerText = report.lead_title ? '今天的案例：' + report.lead_title : '';
       }
 
-      // 渲染主打案例 (优先采用预渲染 HTML 卡片，次级采用本地高容错解析器)
-      const leadEl = document.getElementById('leadContent');
-      if (report.case_html && report.case_html.trim()) {
-        leadEl.innerHTML = report.case_html;
-      } else {
-        leadEl.innerHTML = formatCaseToHtml(report.markdown_content);
-      }
-
-      renderFlashes(report);
-      renderSources(report.sources || []);
+      renderChapters(report);
+      renderTranscript(report);
 
       // 音频源挂载 (自动挂载音频直链，安全防护加载)
       if (report.audio_url) {
@@ -532,56 +523,6 @@
       if (window.lucide) {
         lucide.createIcons();
       }
-    }
-
-    function renderFlashes(report) {
-      const list = document.getElementById('flashCardList');
-      list.innerHTML = '';
-      const sources = report.sources || [];
-
-      sources.forEach((item) => {
-        const colorClass = categoryColors[item.category] || 'bg-slate-800 text-slate-300 border-slate-700';
-        const card = document.createElement('div');
-        card.className = `flash-card rounded-2xl bg-slate-900/70 border border-slate-800/80 p-4 transition-all hover:border-slate-700 space-y-2.5`;
-        card.setAttribute('data-category', item.category);
-
-        card.innerHTML = `
-          <div class="flex items-center justify-between gap-2">
-            <span class="px-2.5 py-1 rounded-full text-[11.5px] font-semibold border ${colorClass}">
-              ${item.category}
-            </span>
-            <span class="text-[12px] text-slate-400 font-mono truncate">${item.source_name || '权威信源'}</span>
-          </div>
-          <h4 class="text-[16px] font-semibold text-slate-100 leading-[1.6]">${item.title}</h4>
-          ${item.why_matter ? `<p class="text-[14px] text-slate-300 leading-[1.75] border-l-2 border-slate-600 pl-3">${item.why_matter}</p>` : ''}
-          <div class="flex items-center justify-end pt-1">
-            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-sky-400 hover:text-sky-300 active:scale-95 transition-all py-1">
-              <span>查看原文</span>
-              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-            </a>
-          </div>
-        `;
-        list.appendChild(card);
-      });
-    }
-
-    function renderSources(sources) {
-      const list = document.getElementById('sourceLinksList');
-      list.innerHTML = '';
-      sources.forEach((s, idx) => {
-        const item = document.createElement('div');
-        item.className = 'text-[13px] text-slate-400 flex items-center justify-between gap-3 py-2 border-b border-slate-800/40 last:border-none';
-        item.innerHTML = `
-          <div class="truncate flex items-center gap-2 min-w-0">
-            <span class="font-mono text-slate-500 text-[12px] flex-shrink-0">${idx + 1}.</span>
-            <span class="text-slate-300 truncate">${s.title}</span>
-          </div>
-          <a href="${s.url}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline flex-shrink-0 text-[12px]">
-            ${s.source_name}
-          </a>
-        `;
-        list.appendChild(item);
-      });
     }
 
     function renderHistoryModal(reports) {
@@ -600,6 +541,7 @@
         item.addEventListener('click', () => {
           renderReport(r);
           historyModal.classList.add('hidden');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
           if (audio.paused) togglePlay();
         });
         container.appendChild(item);
@@ -613,72 +555,6 @@
     btnCloseHistory.addEventListener('click', () => {
       historyModal.classList.add('hidden');
     });
-
-    // 分类筛选切换
-    document.getElementById('categoryTabs').addEventListener('click', (e) => {
-      const btn = e.target.closest('.cat-pill');
-      if (!btn) return;
-      document.querySelectorAll('.cat-pill').forEach(b => {
-        b.classList.remove('bg-sky-500', 'text-white', 'shadow-sm', 'shadow-sky-500/30');
-        b.classList.add('bg-slate-800/80', 'text-slate-300');
-      });
-      btn.classList.add('bg-sky-500', 'text-white', 'shadow-sm', 'shadow-sky-500/30');
-      btn.classList.remove('bg-slate-800/80', 'text-slate-300');
-
-      const cat = btn.getAttribute('data-cat');
-      filterCategory(cat);
-    });
-
-    function filterCategory(cat) {
-      const leadSec = document.getElementById('sectionLead');
-      const flashesSec = document.getElementById('sectionFlashes');
-      const sourcesSec = document.getElementById('sectionSources');
-      const cards = document.querySelectorAll('.flash-card');
-
-      if (cat === 'ALL') {
-        leadSec.style.display = 'block';
-        if (flashesSec) flashesSec.style.display = 'block';
-        if (sourcesSec) sourcesSec.style.display = 'block';
-        cards.forEach(c => c.style.display = 'block');
-      } else if (cat === 'CASE' || cat === 'LEAD') {
-        leadSec.style.display = 'block';
-        if (flashesSec) flashesSec.style.display = 'none';
-        if (sourcesSec) sourcesSec.style.display = 'none';
-        cards.forEach(c => c.style.display = 'none');
-      } else if (cat === 'AI') {
-        leadSec.style.display = 'none';
-        if (flashesSec) flashesSec.style.display = 'block';
-        if (sourcesSec) sourcesSec.style.display = 'none';
-        cards.forEach(c => {
-          const cCat = c.getAttribute('data-category') || '';
-          c.style.display = (cCat.includes('AI') || cCat.includes('Agent')) ? 'block' : 'none';
-        });
-      } else if (cat === 'OPC') {
-        leadSec.style.display = 'none';
-        if (flashesSec) flashesSec.style.display = 'block';
-        if (sourcesSec) sourcesSec.style.display = 'none';
-        cards.forEach(c => {
-          const cCat = c.getAttribute('data-category') || '';
-          c.style.display = (cCat.includes('一人公司') || cCat.includes('OPC')) ? 'block' : 'none';
-        });
-      } else if (cat === 'MACRO') {
-        leadSec.style.display = 'none';
-        if (flashesSec) flashesSec.style.display = 'block';
-        if (sourcesSec) sourcesSec.style.display = 'none';
-        cards.forEach(c => {
-          const cCat = c.getAttribute('data-category') || '';
-          c.style.display = cCat.includes('宏观大势') ? 'block' : 'none';
-        });
-      } else if (cat === 'NEWS') {
-        leadSec.style.display = 'none';
-        if (flashesSec) flashesSec.style.display = 'block';
-        if (sourcesSec) sourcesSec.style.display = 'block';
-        cards.forEach(c => {
-          const cCat = c.getAttribute('data-category') || '';
-          c.style.display = (cCat.includes('学习强国') || cCat.includes('参考消息') || cCat.includes('新浪财经') || cCat.includes('喜马拉雅')) ? 'block' : 'none';
-        });
-      }
-    }
 
     function togglePlay() {
       if (audio.paused) {
@@ -704,12 +580,14 @@
           pauseWrap.classList.add('hidden');
         }
       }
-      if (isPlaying) {
-        waveAnimation.classList.remove('hidden');
-        waveIconStatic.classList.add('hidden');
-      } else {
-        waveAnimation.classList.add('hidden');
-        waveIconStatic.classList.remove('hidden');
+      // 大按钮图标同步
+      if (heroPlayIcon && heroPauseIcon) {
+        heroPlayIcon.classList.toggle('hidden', isPlaying);
+        heroPauseIcon.classList.toggle('hidden', !isPlaying);
+      }
+      if (waveAnimation) {
+        waveAnimation.classList.toggle('hidden', !isPlaying);
+        waveIconStatic.classList.toggle('hidden', isPlaying);
       }
     }
 
@@ -717,14 +595,7 @@
     audio.addEventListener('pause', () => updatePlayUI(false));
 
     btnPlayPause.addEventListener('click', togglePlay);
-    btnPlayMain.addEventListener('click', () => {
-      if (audio.paused) {
-        audio.play().catch(e => console.log('Play err:', e));
-      } else {
-        audio.pause();
-      }
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    });
+    btnHeroPlay.addEventListener('click', togglePlay);
 
     btnRewind15.addEventListener('click', () => {
       audio.currentTime = Math.max(0, audio.currentTime - 15);
@@ -743,8 +614,8 @@
     audio.addEventListener('loadedmetadata', () => {
       if (!isNaN(audio.duration) && audio.duration > 0) {
         playerTotalTime.innerText = formatTime(audio.duration);
-        const metaElem = document.getElementById('leadMetaTime');
-        if (metaElem) metaElem.innerText = `时长约 ${formatTime(audio.duration)}`;
+        const heroDur = document.getElementById('heroDuration');
+        if (heroDur) heroDur.innerText = formatTime(audio.duration);
       }
     });
 
@@ -755,6 +626,7 @@
         progressRange.value = pct;
         playerCurrentTime.innerText = formatTime(audio.currentTime);
         playerTotalTime.innerText = formatTime(audio.duration);
+        highlightChapter(audio.currentTime);
       }
     });
 
@@ -775,7 +647,7 @@
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: report.lead_title || report.title,
-          artist: '每日商业深度拆解与权威要闻播报',
+          artist: '搞钱情报 · 每日语音早报',
           album: `NewsCast · ${report.date_str}`,
           artwork: [
             { src: './static/icons/icon.svg', sizes: '512x512', type: 'image/svg+xml' }
@@ -818,8 +690,6 @@
 
     loadReports();
     loadMarket();
-    syncNavOffset();
-    window.addEventListener('resize', syncNavOffset);
     lucide.createIcons();
   </script>
 </body>

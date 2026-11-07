@@ -5,6 +5,7 @@ import shutil
 import asyncio
 import datetime
 import email.utils
+import httpx
 from pathlib import Path
 from app.collector import collector
 from app.summarizer import summarizer
@@ -91,6 +92,58 @@ def write_podcast_xml(reports: list) -> None:
     print(f"  播客 RSS 已生成: {DOCS_DIR / 'podcast.xml'}，共 {len(items)} 期")
 
 
+MARKET_SECIDS = "100.DJIA,100.NDX,100.SPX,1.000001,0.399006,101.GC00Y"
+MARKET_NAMES = {
+    "100.DJIA": "道琼斯",
+    "100.NDX": "纳斯达克",
+    "100.SPX": "标普500",
+    "1.000001": "上证指数",
+    "0.399006": "创业板指",
+    "101.GC00Y": "黄金",
+}
+
+
+async def write_market_snapshot() -> None:
+    """
+    生成一份收盘行情快照（docs/data/market.json）。
+    页面优先实时拉接口；接口万一连不上，就退回这份快照，
+    不至于让「唯一需要看」的行情模块整个消失。
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            resp = await client.get(
+                "https://push2.eastmoney.com/api/qt/ulist.np/get",
+                params={"fltt": 2, "fields": "f2,f3,f4,f12,f13,f14", "secids": MARKET_SECIDS},
+            )
+            rows = (resp.json() or {}).get("data", {}).get("diff") or []
+    except Exception as e:
+        print(f"  行情快照抓取失败（不影响早报生成）: {type(e).__name__}")
+        return
+
+    by_code = {f"{r.get('f13')}.{r.get('f12')}": r for r in rows}
+    items = []
+    for code, name in MARKET_NAMES.items():
+        r = by_code.get(code)
+        if not r:
+            continue
+        price, pct = r.get("f2"), r.get("f3")
+        items.append({
+            "name": name,
+            "price": price if isinstance(price, (int, float)) else None,
+            "pct": pct if isinstance(pct, (int, float)) else None,
+        })
+    if not items:
+        print("  行情快照为空，跳过写入")
+        return
+
+    cst = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+    payload = {"updated": cst.strftime("%Y-%m-%d %H:%M"), "items": items}
+    (DOCS_DATA_DIR / "market.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"  行情快照已写入（{len(items)} 个品种）")
+
+
 def build_case_html(md_text: str) -> str:
     m = re.search(r'## 💰 一人公司搞钱案例深度拆解\s+### 【本期课题】(.*?)(?=---\s*\n## |\n## 🤖|$)', md_text, re.DOTALL)
     if not m:
@@ -141,6 +194,9 @@ async def build_today_report():
     print(f"  本期归属日期: {date_str}")
     print(f"  触发方式: {os.getenv('GITHUB_EVENT_NAME', 'local')}")
     print(f"==================================================")
+
+    # 无论本期是否重跑，都刷新一次收盘行情快照，给页面做兜底
+    await write_market_snapshot()
 
     # 先读取既有存档：判断本期是否已经生成过，避免三个兜底时间点重复合成音频
     reports_file = DOCS_DATA_DIR / "reports.json"
@@ -196,6 +252,23 @@ async def build_today_report():
         else ((cat_summary or {}).get("今日金句") or "未来属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。")
     )
 
+    # 章节时间轴：TTS 是整段一次合成的，拿不到逐段真实时间戳，
+    # 按各段字数占比换算成秒，误差在几秒内，够用来做章节跳转。
+    chapters = []
+    raw_chapters = getattr(summarizer, "last_chapters", []) or []
+    if raw_chapters:
+        total_chars = sum(len(re.sub(r"\s+", "", c["text"])) for c in raw_chapters) or 1
+        cursor = 0
+        for c in raw_chapters:
+            chars = len(re.sub(r"\s+", "", c["text"]))
+            chapters.append({
+                "label": c["label"],
+                "start": int(round(duration_sec * cursor / total_chars)),
+            })
+            cursor += chars
+        if chapters:
+            chapters[0]["start"] = 0
+
     # 生成案例卡片 HTML
     case_html = build_case_html(markdown_content)
 
@@ -212,6 +285,7 @@ async def build_today_report():
         "audio_url": f"audio/{audio_filename}?v={int(cst_now.timestamp())}",
         "audio_duration": duration_sec,
         "audio_duration_str": duration_str,
+        "chapters": chapters,
         "file_size_bytes": file_size,
         "category_summary": cat_summary,
         "sources": sources,

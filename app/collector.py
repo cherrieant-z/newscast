@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import datetime
+import email.utils
 import hashlib
 import re
 import xml.etree.ElementTree as ET
@@ -177,6 +178,14 @@ MACRO_KEYWORDS = [
     ("ai", "tech"),
 ]
 
+# 只要标题在讲某类资产的价格，就直接归到「你的钱袋子」。
+# 「央行增持黄金」若被「央行」拽进「钱的价格」，会配上一段讲借钱成本的解读，听感完全跑偏。
+MACRO_ASSET_WORDS = [
+    "黄金", "金价", "原油", "油价", "比特币", "美股", "纳指", "道指", "标普",
+    "a股", "上证", "深证", "创业板", "科创板", "恒指", "港股", "股价", "涨停",
+    "跌停", "收盘", "收涨", "收跌", "大宗商品",
+]
+
 # 跟个人决策无关的类型：外事礼仪、人事表彰、军事冲突、国际政坛、体育文娱
 # 命中即剔除（哪怕同时含经济词，因为这类标题信息量太低、无法给出行动指向）
 MACRO_NEGATIVE = [
@@ -208,6 +217,10 @@ def _macro_domain_of(title: str) -> str:
     # 先剔除明确无关的类型
     if _hits_any(t, MACRO_NEGATIVE):
         return ""
+    # 只要是讲某类资产价格的，一律归到「你的钱袋子」。
+    # 否则「央行增持黄金」会被「央行」拽进「钱的价格」，配上借钱成本的解读，听感完全跑偏。
+    if _hits_any(t, MACRO_ASSET_WORDS):
+        return "market"
     score: Dict[str, int] = {}
     for kw, dom in MACRO_KEYWORDS:
         if _kw_hit(t, kw):
@@ -311,9 +324,38 @@ SUMMARY_NOISE_PATTERNS = [
 
 # 聚合类稿件：一天塞十几条杂讯，命中率低、噪声高，整条丢弃
 AGGREGATOR_NOISE = [
-    "8点1氪", "早报", "晚报", "午报", "日报", "周报", "快讯汇总", "热点汇总",
-    "一周要闻", "今日要闻", "新闻盘点", "盘前", "盘中", "收盘播报",
+    "8点1氪", "9点1氪", "10点1氪", "点1氪", "科氪", "早报", "晚报", "午报", "日报", "周报",
+    "快讯汇总", "热点汇总", "热点导览", "一周要闻", "今日要闻", "新闻盘点", "盘前", "盘中",
+    "收盘播报", "一文读懂", "一文看懂", "速览", "合集",
 ]
+
+
+def _is_stale(published: str, max_days: int = 10) -> bool:
+    """
+    发布时间太久的条目直接丢弃。
+    「过去 24 小时」的播报里如果混进几年前的旧文，听感上就是假话，比没有更糟。
+    解析不出日期的（部分源不带时间）一律保留，不误伤。
+    """
+    raw = (published or "").strip()
+    if not raw:
+        return False
+    dt = None
+    try:
+        dt = email.utils.parsedate_to_datetime(raw)
+    except Exception:
+        dt = None
+    if dt is None:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d"):
+            try:
+                dt = datetime.datetime.strptime(raw[:19], fmt)
+                break
+            except Exception:
+                continue
+    if dt is None:
+        return False
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return (datetime.datetime.utcnow() - dt).days > max_days
 
 
 def _clean_summary(text: str) -> str:
@@ -549,6 +591,9 @@ class NewsCollector:
                         continue
                     # 聚合类稿件（早报、快讯汇总）噪声极高，整条不要
                     if _is_aggregator(title):
+                        continue
+                    # 旧文不要：别让「过去 24 小时」里混进几年前的帖子
+                    if _is_stale(fi.get("published", "")):
                         continue
                     # 摘要先洗掉付费墙 / 推广模板句，再压到一两句
                     summary = _clean_summary(fi.get("summary", "")[:400])
