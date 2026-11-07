@@ -92,48 +92,50 @@ def write_podcast_xml(reports: list) -> None:
     print(f"  播客 RSS 已生成: {DOCS_DIR / 'podcast.xml'}，共 {len(items)} 期")
 
 
-MARKET_SECIDS = "100.DJIA,100.NDX,100.SPX,1.000001,0.399006,101.GC00Y"
-MARKET_NAMES = {
-    "100.DJIA": "道琼斯",
-    "100.NDX": "纳斯达克",
-    "100.SPX": "标普500",
-    "1.000001": "上证指数",
-    "0.399006": "创业板指",
-    "101.GC00Y": "黄金",
-}
-
-# 快照用的新浪代码：GitHub Actions 的机房 IP 访问东财会被拒，新浪这组更稳
-SINA_QUOTES = [
-    ("int_dji", "道琼斯"),
-    ("int_nasdaq", "纳斯达克"),
-    ("int_sp500", "标普500"),
-    ("s_sh000001", "上证指数"),
-    ("s_sz399006", "创业板指"),
-    ("hf_GC", "黄金"),
+# 快照用的腾讯代码：机房 IP 用 Python 访问东财会被拒，腾讯这组稳定，
+# 而且境外指数、A股指数一次就能取全（黄金腾讯不提供，用新浪补）
+TENCENT_QUOTES = [
+    ("usDJI", "道琼斯"),
+    ("usIXIC", "纳斯达克"),
+    ("usINX", "标普500"),
+    ("sh000001", "上证指数"),
+    ("sz399006", "创业板指"),
 ]
+MARKET_ORDER = ["道琼斯", "纳斯达克", "标普500", "上证指数", "创业板指", "黄金"]
 
 
-def _parse_sina_quotes(text: str) -> list:
-    """解析 var hq_str_xxx="名称,价格,涨跌,涨跌幅,..." 这一串，取价格与涨跌幅"""
+def _parse_tencent_quotes(text: str) -> list:
+    """v_usDJI="200~道琼斯~.DJI~51285.73~...~-0.46~..."，3 是现价、32 是涨跌幅"""
     items = []
-    for code, name in SINA_QUOTES:
-        m = re.search(rf'hq_str_{code}="([^"]*)"', text or "")
-        if not m or not m.group(1).strip():
+    for code, name in TENCENT_QUOTES:
+        m = re.search(rf'v_{code}="([^"]*)"', text or "")
+        if not m:
             continue
-        f = m.group(1).split(",")
+        f = m.group(1).split("~")
         try:
-            if code.startswith("hf_"):
-                # 黄金：0 是现价，7 是昨结算价（没有直接给涨跌幅）
-                price = float(f[0])
-                prev = float(f[7]) if len(f) > 7 and f[7] else price
-                pct = (price - prev) / prev * 100 if prev else 0.0
-            else:
-                price = float(f[1])
-                pct = float(f[3])
+            price = float(f[3])
+            pct = float(f[32])
         except (ValueError, IndexError):
             continue
         items.append({"name": name, "price": round(price, 2), "pct": round(pct, 2)})
     return items
+
+
+async def _fetch_gold(client: httpx.AsyncClient) -> dict:
+    """腾讯没有黄金，用新浪的 hf_GC（0 现价、7 昨结算），自己算涨跌幅"""
+    try:
+        resp = await client.get("https://hq.sinajs.cn/list=hf_GC",
+                                headers={"Referer": "https://finance.sina.com.cn"})
+        m = re.search(r'hq_str_hf_GC="([^"]*)"', resp.text)
+        if not m:
+            return {}
+        f = m.group(1).split(",")
+        price = float(f[0])
+        prev = float(f[7]) if len(f) > 7 and f[7] else price
+        pct = (price - prev) / prev * 100 if prev else 0.0
+        return {"name": "黄金", "price": round(price, 2), "pct": round(pct, 2)}
+    except Exception:
+        return {}
 
 
 async def write_market_snapshot() -> None:
@@ -141,52 +143,32 @@ async def write_market_snapshot() -> None:
     生成一份收盘行情快照（docs/data/market.json）。
     页面优先实时拉接口；接口连不上就退回这份快照，
     不至于让「唯一需要看」的行情模块整个消失。
-    先用新浪（机房 IP 也能拿到），失败再退回东财。
     """
     items = []
     try:
-        async with httpx.AsyncClient(timeout=15.0, headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://finance.sina.com.cn",
-        }) as client:
-            codes = ",".join(c for c, _ in SINA_QUOTES)
-            resp = await client.get(f"https://hq.sinajs.cn/list={codes}")
-            items = _parse_sina_quotes(resp.text)
+        async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            codes = ",".join(c for c, _ in TENCENT_QUOTES)
+            resp = await client.get(f"https://qt.gtimg.cn/q={codes}")
+            items = _parse_tencent_quotes(resp.content.decode("gbk", "ignore"))
+            gold = await _fetch_gold(client)
+            if gold:
+                items.append(gold)
     except Exception as e:
-        print(f"  新浪行情抓取失败: {type(e).__name__}")
+        print(f"  行情快照抓取失败（不影响早报生成）: {type(e).__name__}")
 
     if not items:
-        try:
-            async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
-                resp = await client.get(
-                    "https://push2.eastmoney.com/api/qt/ulist.np/get",
-                    params={"fltt": 2, "fields": "f2,f3,f4,f12,f13,f14", "secids": MARKET_SECIDS},
-                )
-                rows = (resp.json() or {}).get("data", {}).get("diff") or []
-            by_code = {f"{r.get('f13')}.{r.get('f12')}": r for r in rows}
-            for code, name in MARKET_NAMES.items():
-                r = by_code.get(code)
-                if not r:
-                    continue
-                price, pct = r.get("f2"), r.get("f3")
-                items.append({
-                    "name": name,
-                    "price": price if isinstance(price, (int, float)) else None,
-                    "pct": pct if isinstance(pct, (int, float)) else None,
-                })
-        except Exception as e:
-            print(f"  东财行情也失败: {type(e).__name__}")
-
-    if not items:
-        print("  行情快照为空，跳过写入（不影响早报生成）")
+        print("  行情快照为空，跳过写入")
         return
 
+    by_name = {it["name"]: it for it in items}
+    ordered = [by_name[n] for n in MARKET_ORDER if n in by_name]
+
     cst = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
-    payload = {"updated": cst.strftime("%Y-%m-%d %H:%M"), "items": items}
+    payload = {"updated": cst.strftime("%Y-%m-%d %H:%M"), "items": ordered}
     (DOCS_DATA_DIR / "market.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(f"  行情快照已写入（{len(items)} 个品种）")
+    print(f"  行情快照已写入（{len(ordered)} 个品种）")
 
 
 def build_case_html(md_text: str) -> str:
