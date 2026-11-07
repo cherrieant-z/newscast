@@ -1,4 +1,4 @@
-const CACHE_NAME = 'newscast-pwa-v3';
+const CACHE_NAME = 'newscast-pwa-v4';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -21,8 +21,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 针对 reports.json 数据：优先网络，失败则读取离线缓存 (Network-first with Cache fallback)
-  if (event.request.url.includes('reports.json') || event.request.url.includes('/api/')) {
+  // 数据文件（reports.json / market.json）：优先网络，失败才读缓存，避免行情显示上一次的旧数字
+  if (event.request.url.includes('reports.json') || event.request.url.includes('market.json') || event.request.url.includes('/api/')) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
