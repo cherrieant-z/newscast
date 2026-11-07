@@ -359,7 +359,7 @@
           const snap = await snapResp.json();
           if (!snap || !Array.isArray(snap.items) || !snap.items.length) throw new Error('快照为空');
           const t = (snap.updated || '').slice(5);
-          renderMarketRows(snap.items, t + ' 收盘');
+          renderMarketRows(snap.items, t + ' 快照');
         } catch (e2) {
           const sec = document.getElementById('sectionMarket');
           if (sec) sec.style.display = 'none';

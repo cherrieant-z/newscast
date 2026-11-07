@@ -102,38 +102,83 @@ MARKET_NAMES = {
     "101.GC00Y": "黄金",
 }
 
+# 快照用的新浪代码：GitHub Actions 的机房 IP 访问东财会被拒，新浪这组更稳
+SINA_QUOTES = [
+    ("int_dji", "道琼斯"),
+    ("int_nasdaq", "纳斯达克"),
+    ("int_sp500", "标普500"),
+    ("s_sh000001", "上证指数"),
+    ("s_sz399006", "创业板指"),
+    ("hf_GC", "黄金"),
+]
+
+
+def _parse_sina_quotes(text: str) -> list:
+    """解析 var hq_str_xxx="名称,价格,涨跌,涨跌幅,..." 这一串，取价格与涨跌幅"""
+    items = []
+    for code, name in SINA_QUOTES:
+        m = re.search(rf'hq_str_{code}="([^"]*)"', text or "")
+        if not m or not m.group(1).strip():
+            continue
+        f = m.group(1).split(",")
+        try:
+            if code.startswith("hf_"):
+                # 黄金：0 是现价，7 是昨结算价（没有直接给涨跌幅）
+                price = float(f[0])
+                prev = float(f[7]) if len(f) > 7 and f[7] else price
+                pct = (price - prev) / prev * 100 if prev else 0.0
+            else:
+                price = float(f[1])
+                pct = float(f[3])
+        except (ValueError, IndexError):
+            continue
+        items.append({"name": name, "price": round(price, 2), "pct": round(pct, 2)})
+    return items
+
 
 async def write_market_snapshot() -> None:
     """
     生成一份收盘行情快照（docs/data/market.json）。
-    页面优先实时拉接口；接口万一连不上，就退回这份快照，
+    页面优先实时拉接口；接口连不上就退回这份快照，
     不至于让「唯一需要看」的行情模块整个消失。
+    先用新浪（机房 IP 也能拿到），失败再退回东财。
     """
-    try:
-        async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
-            resp = await client.get(
-                "https://push2.eastmoney.com/api/qt/ulist.np/get",
-                params={"fltt": 2, "fields": "f2,f3,f4,f12,f13,f14", "secids": MARKET_SECIDS},
-            )
-            rows = (resp.json() or {}).get("data", {}).get("diff") or []
-    except Exception as e:
-        print(f"  行情快照抓取失败（不影响早报生成）: {type(e).__name__}")
-        return
-
-    by_code = {f"{r.get('f13')}.{r.get('f12')}": r for r in rows}
     items = []
-    for code, name in MARKET_NAMES.items():
-        r = by_code.get(code)
-        if not r:
-            continue
-        price, pct = r.get("f2"), r.get("f3")
-        items.append({
-            "name": name,
-            "price": price if isinstance(price, (int, float)) else None,
-            "pct": pct if isinstance(pct, (int, float)) else None,
-        })
+    try:
+        async with httpx.AsyncClient(timeout=15.0, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://finance.sina.com.cn",
+        }) as client:
+            codes = ",".join(c for c, _ in SINA_QUOTES)
+            resp = await client.get(f"https://hq.sinajs.cn/list={codes}")
+            items = _parse_sina_quotes(resp.text)
+    except Exception as e:
+        print(f"  新浪行情抓取失败: {type(e).__name__}")
+
     if not items:
-        print("  行情快照为空，跳过写入")
+        try:
+            async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
+                resp = await client.get(
+                    "https://push2.eastmoney.com/api/qt/ulist.np/get",
+                    params={"fltt": 2, "fields": "f2,f3,f4,f12,f13,f14", "secids": MARKET_SECIDS},
+                )
+                rows = (resp.json() or {}).get("data", {}).get("diff") or []
+            by_code = {f"{r.get('f13')}.{r.get('f12')}": r for r in rows}
+            for code, name in MARKET_NAMES.items():
+                r = by_code.get(code)
+                if not r:
+                    continue
+                price, pct = r.get("f2"), r.get("f3")
+                items.append({
+                    "name": name,
+                    "price": price if isinstance(price, (int, float)) else None,
+                    "pct": pct if isinstance(pct, (int, float)) else None,
+                })
+        except Exception as e:
+            print(f"  东财行情也失败: {type(e).__name__}")
+
+    if not items:
+        print("  行情快照为空，跳过写入（不影响早报生成）")
         return
 
     cst = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
