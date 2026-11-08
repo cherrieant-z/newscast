@@ -1,5 +1,414 @@
 [
   {
+    "id": 20261109,
+    "date_str": "2026-11-09",
+    "title": "全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-09)",
+    "lead_title": "搭建'垂直行业AI投标书与商业方案生成器'，单人单月变现 12 万的完整 SOP 拆解",
+    "quote_of_the_day": "商业竞争的终局不是拼体力劳动，而是把行业中最繁重、最耗时的脑力劳动提炼成一键交付的精准自动化流水线。",
+    "summary_text": "早上好，今天是 11 月 9 日。接下来这几分钟，我把全球 AI 圈、一人公司圈，还有几个跟你钱包有关的大环境信号，全部讲给你听。你不用看任何文字，闭上眼跟着听就行。\n\n先送你今天的一句话：商业竞争的终局不是拼体力劳动，而是把行业中最繁重、最耗时的脑力劳动提炼成一键交付的精准自动化流水线。这句话放在搞钱这件事上，特别应景。\n\n接下来聊今天主推的一人公司案例：搭建'垂直行业人工智能投标书与商业方案生成器'，单人单月变现 12 万的完整 标准实操流程 拆解。我拆成五段讲。第一段，它解决了什么让人头疼的问题？政府采购、工程建设与企业IT招投标领域，撰写一份动辄上百页的规范投标方案需要专职策划团队耗费...",
+    "case_html": "<div class=\"rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm\">\n  <div class=\"flex items-center justify-between gap-2\">\n    <h4 class=\"text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug\">\n      <span class=\"w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0\"></span>\n      1. 业务切入场景与核心痛点\n    </h4>\n    <span class=\"text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 bg-sky-500/20 text-sky-300 border-sky-500/40\">痛点洞察</span>\n  </div>\n  <p class=\"text-[15px] text-slate-200 leading-[1.8] font-normal\">政府采购、工程建设与企业IT招投标领域，撰写一份动辄上百页的规范投标方案需要专职策划团队耗费5至7天，且格式排版、资质匹配稍有疏漏便面临废标风险。中小投标企业常年面临专职写手年薪高昂（15万以上）、加班严重、临时赶标容易出错的严峻痛点。</p>\n</div>\n<div class=\"rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm\">\n  <div class=\"flex items-center justify-between gap-2\">\n    <h4 class=\"text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug\">\n      <span class=\"w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0\"></span>\n      2. 商业模式与产品极简设计\n    </h4>\n    <span class=\"text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 bg-emerald-500/20 text-emerald-300 border-emerald-500/40\">商业模式</span>\n  </div>\n  <p class=\"text-[15px] text-slate-200 leading-[1.8] font-normal\">针对工程施工、软硬件集成的垂直标书AI生成SaaS系统。用户只需上传招标文件PDF与公司过往案例，系统在15分钟内自动解析评分标准、目录大纲、响应条款并一键生成90%完成度的标准Word标书。采用按份收费加年度会员模式：单次标书生成收费 199 元，企业无限次年卡 3999 元。</p>\n</div>\n<div class=\"rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm\">\n  <div class=\"flex items-center justify-between gap-2\">\n    <h4 class=\"text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug\">\n      <span class=\"w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0\"></span>\n      3. 全套 AI 工具链与自动化 SOP\n    </h4>\n    <span class=\"text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 bg-purple-500/20 text-purple-300 border-purple-500/40\">工具链 SOP</span>\n  </div>\n  <p class=\"text-[15px] text-slate-200 leading-[1.8] font-normal\">1. 文档解析层：采用 Marker 与 LlamaParse 深度提取招标PDF中的复杂表格与技术参数要求；<br>2. 知识库检索增强：基于 Dify 搭建行业案例库与法律资质库，实现本地向量检索防幻觉；<br>3. 模型生成层：调度 DeepSeek 与 Claude 处理长上下文标书技术方案章节撰写；<br>4. 格式导出层：利用 Python-docx 自动化脚本将大模型输出精确套入国标排版模板。</p>\n</div>\n<div class=\"rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm\">\n  <div class=\"flex items-center justify-between gap-2\">\n    <h4 class=\"text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug\">\n      <span class=\"w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0\"></span>\n      4. 流量获客与盈利变现闭环\n    </h4>\n    <span class=\"text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 bg-amber-500/20 text-amber-300 border-amber-500/40\">变现闭环</span>\n  </div>\n  <p class=\"text-[15px] text-slate-200 leading-[1.8] font-normal\">1. 获客打法：在知乎、小红书与微信视频号持续分享各行业废标血泪教训与标书检查清单，引流至私域微信；<br>2. 转化方案：提供首次免费体验生成前三章，满意后再付全款；<br>3. 财务表现：个人开发者运营第6个月，累计付费企业客户达 140 家，单月流水突破 12 万元，纯软件服务毛利率达 96%。</p>\n</div>\n<div class=\"rounded-2xl bg-slate-900/90 border border-slate-700/80 p-4 space-y-2.5 shadow-sm\">\n  <div class=\"flex items-center justify-between gap-2\">\n    <h4 class=\"text-[15px] sm:text-[16px] font-semibold text-slate-100 flex items-center gap-1.5 leading-snug\">\n      <span class=\"w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0\"></span>\n      5. 普通人低门槛复制实操指南\n    </h4>\n    <span class=\"text-[11.5px] px-2 py-0.5 rounded-full border whitespace-nowrap font-medium flex-shrink-0 bg-rose-500/20 text-rose-300 border-rose-500/40\">实操建议</span>\n  </div>\n  <p class=\"text-[15px] text-slate-200 leading-[1.8] font-normal\">1. 切入点一定要垂直：不要做通用文案生成器，聚焦建筑工程或消防弱电等单价极高的垂直领域；<br>2. 搞定真实行业模板库：收集50份以上行业中标范本作为Few-shot提示词输入；<br>3. 客户痛点在于防废标和保交期，强调省下3个人工策划成本，企业老板买单决策极快。</p>\n</div>",
+    "markdown_content": "# 全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-09)\n\n> **发布日期**：2026-11-09 &nbsp;|&nbsp; **内容属性**：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报\n\n---\n\n## 💡 今日金句 (Quote of the Day)\n\n> ### 🌟 **「商业竞争的终局不是拼体力劳动，而是把行业中最繁重、最耗时的脑力劳动提炼成一键交付的精准自动化流水线。」**\n\n---\n\n## 💰 一人公司搞钱案例深度拆解\n\n### 【本期课题】搭建'垂直行业AI投标书与商业方案生成器'，单人单月变现 12 万的完整 SOP 拆解\n\n#### 1. 业务切入场景与核心痛点\n政府采购、工程建设与企业IT招投标领域，撰写一份动辄上百页的规范投标方案需要专职策划团队耗费5至7天，且格式排版、资质匹配稍有疏漏便面临废标风险。中小投标企业常年面临专职写手年薪高昂（15万以上）、加班严重、临时赶标容易出错的严峻痛点。\n\n#### 2. 商业模式与产品极简设计\n针对工程施工、软硬件集成的垂直标书AI生成SaaS系统。用户只需上传招标文件PDF与公司过往案例，系统在15分钟内自动解析评分标准、目录大纲、响应条款并一键生成90%完成度的标准Word标书。采用按份收费加年度会员模式：单次标书生成收费 199 元，企业无限次年卡 3999 元。\n\n#### 3. 全套 AI 工具链与自动化 SOP\n1. 文档解析层：采用 Marker 与 LlamaParse 深度提取招标PDF中的复杂表格与技术参数要求；\n2. 知识库检索增强：基于 Dify 搭建行业案例库与法律资质库，实现本地向量检索防幻觉；\n3. 模型生成层：调度 DeepSeek 与 Claude 处理长上下文标书技术方案章节撰写；\n4. 格式导出层：利用 Python-docx 自动化脚本将大模型输出精确套入国标排版模板。\n\n#### 4. 流量获客与盈利变现闭环\n1. 获客打法：在知乎、小红书与微信视频号持续分享各行业废标血泪教训与标书检查清单，引流至私域微信；\n2. 转化方案：提供首次免费体验生成前三章，满意后再付全款；\n3. 财务表现：个人开发者运营第6个月，累计付费企业客户达 140 家，单月流水突破 12 万元，纯软件服务毛利率达 96%。\n\n#### 5. 普通人低门槛复制实操指南\n1. 切入点一定要垂直：不要做通用文案生成器，聚焦建筑工程或消防弱电等单价极高的垂直领域；\n2. 搞定真实行业模板库：收集50份以上行业中标范本作为Few-shot提示词输入；\n3. 客户痛点在于防废标和保交期，强调省下3个人工策划成本，企业老板买单决策极快。\n\n---\n\n## 🤖 全球 AI 与 Agent 前沿要点 (3-5条精选)\n\n### 📌 【AI Agent】成都具身智能公司获千万级天使轮融资，基于开源鸿蒙开发机器人大脑｜硬氪首发\n- **① 一句话内容摘要**：硬氪获悉，成都具身大脑公司「奇林波」近日完成千万级人民币天使轮融资，投资方包括成都方寸引擎科技有限公司及天使投资人。\n- **② 人话解读**：有钱在往这个方向押注，说明它不只是个概念了；顺着它找能落地的具体环节，比追热点实在\n\n### 📌 【AI Agent】美的全屋智能锚定A2A：家电互联正从「接口对接」走向「Agent对话」｜最前线\n- **① 一句话内容摘要**：全屋智能概念发展多年，行业始终没有跨过规模化普及的门槛。\n- **② 人话解读**：这一层最值得先动手，它把一堆单点工具串成能自己跑完的流程\n\n### 📌 【AI Agent】36氪首发丨重载物理AI公司成立一年内融资近4亿，核心成员来自华为、理想，已运营车辆超百台\n- **① 一句话内容摘要**：硬氪获悉，上海易博图科技有限公司（EABOT，以下简称“易博图”）近日连续完成两轮近4亿元融资\n- **② 人话解读**：有钱在往这个方向押注，说明它不只是个概念了；顺着它找能落地的具体环节，比追热点实在\n\n### 📌 【一人公司】一个人也能跑通一门生意\n- **① 一句话内容摘要**：越来越多独立开发者用低代码和 AI 工作流，把获客、客服、收款串成一条自动化流水线。\n- **② 人话解读**：把它当成一个值得你留意的方向信号，而不是一条新鲜出炉的新闻。\n\n### 📌 【一人公司】微型 SaaS 项目迎来好行情\n- **① 一句话内容摘要**：单人开发、AI 托管的微型软件项目越来越受买家青睐，深耕极小垂直痛点也能做出稳定现金流。\n- **② 人话解读**：把它当成一个值得你留意的方向信号，而不是一条新鲜出炉的新闻。\n\n### 📌 【一人公司】信息差与语言差里藏着机会\n- **① 一句话内容摘要**：用工具抹平地域和语言鸿沟的地方，往往涌动着普通人能抓住的商业机会。\n- **② 人话解读**：把它当成一个值得你留意的方向信号，而不是一条新鲜出炉的新闻。\n\n---\n\n## 🌍 今日宏观大势（从时政 / 国际 / 财经中筛出跟你决策有关的信号）\n\n### 【你的钱袋子】美股科技股迈入“比大盘便宜”时代\n- **发生了什么**：美股科技股迈入“比大盘便宜”时代\n- **这意味着什么**：海外股市在剧烈波动，会顺着跨境基金和港股通传到你的账户\n- **你该怎么做**：持有海外基金的，先别在最恐慌的时候加仓；做外贸的，美元流动性收紧会传导到账期\n- *来源：新浪财经·要闻*\n\n### 【技术在往哪走】谷歌AI工具被控协助策划自杀\n- **发生了什么**：谷歌AI工具被控协助策划自杀（参考消息发布于 2026-11-08 16:45:25）\n- **这意味着什么**：这是门槛最低、扩散最快的一次技术红利\n- **你该怎么做**：不用等它成熟，现在就挑一件每天重复两小时的事，试着让它接管\n- *来源：参考消息·要闻*\n\n---\n\n## 📰 原始要闻清单（备查，音频里已按相关性筛过）\n\n### 🇨🇳 【学习强国 · 头条新闻】（共 10 条）\n1. **学习卡丨“人不负青山，青山定不负人”** - *生态环境是关系党的使命宗旨的重大政治问题，也是关系民生的重大社会问题。习近平总书记多次指出，必须站在中华民族永续发展根本大计的高度，尊重自然、顺应自然、保护自然，建设人与自然和谐共生的现代化，建设望得见山、看得见水、记得住乡愁的美丽中国。今*\n2. **镜观·足迹｜呵护千山万水 擘画永续发展** - *大美中国，江山如画。党的十八大以来，习近平总书记的考察足迹遍及神州大地。祁连山麓、坝上林海，秦岭深处、黄河之滨，总书记在大江奔涌处谋划千秋大计，在山川锦绣间擘画生态蓝图。一系列重要论述，为新时代生态文明建设提供了根本遵循和行动指南。世界环境*\n3. **学习手记 | “环境就是民生”** - *6月5日是世界环境日，也是我国环境保护法确立的环境日。22年前的这一天，在时任浙江省委书记习近平部署推动下，以农村人居环境整治为重点的“千万工程”启动。当时，习近平同志担任浙江省委书记刚半年多，工作千头万绪。他何以将农村人居环境整治作为重点*\n4. **刘国中在安徽调研时强调 全力以赴夺取夏粮丰收 全面打牢秋粮生产基础** - *新华社合肥6月5日电 中共中央政治局委员、国务院副总理刘国中3日至5日到安徽调研“三夏”农业生产工作。他强调，要深入学习贯彻习近平总书记关于国家粮食安全的重要论述，按照党中央、国务院部署，扛稳政治责任，毫不放松抓好夏收夏种夏管，全力以赴夺取*\n5. **韩正会见中美高级别二轨对话美方代表团** - *新华社北京6月5日电 6月5日，国家副主席韩正在北京会见中美高级别二轨对话美方代表团。韩正表示，中美关系是当今世界最重要的双边关系之一。当前，中美关系处于关键历史节点。中美相互尊重、和平共处、合作共赢，不仅有利于两国，也有利于世界和平与发展*\n6. **国务院印发《关于开展第四次全国农业普查的通知》** - *新华社北京6月5日电 国务院日前印发《关于开展第四次全国农业普查的通知》（以下简称《通知》）。根据《中华人民共和国统计法》和《全国农业普查条例》规定，国务院决定于2026年开展第四次全国农业普查。《通知》强调，第四次全国农业普查是在以中国式*\n7. **中央军委主席习近平签署命令 发布《军事设施建设条例》** - *新华社北京6月5日电 中央军委主席习近平日前签署命令，发布《军事设施建设条例》，自2025年8月1日起施行。条例深入贯彻习近平强军思想，深入贯彻新时代军事战略方针，聚焦服务备战打仗，适应新的领导指挥体制和保障模式，科学规范军事设施建设的基本*\n8. **丁薛祥在山西调研时强调 守好公平公正“生命线” 确保实现“平安高考”目标** - *新华社太原6月5日电 6月3日至4日，中共中央政治局常委、国务院副总理丁薛祥在山西调研高考组织保障和能源改革发展等工作。丁薛祥首先前往山西省招生考试管理中心和太原市晋源区实验中学考点，听取高考工作情况汇报，实地察看考务组织各环节工作情况。他*\n9. **中共中央办公厅印发《党组讨论和决定党员处分事项工作程序规定》** - *新华社北京6月5日电 近日，中共中央办公厅印发《党组讨论和决定党员处分事项工作程序规定》，并发出通知，要求各地区各部门认真遵照执行。《党组讨论和决定党员处分事项工作程序规定》全文如下。党组讨论和决定党员处分事项工作程序规定 （2018年11*\n10. **全国人大常委会启动节约能源法执法检查** - *新华社北京6月5日电 为推动节约能源法全面有效实施，促进更高水平、更高质量做好节能工作，全国人大常委会5日启动节约能源法执法检查。节约能源法自1998年1月1日实施，并于2007年、2016年、2018年进行了修改。记者5日从全国人大常委会*\n\n### 🌐 【参考消息 · 今日要闻】（共 15 条）\n1. **乌总统办公室主任因公开使用俄语被罚款** - *来源: 参考消息·要闻*\n2. **韩国陆海军高层计划访日** - *来源: 参考消息·要闻*\n3. **埃森科特将获授权组阁，内塔尼亚胡：“这将导致国家崩溃”** - *来源: 参考消息·要闻*\n4. **谷歌AI工具被控协助策划自杀** - *来源: 参考消息·要闻*\n5. **英媒：德企欲研发“无限射程”太空导弹** - *来源: 参考消息·要闻*\n6. **北约推动反无人机装备联合采购** - *来源: 参考消息·要闻*\n7. **法媒文章：人才流失折射美科学界深层困境** - *来源: 参考消息·要闻*\n8. **印媒文章：“中心-边缘”世界格局正在瓦解** - *来源: 参考消息·要闻*\n9. **泽连斯基与基辅市长互相指责** - *来源: 参考消息·要闻*\n10. **俄国防部公布对乌一周战报** - *来源: 参考消息·要闻*\n11. **日媒：石破茂等四人“出人意料”退席，震动自民党** - *来源: 参考消息·要闻*\n12. **冲绳民众要求撤换驻冲绳美军将领** - *来源: 参考消息·要闻*\n13. **美中期选举结果揭晓，华尔街遭遇历史性暴跌** - *来源: 参考消息·要闻*\n14. **欧洲多地电视台收到“倒计时”虚假炸弹威胁** - *来源: 参考消息·要闻*\n15. **美司法部数名高级官员在中期选举后辞职** - *来源: 参考消息·要闻*\n\n### 📈 【新浪财经 · 首页要闻】（共 15 条）\n1. **十大机构看后市：“阻断式反弹”开启** - *来源: 新浪财经·要闻*\n2. **中国银河策略：政策托底与外部博弈交织 后市如何看？** - *来源: 新浪财经·要闻*\n3. **美股科技股迈入“比大盘便宜”时代** - *来源: 新浪财经·要闻*\n4. **“蓝色浪潮”重创科技信仰,何时企稳？** - *来源: 新浪财经·要闻*\n5. **华尔街高呼“抄底”** - *来源: 新浪财经·要闻*\n6. **估值具备吸引力!下周A股大概率这么走** - *来源: 新浪财经·要闻*\n7. **清华金融评论:国常会给出更高层级定调 稳股市是国家层面大事** - *来源: 新浪财经·要闻*\n8. **事关股市！国常会，重磅定调！创业板指，重大调整！已买入股票，头部券商官宣！影响一周市场的十大消息** - *来源: 新浪财经·要闻*\n9. **比特币跌破7.6万美元，原油暗盘上涨，国际油价一周暴跌16%，沙特首都传出剧烈爆炸声** - *来源: 新浪财经·要闻*\n10. **俄美乌三方会谈在即、特朗普会前密集斡旋，这次会迎来“大和解”吗？** - *来源: 新浪财经·要闻*\n11. **央行连续24个月增持黄金，创近两年最大加仓手笔** - *来源: 新浪财经·要闻*\n12. **定了，5×23！纳斯达克，重大交易改革！** - *来源: 新浪财经·要闻*\n13. **全部提前结募！18只主动ETF最新数据披露** - *来源: 新浪财经·要闻*\n14. **天猫国际售卖有污染的不合格食品** - *来源: 新浪财经·要闻*\n15. **众议院民主党领袖支持弹劾海格塞斯 称其“必须”下台** - *来源: 新浪财经·要闻*\n\n---\n\n## 🔗 权威来源与原文索引\n\n1. [AI Agent] [成都具身智能公司获千万级天使轮融资，基于开源鸿蒙开发机器人大脑｜硬氪首发](https://36kr.com/p/4052696726328452?f=rss) - *36氪*\n2. [AI Agent] [美的全屋智能锚定A2A：家电互联正从「接口对接」走向「Agent对话」｜最前线](https://36kr.com/p/4057965347869576?f=rss) - *36氪*\n3. [AI Agent] [36氪首发丨重载物理AI公司成立一年内融资近4亿，核心成员来自华为、理想，已运营车辆超百台](https://36kr.com/p/4057656248685701?f=rss) - *36氪*\n4. [一人公司] [一个人也能跑通一门生意]() - *精选观点库*\n5. [一人公司] [微型 SaaS 项目迎来好行情]() - *精选观点库*\n6. [一人公司] [信息差与语言差里藏着机会]() - *精选观点库*\n7. [宏观大势] [美股科技股迈入“比大盘便宜”时代](https://finance.sina.com.cn/roll/2026-11-08/doc-inixymrh4098485.shtml) - *新浪财经·要闻*\n8. [宏观大势] [谷歌AI工具被控协助策划自杀](https://ckxxapp.ckxx.net/pages/2026/11/08/8b85973edf0847dcab42a990df16e41e.html) - *参考消息·要闻*\n9. [新浪财经] [十大机构看后市：“阻断式反弹”开启](https://finance.sina.com.cn/stock/marketresearch/2026-11-08/doc-inixzpay3997583.shtml) - *新浪财经·要闻*\n10. [新浪财经] [中国银河策略：政策托底与外部博弈交织 后市如何看？](https://finance.sina.com.cn/stock/2026-11-08/doc-inixzpas7025861.shtml) - *新浪财经·要闻*\n11. [新浪财经] [美股科技股迈入“比大盘便宜”时代](https://finance.sina.com.cn/roll/2026-11-08/doc-inixymrh4098485.shtml) - *新浪财经·要闻*\n12. [新浪财经] [“蓝色浪潮”重创科技信仰,何时企稳？](https://finance.sina.com.cn/roll/2026-11-08/doc-inixzape4141129.shtml) - *新浪财经·要闻*\n13. [新浪财经] [华尔街高呼“抄底”](https://finance.sina.com.cn/roll/2026-11-08/doc-inixyrxe3997753.shtml) - *新浪财经·要闻*\n14. [新浪财经] [估值具备吸引力!下周A股大概率这么走](https://finance.sina.com.cn/stock/marketresearch/2026-11-08/doc-inixzape4126353.shtml) - *新浪财经·要闻*\n15. [新浪财经] [清华金融评论:国常会给出更高层级定调 稳股市是国家层面大事](https://finance.sina.com.cn/stock/marketresearch/2026-11-08/doc-inixywfh4212311.shtml) - *新浪财经·要闻*\n16. [新浪财经] [事关股市！国常会，重磅定调！创业板指，重大调整！已买入股票，头部券商官宣！影响一周市场的十大消息](https://finance.sina.com.cn/jjxw/2026-11-08/doc-inixzpay3984637.shtml) - *新浪财经·要闻*\n17. [新浪财经] [比特币跌破7.6万美元，原油暗盘上涨，国际油价一周暴跌16%，沙特首都传出剧烈爆炸声](https://finance.sina.com.cn/jjxw/2026-11-08/doc-inixzhuy7265289.shtml) - *新浪财经·要闻*\n18. [新浪财经] [俄美乌三方会谈在即、特朗普会前密集斡旋，这次会迎来“大和解”吗？](https://finance.sina.com.cn/roll/2026-11-08/doc-inixzanw7205151.shtml) - *新浪财经·要闻*\n19. [新浪财经] [央行连续24个月增持黄金，创近两年最大加仓手笔](https://finance.sina.com.cn/roll/2026-11-08/doc-inixzape4138728.shtml) - *新浪财经·要闻*\n20. [新浪财经] [定了，5×23！纳斯达克，重大交易改革！](https://finance.sina.com.cn/stock/zqgd/2026-11-08/doc-inixyrxe4005111.shtml) - *新浪财经·要闻*\n21. [新浪财经] [全部提前结募！18只主动ETF最新数据披露](https://finance.sina.com.cn/stock/zqgd/2026-11-08/doc-inixymre7439845.shtml) - *新浪财经·要闻*\n22. [新浪财经] [天猫国际售卖有污染的不合格食品](https://tousu.sina.com.cn/complaint/view/17402771147/?sld=80cd3856c654f74662a1ee8c23ada6a9) - *新浪财经·要闻*\n23. [新浪财经] [众议院民主党领袖支持弹劾海格塞斯 称其“必须”下台](https://finance.sina.com.cn/stock/usstock/c/2026-11-09/doc-iniyacys3721737.shtml) - *新浪财经·要闻*\n24. [参考消息] [乌总统办公室主任因公开使用俄语被罚款](https://ckxxapp.ckxx.net/pages/2026/11/08/90c262f50dd04872bc5b2768793a2e35.html) - *参考消息·要闻*\n25. [参考消息] [韩国陆海军高层计划访日](https://ckxxapp.ckxx.net/pages/2026/11/08/7e9df349c6304f1c9bfb6b9720a14b47.html) - *参考消息·要闻*\n26. [参考消息] [埃森科特将获授权组阁，内塔尼亚胡：“这将导致国家崩溃”](https://ckxxapp.ckxx.net/pages/2026/11/08/3c6899a81b9944e0bb682aefa27f98cc.html) - *参考消息·要闻*\n27. [参考消息] [谷歌AI工具被控协助策划自杀](https://ckxxapp.ckxx.net/pages/2026/11/08/8b85973edf0847dcab42a990df16e41e.html) - *参考消息·要闻*\n28. [参考消息] [英媒：德企欲研发“无限射程”太空导弹](https://ckxxapp.ckxx.net/pages/2026/11/08/f5b25c8fc789471daaa85a205c8a6bc0.html) - *参考消息·要闻*\n29. [参考消息] [北约推动反无人机装备联合采购](https://ckxxapp.ckxx.net/pages/2026/11/08/327142fe5aa64f90a45bdb5c5cf51081.html) - *参考消息·要闻*\n30. [参考消息] [法媒文章：人才流失折射美科学界深层困境](https://ckxxapp.ckxx.net/pages/2026/11/08/d7c229f52ef647f8917877716c694fe5.html) - *参考消息·要闻*\n31. [参考消息] [印媒文章：“中心-边缘”世界格局正在瓦解](https://ckxxapp.ckxx.net/pages/2026/11/08/04b2c5f4439f4961a7b6a6ea8a35a8db.html) - *参考消息·要闻*\n32. [参考消息] [泽连斯基与基辅市长互相指责](https://ckxxapp.ckxx.net/pages/2026/11/07/2ad3efec9fbe4b4786c658cea01a108d.html) - *参考消息·要闻*\n33. [参考消息] [俄国防部公布对乌一周战报](https://ckxxapp.ckxx.net/pages/2026/11/07/67d54f3a8cd94df2b092e43151bbfcef.html) - *参考消息·要闻*\n34. [参考消息] [日媒：石破茂等四人“出人意料”退席，震动自民党](https://ckxxapp.ckxx.net/pages/2026/11/07/45ce8647594e452f9a7e34faba472378.html) - *参考消息·要闻*\n35. [参考消息] [冲绳民众要求撤换驻冲绳美军将领](https://ckxxapp.ckxx.net/pages/2026/11/07/d5b7a495901c40d1a86c77cb5b3eeb90.html) - *参考消息·要闻*\n36. [参考消息] [美中期选举结果揭晓，华尔街遭遇历史性暴跌](https://ckxxapp.ckxx.net/pages/2026/11/07/48d652562c7a408199ee8606580fb14a.html) - *参考消息·要闻*\n37. [参考消息] [欧洲多地电视台收到“倒计时”虚假炸弹威胁](https://ckxxapp.ckxx.net/pages/2026/11/07/0f3c8452df8040f89bc1094f525cf77f.html) - *参考消息·要闻*\n38. [参考消息] [美司法部数名高级官员在中期选举后辞职](https://ckxxapp.ckxx.net/pages/2026/11/07/1c89b99a905f4a6b8d8454011bf631c8.html) - *参考消息·要闻*\n39. [学习强国] [学习卡丨“人不负青山，青山定不负人”](http://politics.people.com.cn/n1/2025/0605/c1001-40494898.html) - *学习强国·头条要闻*\n40. [学习强国] [镜观·足迹｜呵护千山万水 擘画永续发展](http://politics.people.com.cn/n1/2025/0605/c1001-40494899.html) - *学习强国·头条要闻*\n41. [学习强国] [学习手记 | “环境就是民生”](http://politics.people.com.cn/n1/2025/0605/c1001-40494900.html) - *学习强国·头条要闻*\n42. [学习强国] [刘国中在安徽调研时强调 全力以赴夺取夏粮丰收 全面打牢秋粮生产基础](http://politics.people.com.cn/n1/2025/0605/c1001-40494881.html) - *学习强国·头条要闻*\n43. [学习强国] [韩正会见中美高级别二轨对话美方代表团](http://politics.people.com.cn/n1/2025/0605/c1001-40494879.html) - *学习强国·头条要闻*\n44. [学习强国] [国务院印发《关于开展第四次全国农业普查的通知》](http://politics.people.com.cn/n1/2025/0605/c1001-40494878.html) - *学习强国·头条要闻*\n45. [学习强国] [中央军委主席习近平签署命令 发布《军事设施建设条例》](http://politics.people.com.cn/n1/2025/0605/c1024-40494849.html) - *学习强国·头条要闻*\n46. [学习强国] [丁薛祥在山西调研时强调 守好公平公正“生命线” 确保实现“平安高考”目标](http://politics.people.com.cn/n1/2025/0605/c1024-40494847.html) - *学习强国·头条要闻*\n47. [学习强国] [中共中央办公厅印发《党组讨论和决定党员处分事项工作程序规定》](http://politics.people.com.cn/n1/2025/0605/c1001-40494813.html) - *学习强国·头条要闻*\n48. [学习强国] [全国人大常委会启动节约能源法执法检查](http://politics.people.com.cn/n1/2025/0605/c1001-40494812.html) - *学习强国·头条要闻*",
+    "audio_url": "audio/newscast_2026-11-09.mp3?v=1794194095",
+    "audio_duration": 417,
+    "audio_duration_str": "06:57",
+    "chapters": [
+      {
+        "label": "开场",
+        "start": 0
+      },
+      {
+        "label": "今日金句",
+        "start": 16
+      },
+      {
+        "label": "案例·痛点",
+        "start": 31
+      },
+      {
+        "label": "案例·收钱",
+        "start": 73
+      },
+      {
+        "label": "案例·工具",
+        "start": 105
+      },
+      {
+        "label": "案例·赚钱",
+        "start": 145
+      },
+      {
+        "label": "案例·抄作业",
+        "start": 175
+      },
+      {
+        "label": "AI 动态",
+        "start": 203
+      },
+      {
+        "label": "一人公司动态",
+        "start": 288
+      },
+      {
+        "label": "宏观大势",
+        "start": 331
+      },
+      {
+        "label": "今天动手的事",
+        "start": 393
+      }
+    ],
+    "file_size_bytes": 2506752,
+    "category_summary": {
+      "今日金句": "商业竞争的终局不是拼体力劳动，而是把行业中最繁重、最耗时的脑力劳动提炼成一键交付的精准自动化流水线。",
+      "搞钱案例": "搭建'垂直行业AI投标书与商业方案生成器'，单人单月变现 12 万的完整 SOP 拆解",
+      "宏观大势": "今日识别 2 个跟决策有关的信号",
+      "学习强国": "头条新闻共 10 条",
+      "参考消息": "国际要闻共 15 条",
+      "新浪财经": "核心要闻共 15 条",
+      "喜马早餐": "今日未出自动跳过"
+    },
+    "sources": [
+      {
+        "title": "成都具身智能公司获千万级天使轮融资，基于开源鸿蒙开发机器人大脑｜硬氪首发",
+        "category": "AI Agent",
+        "source_name": "36氪",
+        "url": "https://36kr.com/p/4052696726328452?f=rss",
+        "why_matter": "有钱在往这个方向押注，说明它不只是个概念了；顺着它找能落地的具体环节，比追热点实在"
+      },
+      {
+        "title": "美的全屋智能锚定A2A：家电互联正从「接口对接」走向「Agent对话」｜最前线",
+        "category": "AI Agent",
+        "source_name": "36氪",
+        "url": "https://36kr.com/p/4057965347869576?f=rss",
+        "why_matter": "这一层最值得先动手，它把一堆单点工具串成能自己跑完的流程"
+      },
+      {
+        "title": "36氪首发丨重载物理AI公司成立一年内融资近4亿，核心成员来自华为、理想，已运营车辆超百台",
+        "category": "AI Agent",
+        "source_name": "36氪",
+        "url": "https://36kr.com/p/4057656248685701?f=rss",
+        "why_matter": "有钱在往这个方向押注，说明它不只是个概念了；顺着它找能落地的具体环节，比追热点实在"
+      },
+      {
+        "title": "一个人也能跑通一门生意",
+        "category": "一人公司",
+        "source_name": "精选观点库",
+        "url": "",
+        "why_matter": "把它当成一个值得你留意的方向信号，而不是一条新鲜出炉的新闻。"
+      },
+      {
+        "title": "微型 SaaS 项目迎来好行情",
+        "category": "一人公司",
+        "source_name": "精选观点库",
+        "url": "",
+        "why_matter": "把它当成一个值得你留意的方向信号，而不是一条新鲜出炉的新闻。"
+      },
+      {
+        "title": "信息差与语言差里藏着机会",
+        "category": "一人公司",
+        "source_name": "精选观点库",
+        "url": "",
+        "why_matter": "把它当成一个值得你留意的方向信号，而不是一条新鲜出炉的新闻。"
+      },
+      {
+        "title": "美股科技股迈入“比大盘便宜”时代",
+        "category": "宏观大势",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/roll/2026-11-08/doc-inixymrh4098485.shtml",
+        "why_matter": "你的钱袋子｜海外股市在剧烈波动，会顺着跨境基金和港股通传到你的账户。你该怎么做：持有海外基金的，先别在最恐慌的时候加仓；做外贸的，美元流动性收紧会传导到账期"
+      },
+      {
+        "title": "谷歌AI工具被控协助策划自杀",
+        "category": "宏观大势",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/8b85973edf0847dcab42a990df16e41e.html",
+        "why_matter": "技术在往哪走｜这是门槛最低、扩散最快的一次技术红利。你该怎么做：不用等它成熟，现在就挑一件每天重复两小时的事，试着让它接管"
+      },
+      {
+        "title": "十大机构看后市：“阻断式反弹”开启",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/stock/marketresearch/2026-11-08/doc-inixzpay3997583.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "中国银河策略：政策托底与外部博弈交织 后市如何看？",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/stock/2026-11-08/doc-inixzpas7025861.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "美股科技股迈入“比大盘便宜”时代",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/roll/2026-11-08/doc-inixymrh4098485.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "“蓝色浪潮”重创科技信仰,何时企稳？",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/roll/2026-11-08/doc-inixzape4141129.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "华尔街高呼“抄底”",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/roll/2026-11-08/doc-inixyrxe3997753.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "估值具备吸引力!下周A股大概率这么走",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/stock/marketresearch/2026-11-08/doc-inixzape4126353.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "清华金融评论:国常会给出更高层级定调 稳股市是国家层面大事",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/stock/marketresearch/2026-11-08/doc-inixywfh4212311.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "事关股市！国常会，重磅定调！创业板指，重大调整！已买入股票，头部券商官宣！影响一周市场的十大消息",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/jjxw/2026-11-08/doc-inixzpay3984637.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "比特币跌破7.6万美元，原油暗盘上涨，国际油价一周暴跌16%，沙特首都传出剧烈爆炸声",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/jjxw/2026-11-08/doc-inixzhuy7265289.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "俄美乌三方会谈在即、特朗普会前密集斡旋，这次会迎来“大和解”吗？",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/roll/2026-11-08/doc-inixzanw7205151.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "央行连续24个月增持黄金，创近两年最大加仓手笔",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/roll/2026-11-08/doc-inixzape4138728.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "定了，5×23！纳斯达克，重大交易改革！",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/stock/zqgd/2026-11-08/doc-inixyrxe4005111.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "全部提前结募！18只主动ETF最新数据披露",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/stock/zqgd/2026-11-08/doc-inixymre7439845.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "天猫国际售卖有污染的不合格食品",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://tousu.sina.com.cn/complaint/view/17402771147/?sld=80cd3856c654f74662a1ee8c23ada6a9",
+        "why_matter": ""
+      },
+      {
+        "title": "众议院民主党领袖支持弹劾海格塞斯 称其“必须”下台",
+        "category": "新浪财经",
+        "source_name": "新浪财经·要闻",
+        "url": "https://finance.sina.com.cn/stock/usstock/c/2026-11-09/doc-iniyacys3721737.shtml",
+        "why_matter": ""
+      },
+      {
+        "title": "乌总统办公室主任因公开使用俄语被罚款",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/90c262f50dd04872bc5b2768793a2e35.html",
+        "why_matter": ""
+      },
+      {
+        "title": "韩国陆海军高层计划访日",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/7e9df349c6304f1c9bfb6b9720a14b47.html",
+        "why_matter": ""
+      },
+      {
+        "title": "埃森科特将获授权组阁，内塔尼亚胡：“这将导致国家崩溃”",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/3c6899a81b9944e0bb682aefa27f98cc.html",
+        "why_matter": ""
+      },
+      {
+        "title": "谷歌AI工具被控协助策划自杀",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/8b85973edf0847dcab42a990df16e41e.html",
+        "why_matter": ""
+      },
+      {
+        "title": "英媒：德企欲研发“无限射程”太空导弹",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/f5b25c8fc789471daaa85a205c8a6bc0.html",
+        "why_matter": ""
+      },
+      {
+        "title": "北约推动反无人机装备联合采购",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/327142fe5aa64f90a45bdb5c5cf51081.html",
+        "why_matter": ""
+      },
+      {
+        "title": "法媒文章：人才流失折射美科学界深层困境",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/d7c229f52ef647f8917877716c694fe5.html",
+        "why_matter": ""
+      },
+      {
+        "title": "印媒文章：“中心-边缘”世界格局正在瓦解",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/08/04b2c5f4439f4961a7b6a6ea8a35a8db.html",
+        "why_matter": ""
+      },
+      {
+        "title": "泽连斯基与基辅市长互相指责",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/07/2ad3efec9fbe4b4786c658cea01a108d.html",
+        "why_matter": ""
+      },
+      {
+        "title": "俄国防部公布对乌一周战报",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/07/67d54f3a8cd94df2b092e43151bbfcef.html",
+        "why_matter": ""
+      },
+      {
+        "title": "日媒：石破茂等四人“出人意料”退席，震动自民党",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/07/45ce8647594e452f9a7e34faba472378.html",
+        "why_matter": ""
+      },
+      {
+        "title": "冲绳民众要求撤换驻冲绳美军将领",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/07/d5b7a495901c40d1a86c77cb5b3eeb90.html",
+        "why_matter": ""
+      },
+      {
+        "title": "美中期选举结果揭晓，华尔街遭遇历史性暴跌",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/07/48d652562c7a408199ee8606580fb14a.html",
+        "why_matter": ""
+      },
+      {
+        "title": "欧洲多地电视台收到“倒计时”虚假炸弹威胁",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/07/0f3c8452df8040f89bc1094f525cf77f.html",
+        "why_matter": ""
+      },
+      {
+        "title": "美司法部数名高级官员在中期选举后辞职",
+        "category": "参考消息",
+        "source_name": "参考消息·要闻",
+        "url": "https://ckxxapp.ckxx.net/pages/2026/11/07/1c89b99a905f4a6b8d8454011bf631c8.html",
+        "why_matter": ""
+      },
+      {
+        "title": "学习卡丨“人不负青山，青山定不负人”",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494898.html",
+        "why_matter": ""
+      },
+      {
+        "title": "镜观·足迹｜呵护千山万水 擘画永续发展",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494899.html",
+        "why_matter": ""
+      },
+      {
+        "title": "学习手记 | “环境就是民生”",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494900.html",
+        "why_matter": ""
+      },
+      {
+        "title": "刘国中在安徽调研时强调 全力以赴夺取夏粮丰收 全面打牢秋粮生产基础",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494881.html",
+        "why_matter": ""
+      },
+      {
+        "title": "韩正会见中美高级别二轨对话美方代表团",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494879.html",
+        "why_matter": ""
+      },
+      {
+        "title": "国务院印发《关于开展第四次全国农业普查的通知》",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494878.html",
+        "why_matter": ""
+      },
+      {
+        "title": "中央军委主席习近平签署命令 发布《军事设施建设条例》",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1024-40494849.html",
+        "why_matter": ""
+      },
+      {
+        "title": "丁薛祥在山西调研时强调 守好公平公正“生命线” 确保实现“平安高考”目标",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1024-40494847.html",
+        "why_matter": ""
+      },
+      {
+        "title": "中共中央办公厅印发《党组讨论和决定党员处分事项工作程序规定》",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494813.html",
+        "why_matter": ""
+      },
+      {
+        "title": "全国人大常委会启动节约能源法执法检查",
+        "category": "学习强国",
+        "source_name": "学习强国·头条要闻",
+        "url": "http://politics.people.com.cn/n1/2025/0605/c1001-40494812.html",
+        "why_matter": ""
+      }
+    ],
+    "status": "completed",
+    "created_at": "2026-11-09 03:14:55"
+  },
+  {
     "id": 20261108,
     "date_str": "2026-11-08",
     "title": "全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-08)",
