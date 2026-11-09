@@ -305,6 +305,26 @@ MACRO_ASSET_WORDS = [
     "跌停", "收盘", "收涨", "收跌", "大宗商品",
 ]
 
+# 宏观板块的准入信号：要么是一次政策动作，要么是一组硬数据。
+#
+# 没有这道闸门时，标题里只要沾上「养老 / 进口 / 科技」这类大类词就能进来，
+# 于是「养老护理员技能竞赛」「进口小客车上牌便民措施」「科技翻译研讨会」
+# 都会被配上社保、外贸、研发投入的解读念出去——听众听到的是"什么都懂，什么都不对"。
+POLICY_SIGNAL = [
+    "政策", "通知", "意见", "办法", "条例", "规定", "细则", "方案", "规划", "部署", "决定",
+    "措施", "印发", "出台", "发布", "实施", "修订", "废止", "试点", "补贴", "补助",
+    "降准", "降息", "加息", "减税", "退税", "免税", "关税", "清单", "配额", "准入",
+    "监管", "约谈", "处罚", "立案", "新规", "改革", "立法", "征收",
+    "社保", "医保", "公积金", "落户", "限购", "专项债", "国债", "财政", "货币", "信贷",
+]
+
+HARD_DATA_SIGNAL = [
+    "cpi", "ppi", "pmi", "gdp", "社融", "m2", "进出口", "出口", "进口",
+    "失业率", "就业", "居民收入", "人均可支配", "工业增加值", "社会消费品零售",
+    "固定资产投资", "财政收入", "外汇储备", "贸易顺差", "逆差", "同比", "环比",
+    "增速", "价格指数", "成交额", "开户数",
+]
+
 # 跟个人决策无关的类型：外事礼仪、人事表彰、军事冲突、国际政坛、体育文娱
 # 命中即剔除（哪怕同时含经济词，因为这类标题信息量太低、无法给出行动指向）
 MACRO_NEGATIVE = [
@@ -319,6 +339,10 @@ MACRO_NEGATIVE = [
     "奥运", "亚运", "冬奥", "世界杯", "足球", "篮球", "乒乓", "夺冠",
     "比赛", "联赛", "明星", "演员", "歌手", "婚礼", "离婚", "去世",
     "逝世", "追悼", "演唱会", "综艺", "票房",
+    # 活动类通稿：标题里往往挂着「养老 / 科技 / 创新」这种大类词，
+    # 但内容是一场竞赛、一次研讨、一个启动仪式，念出来配任何解读都是错的。
+    "竞赛", "技能大赛", "研讨会", "院庆", "校庆", "启动仪式", "颁奖", "义诊",
+    "招聘会", "马拉松", "徒步", "摄影展", "书画展", "展演", "巡展", "开放日",
     # 转述性、表态性国际新闻：信息很碎，给不出任何个人行动指向
     "俄媒", "美媒", "英媒", "日媒", "韩媒", "外媒", "据报道", "报道称",
     "呼吁", "警告", "谴责", "指责", "抨击", "抗议", "回应称", "声称",
@@ -354,9 +378,15 @@ def build_macro_trends(pools: Dict[str, List[Dict[str, Any]]], exclude_titles: L
     """
     把时政 / 国际 / 财经三源合并，筛出跟个人决策有关的信号，每个大势域只取 1 条。
     取数时优先选择尚未用过的来源，避免四条全来自同一家。
+
+    这里加了一道「像不像政策/硬数据」的闸门。原因是原来的行为会闹笑话：
+    中新网一条《沈阳市养老护理员职业技能竞赛完赛》，因为标题里有「养老」，
+    被归进「需求」域，再配上「社保和医保规则在调整」的解读念了出去——
+    一场技能比赛被讲成了政策。同一天真正有用的「10 月 CPI 同比上涨」，
+    就排在同一个候选池里，只因为中新网在遍历顺序里排前面而落选。
     """
     exclude_titles = exclude_titles or []
-    candidates: Dict[str, List[Dict[str, Any]]] = {d: [] for d in MACRO_DOMAIN_ORDER}
+    raw: Dict[str, List[Dict[str, Any]]] = {d: [] for d in MACRO_DOMAIN_ORDER}
 
     for cat in ("权威要闻", "新浪财经", "参考消息"):
         for it in pools.get(cat, []):
@@ -367,12 +397,31 @@ def build_macro_trends(pools: Dict[str, List[Dict[str, Any]]], exclude_titles: L
                 continue
             dom = _macro_domain_of(title)
             if dom:
-                candidates[dom].append(it)
+                raw[dom].append(it)
+
+    candidates: Dict[str, List[Dict[str, Any]]] = {}
+    for dom, items in raw.items():
+        if not items:
+            continue
+        # 硬数据（CPI/PMI/社融…）最有用，其次是有政策动作的，最后才是其他。
+        # 以前是「谁在遍历顺序里靠前谁上」，通稿因此经常挤掉硬数据。
+        items.sort(key=lambda it: (
+            0 if _hits_any((it.get("title") or "").lower(), HARD_DATA_SIGNAL) else 1,
+            0 if _hits_any((it.get("title") or "").lower(), POLICY_SIGNAL) else 1,
+            len(it.get("title", "")),
+        ))
+        policy_like = [
+            it for it in items
+            if _hits_any((it.get("title") or "").lower(), POLICY_SIGNAL)
+            or _hits_any((it.get("title") or "").lower(), HARD_DATA_SIGNAL)
+        ]
+        # 一个都不像政策时不要整块空掉，退回原候选（宁可普通，也不要缺板块）
+        candidates[dom] = policy_like or items
 
     used_sources = set()
     trends: List[Dict[str, Any]] = []
     for dom in MACRO_DOMAIN_ORDER:
-        pool = candidates[dom]
+        pool = candidates.get(dom) or []
         if not pool:
             continue
         chosen = next((it for it in pool if it.get("source_name") not in used_sources), pool[0])
