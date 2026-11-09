@@ -186,6 +186,16 @@ AI_GATE_KEYWORDS = [
     "英伟达", "豆包", "通义", "文心", "kimi", "智谱", "月之暗面", "minimax",
 ]
 
+# AI 板块里混进来的财经稿：定增、扩产、减持这类是股票消息，
+# 不是「AI 圈发生了什么」。它们能过闸门只是因为标题里有「芯片」「算力」，
+# 念出来听众会以为走错节目。
+AI_BLOCK_KEYWORDS = [
+    "拟定增", "定增", "募资", "募集资金", "增发", "配股", "可转债",
+    "回购", "减持", "增持", "解禁", "涨停", "跌停", "股价", "市值",
+    "龙虎榜", "换手率", "市盈率", "主力资金", "北向资金", "分红",
+    "业绩预告", "净利润同比", "上市公司公告", "扩产项目",
+]
+
 OPC_GATE_KEYWORDS = [
     "独立开发", "一人公司", "超级个体", "副业", "变现", "营收", "月入", "年入",
     "赚钱", "被动收入", "付费", "定价", "客单价", "获客", "流量",
@@ -1130,7 +1140,8 @@ class NewsCollector:
 
         ai_items = await self._fetch_from_sources(
             client, AI_RSS_SOURCES, "AI Agent", max_items=3,
-            gate_keywords=AI_GATE_KEYWORDS, history=history, day_offset=day_offset
+            gate_keywords=AI_GATE_KEYWORDS, block_keywords=AI_BLOCK_KEYWORDS,
+            history=history, day_offset=day_offset
         )
         opc_items = await self._fetch_from_sources(
             client, OPC_RSS_SOURCES, "一人公司", max_items=3,

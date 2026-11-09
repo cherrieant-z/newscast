@@ -46,7 +46,15 @@ def _clean_case_title(t: str) -> str:
     t = re.sub(r"[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]", "", t)
     t = t.replace("...", "").replace("…", "")
     t = re.sub(r"(?<=[\u4e00-\u9fa5])\s+(?=[\u4e00-\u9fa5])", "", t)
-    return re.sub(r"\s+", " ", t).strip(" -—·|、，,.")
+    t = re.sub(r"\s+", " ", t).strip(" -—·|、，,.")
+    # 长标题多半是「主体 + 一通解释」，后半截念出来像在念帖子说明：
+    # 「做了个生成说唱歌曲的 Web 工具 RapSongGen，聊下开发过程和目前还存在的问题」
+    # 只需要前一半，后面那句是发帖人的语气，不是产品信息。
+    if len(t) > 26:
+        cut = re.split(r"[，,；;]", t)[0].strip()
+        if len(cut) >= 10:
+            t = cut
+    return t
 
 
 # 帖子里最常见的「无效内容」：下载地址、应用商店、关注引导。
@@ -345,10 +353,16 @@ OPC_CASE_LIBRARY = [
 ]
 
 def safe_ai_replace(text: str) -> str:
-    """仅替换独立的 AI 缩写为'人工智能'，绝不误伤 OpenAI 等知名品牌"""
+    """
+    仅替换独立的 AI 缩写为「人工智能」，绝不误伤 OpenAI 这类品牌。
+
+    除了 OpenAI，还要躲开 Kie.ai 这种「.ai」域名式写法——
+    上一版把「通过 Kie.ai 接入」念成了「通过 Kie.人工智能接入」，
+    听众会以为是另一家公司。
+    """
     if not text:
         return ""
-    return re.sub(r'(?i)(?<![a-zA-Z])AI(?![a-zA-Z])', '人工智能', text)
+    return re.sub(r'(?i)(?<![a-zA-Z._\-/])AI(?![a-zA-Z])', '人工智能', text)
 
 
 def _cue_hit(text: str, kw: str) -> bool:
