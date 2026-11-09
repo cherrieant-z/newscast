@@ -16,11 +16,11 @@
   </image>
     <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10)</title>
-      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10) 发布日期：2026-11-10 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「别拼提示词了，先选偏好出个 Demo 听听。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：V2EX·分享创造） 【本期课题】做了个生成说唱歌曲的 Web 工具 RapSongGen 1. 这是什么项目 通用 AI 音乐工具做说唱得自己拼提示词，太麻烦，他想让有词或主题的人直接选偏好出歌。 2. 用了什么工具 底层调用 Suno V6，通过 Kie.ai 接入，不是自研模型，和官方没背书关系。 3. 怎么收钱、有没有真的赚到 原文没写完，只提到有一次性付费套餐，具体价格他没公开。 首页放了三首真实样例，不用登录就能听，但</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-10.mp3" length="2404224" type="audio/mpeg"/>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10) 发布日期：2026-11-10 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「把复杂提示词拆成选项，普通人也能快速出歌。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：V2EX·分享创造） 【本期课题】做了个生成说唱歌曲的 Web 工具 RapSongGen 1. 这是什么项目 通用 AI 音乐工具做说唱得自己拼提示词，太麻烦。他把曲风、人声和 BPM 拆成页面选项，省去折腾。 2. 用了什么工具 底层调用 Suno V6，通过 Kie.ai 接入。他自己做的是应用层交互和工程处理，比如状态检查和额度返还。 3. 怎么收钱、有没有真的赚到 有一次性付费套餐，但原文没写具体价格。免费体验是终身一次生</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-10.mp3" length="2292048" type="audio/mpeg"/>
       <guid isPermaLink="false">2026-11-10</guid>
-      <pubDate>Mon, 09 Nov 2026 20:06:19 -0000</pubDate>
-      <itunes:duration>400</itunes:duration>
+      <pubDate>Mon, 09 Nov 2026 20:10:01 -0000</pubDate>
+      <itunes:duration>382</itunes:duration>
     </item>
     <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-09)</title>
