@@ -4,6 +4,7 @@ import datetime
 import email.utils
 import hashlib
 import html as _html
+import os
 import re
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any
@@ -37,11 +38,21 @@ AI_RSS_SOURCES = [
 ]
 
 # 一人公司 / 独立开发者 / 搞钱方向（中文）
+# 一人公司 / 独立开发者：必须是「真的有人在做、而且今天还在更新」的源。
+#
+# 原先这四个源实测全部失效：少数派是数码测评和蒸菜菜谱、透明创业实验最新一篇
+# 停在 2023 年、被动收入源 SSL 握手失败、小众软件是软件推荐站（作者视角，不是搞钱视角）。
+# 结果「一人公司」板块每天只能靠固定文案兜底，听众连着听就是同一批话。
+#
+# V2EX 的「分享创造 / 创意」两个节点，是当前中文互联网里唯一每天几十条的
+# 独立开发者真实产品发布流：做提醒小工具的、做找需求工具的、已经开始收到
+# 订阅的项目，全在里面，而且节点本身就是分类，不需要再套关键词闸门。
 OPC_RSS_SOURCES = [
+    {"name": "V2EX·分享创造",     "url": "https://www.v2ex.com/feed/create.xml",          "node_topic": True},
+    {"name": "V2EX·创意",         "url": "https://www.v2ex.com/feed/tab/creative.xml",     "node_topic": True},
     {"name": "少数派",             "url": "https://sspai.com/feed"},
     {"name": "构建我的被动收入",   "url": "https://www.bmpi.dev/index.xml"},
     {"name": "透明创业实验",       "url": "https://blog.t9t.io/atom.xml"},
-    {"name": "小众软件",           "url": "https://www.appinn.com/feed/"},
 ]
 
 
@@ -109,6 +120,14 @@ OPC_BLOCK_KEYWORDS = [
     "菜谱", "蒸菜", "食谱", "美食", "家常", "烘焙", "探店", "好饭", "厨房",
     "游记", "出行装备", "壁纸", "表情包", "字体", "输入法", "键盘", "耳机",
     "显示器", "相机", "摄影", "影音", "观影", "书单", "日历", "桌面美化",
+]
+
+# V2EX 这类社区节点里混着的「求助 / 求职 / 运维排错」帖：
+# 它们跟「一个人做出了什么东西、怎么收钱」没关系，念出来听众会觉得跑题。
+OPC_HELP_NOISE = [
+    "求助", "有偿", "求推荐", "求大佬", "请问", "报错", "怎么解决", "怎么让",
+    "面试", "简历", "招聘", "内推", "求职", "offer", "被裁", "离职",
+    "服务器", "域名被", "封号", "申诉", "退款",
 ]
 
 
@@ -528,6 +547,10 @@ class NewsCollector:
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         }
+        # GitHub Actions 是直连，不需要代理。
+        # 本地调试时如果只有走代理才能访问 V2EX，设 NEWSCAST_PROXY 即可；
+        # 显式传 proxy 比依赖 HTTP_PROXY 环境变量稳（后者在本机实测会被代理回 502）。
+        self.proxy = os.getenv("NEWSCAST_PROXY") or None
 
     async def fetch_sina_finance_yaowen(self, client: httpx.AsyncClient, history: "SeenHistory" = None) -> List[Dict[str, Any]]:
         """
@@ -748,12 +771,17 @@ class NewsCollector:
                     # 题材黑名单（生活类源里的菜谱、装备、壁纸等）
                     if block_keywords and _hits_any(title.lower(), block_keywords):
                         continue
+                    # 社区节点里的求助 / 求职 / 排错帖：不是「一个人做出了什么」
+                    if category == "一人公司" and _hits_any(title.lower(), OPC_HELP_NOISE):
+                        continue
                     # 过滤纯英文长句，保证中文环境纯正
                     if is_mostly_english(title) or is_mostly_english(summary):
                         continue
                     # 相关性闸门：只看标题判断，跟本板块无关的直接丢弃，绝不凑数。
                     # 不能看摘要——36氪这类源的摘要是多条汇总，几乎什么词都有，会把闸门带偏。
-                    if gate_keywords and not _hits_any(title.lower(), gate_keywords):
+                    # 节点型源（V2EX 的分享创造）本身就是分类，再套关键词只会把真东西滤掉。
+                    if gate_keywords and not src.get("node_topic") \
+                            and not _hits_any(title.lower(), gate_keywords):
                         continue
                     # 跨期去重：最近几期念过的一律跳过，这是「似曾相识」的根源
                     if history.seen(title, fi.get("link", "")):
@@ -763,6 +791,9 @@ class NewsCollector:
                             "title": title,
                             "category": category,
                             "summary": summary,
+                            # 案例拆解需要「怎么收钱 / 有没有订阅」这类细节，
+                            # 60 字的播报摘要装不下，单独留一份更长的原文
+                            "raw_text": (_clean_summary(fi.get("summary", "")[:1500]) if category == "一人公司" else ""),
                             "why_matter": "",
                             "source_name": src["name"],
                             "url": fi.get("link", ""),
@@ -775,7 +806,9 @@ class NewsCollector:
                 print(f"[Collector] {src['name']} 抓取异常: {e}")
                 continue
 
-        # 第二遍：轮转分配，先每源 1 条
+        # 第二遍：轮转分配，先每源 1 条。
+        # 注意跨源也要去重：V2EX 的「分享创造」和「创意」两个节点会收录同一个帖子，
+        # 不去重的话 3 个名额里会有 2 个是同一件事，动态里还得再念一遍。
         picked: List[Dict[str, Any]] = []
         round_idx = 0
         while len(picked) < max_items and any(len(b) > round_idx for b in buckets):
@@ -783,7 +816,10 @@ class NewsCollector:
                 if len(picked) >= max_items:
                     break
                 if round_idx < len(b):
-                    picked.append(b[round_idx])
+                    cand = b[round_idx]
+                    if any(is_similar_title(cand["title"], p["title"]) for p in picked):
+                        continue
+                    picked.append(cand)
             round_idx += 1
         return picked[:max_items]
 
@@ -831,17 +867,16 @@ class NewsCollector:
         history = history or SeenHistory()
         pool = pools.get(category, [])
 
-        # 先剔除最近几期已经用过的，避免同一句话隔天再念一遍
+        # 只用「从来没播过」的那几条，一条都不重复。
+        #
+        # 原逻辑在池子快见底时会 fresh = pool 回退到全集，再叠加日期取模，
+        # 实际模拟下来第 5 天取到的就和第 2 天一模一样——这是「似曾相识」的另一半来源。
+        # 现在宁可这个板块当天空着（播报里明说今天没捞到），也绝不重念旧话。
         fresh = [(t, s) for t, s in pool if not history.seen(t)]
-        if len(fresh) < 3:
-            fresh = pool  # 全都用过（池子轮完了）才回到全集
-
-        # 按日期偏移，保证每天取到的是不同的一组
-        try:
-            off = int(date_str.replace("-", "")) % max(1, len(fresh))
-        except Exception:
-            off = 0
-        picked = [fresh[(off + i) % len(fresh)] for i in range(min(3, len(fresh)))]
+        picked = fresh[:3]
+        if not picked:
+            print(f"[Collector] {category} 观点池已全部播过，今天不再降级凑数")
+            return []
 
         return [
             {
@@ -857,11 +892,12 @@ class NewsCollector:
             for title, summary in picked
         ]
 
-    async def fetch_ai_agent_and_opc(self, client: httpx.AsyncClient, date_str: str = None, history: "SeenHistory" = None) -> Dict[str, List[Dict[str, Any]]]:
+    async def fetch_ai_agent_and_opc(self, client: httpx.AsyncClient, date_str: str = None, history: "SeenHistory" = None, all_history: "SeenHistory" = None) -> Dict[str, List[Dict[str, Any]]]:
         """真实抓取全球 AI 与一人公司中文资讯，抓取失败才降级到精选观点库"""
         if not date_str:
             date_str = datetime.datetime.now().strftime("%Y-%m-%d")
         history = history or SeenHistory()
+        all_history = all_history or history
         try:
             day_offset = datetime.datetime.strptime(date_str, "%Y-%m-%d").toordinal()
         except Exception:
@@ -877,18 +913,20 @@ class NewsCollector:
             history=history, day_offset=day_offset
         )
 
+        # 观点兜底要用「全部历史」判断，不是最近几期：
+        # 只看最近 5 期的话，早就播过的观点过几天又会重新出现。
         if not ai_items:
-            ai_items = self._fallback_pool(date_str, "AI Agent", history)
+            ai_items = self._fallback_pool(date_str, "AI Agent", all_history)
         if not opc_items:
-            opc_items = self._fallback_pool(date_str, "一人公司", history)
+            opc_items = self._fallback_pool(date_str, "一人公司", all_history)
 
         return {"AI Agent": ai_items, "一人公司": opc_items}
 
-    async def collect_all(self, date_str: str = None, history: "SeenHistory" = None) -> Dict[str, List[Dict[str, Any]]]:
+    async def collect_all(self, date_str: str = None, history: "SeenHistory" = None, all_history: "SeenHistory" = None) -> Dict[str, List[Dict[str, Any]]]:
         """
-        date_str: 本期归属日期
-        history:  最近几期已播条目（跨期去重）。不传则退化为「只看当天内部去重」，
-                  也就是会出现「昨天念过的今天再念一遍」的老问题。
+        date_str:    本期归属日期
+        history:     最近几期已播条目（新闻跨期去重）
+        all_history: 全部历史（只用于「观点兜底 / 旧案例」这种绝不能重播的内容）
         """
         if not date_str:
             date_str = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -896,13 +934,13 @@ class NewsCollector:
 
         results: Dict[str, List[Dict[str, Any]]] = {cat: [] for cat in CATEGORIES}
 
-        async with httpx.AsyncClient(headers=self.headers, verify=False, timeout=15.0) as client:
+        async with httpx.AsyncClient(headers=self.headers, verify=False, timeout=15.0, proxy=self.proxy) as client:
             tasks = [
                 self.fetch_sina_finance_yaowen(client, history),
                 self.fetch_cankao_xiaoxi_yaowen(client, history),
                 self.fetch_authority_yaowen(client, history),
                 self.fetch_ximalaya_breakfast(client),
-                self.fetch_ai_agent_and_opc(client, date_str, history),
+                self.fetch_ai_agent_and_opc(client, date_str, history, all_history),
             ]
             sina_res, cankao_res, xuexi_res, xm_res, ai_res = await asyncio.gather(*tasks, return_exceptions=True)
 

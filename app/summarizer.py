@@ -8,10 +8,158 @@ import httpx
 from app.config import settings
 from app.collector import is_similar_title
 
-# 14 条完全不重样的一人公司搞钱深度拆解案例库
-# 选择逻辑见 _pick_case：先排除最近几期用过的，再按日期轮转。
-# 原先只有 7 条且直接用「日期序号 % 库长度」，等于严格 7 天一轮回，
-# 上周几讲过什么，这周同一天一字不差再讲一遍。
+# ============================================================
+# 真实案例抽取：把「今天真的有人在做什么」拆成可播报的五段
+#
+# 原先的做法是一个 14 条的固定案例库，用「日期序号 % 14」挑一条，
+# 等于每两周原样重播一遍，内容跟当天真实发生的事毫无关系——
+# 这是听众「似曾相识」的主要来源。现在改为优先使用当天抓到的真实项目，
+# 固定库只作最后一级兜底，且用完即止。
+#
+# 铁律：案例里出现的任何数字（订阅数、收入、定价、用户量）都必须来自原文。
+#      原文没写就明说「作者没公开」，绝不替人编一个像样的数字。
+# ============================================================
+
+# 只认「真的在收钱」的说法。
+# 裸的「订阅」「付费」不能算——在视频和内容语境里，「订阅」是 subscribe 频道，
+# 「付费」可能只是「付费视频」，拿它当收入信号会把一堆免费项目误判成案例。
+CASE_PRICE_SIGNALS = [
+    "付费订阅", "订阅制", "按月订阅", "按年订阅", "付费用户", "付费客户",
+    "年费", "月费", "买断", "定价", "收费", "免费试用", "价格", "收费版",
+    "增值服务", "元/月", "元每月", "块钱一个月", "客单价", "开始收钱",
+]
+CASE_NUMBER_RE = re.compile(r"\d+\s*(万|千|百|位|个用户|名用户|订阅|美元|元|块|刀|单|人)")
+CASE_TOOL_WORDS = [
+    "claude", "codex", "cursor", "windsurf", "copilot", "chatgpt", "gpt", "gemini",
+    "deepseek", "qwen", "dify", "n8n", "coze", "扣子", "langchain", "ragflow",
+    "python", "typescript", "javascript", "react", "vue", "next.js", "node.js",
+    "flutter", "swift", "kotlin", "rust", "golang", "supabase", "vercel",
+    "cloudflare", "figma", "tailwind", "electron", "tauri",
+    "whisper", "asr", "anki", "obsidian", "notion", "comfyui", "stable diffusion",
+]
+
+
+def _clean_case_title(t: str) -> str:
+    """去掉 [分享] 前缀、emoji、省略号和中文之间的空格，让标题能直接念出来"""
+    t = re.sub(r"^\s*[\[【][^\]】]{1,14}[\]】]\s*", "", t or "")
+    t = re.sub(r"[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]", "", t)
+    t = t.replace("...", "").replace("…", "")
+    t = re.sub(r"(?<=[\u4e00-\u9fa5])\s+(?=[\u4e00-\u9fa5])", "", t)
+    return re.sub(r"\s+", " ", t).strip(" -—·|、，,.")
+
+
+# 帖子里最常见的「无效内容」：下载地址、应用商店、关注引导。
+# 这些整句念出来听众一个字都留不住，直接不要。
+NOISE_FRAG_RE = re.compile(
+    r"https?://|www\.|\.com|\.cn|app store|google play|扫码|二维码|公众号|"
+    r"地址在|下载地址|欢迎关注|传送门|点击查看|原文链接",
+    re.I,
+)
+
+
+def _tidy_frag(s: str) -> str:
+    """去掉 V2EX 正文里的分节小标题，并压缩中文之间的空格"""
+    s = re.sub(r"^(简介|特色|功能|说明|背景|痛点|地址|官网|链接|使用说明|更新|价格|正文)[:：\s]+", "", s)
+    s = re.sub(r"(?<=[\u4e00-\u9fa5])\s+(?=[\u4e00-\u9fa5])", "", s)
+    return s.strip()
+
+
+def _split_sentences(text: str) -> List[str]:
+    """
+    切成可以「单独念一句」的短句。
+
+    V2EX 的正文常常是一整段没有任何标点的文字，直接按句号切会切出几百字的一坨，
+    念出来就是「地址在：目前支持 Web/iOS/Android 三端同步」这种没人听得懂的东西。
+    所以先按标点切，太长的再按逗号切，还很长的按长度硬切，最后滤掉没用的片段。
+    """
+    out: List[str] = []
+    for chunk in re.split(r"[。！？!?；;\n]+", text or ""):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        for sub in (re.split(r"[，,、]", chunk) if len(chunk) > 70 else [chunk]):
+            sub = _tidy_frag(sub)
+            if not sub:
+                continue
+            while len(sub) > 70:
+                out.append(sub[:70])
+                sub = sub[70:]
+            if len(sub) >= 8:
+                out.append(sub)
+    return [
+        s for s in out
+        if not NOISE_FRAG_RE.search(s)
+        and not s.startswith(("就不多", "不说了", "另外", "顺便", "总之", "哈哈", "然后"))
+    ]
+
+
+def _cut(text: str, limit: int = 80) -> str:
+    """摘录句压到 limit 以内，优先在逗号处收尾"""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    idx = max(head.rfind("，"), head.rfind("、"), head.rfind(","))
+    return (head[:idx] if idx >= limit * 0.5 else head).rstrip("，、,；; ") + "……"
+
+
+REVENUE_CUES = ("收入", "赚", "营收", "月入", "年入", "付费", "订阅", "客户", "用户")
+
+
+def _has_money_signal(raw: str) -> bool:
+    """
+    这条帖子能不能看出「怎么收钱 / 有没有人付钱」。
+
+    大部分「分享创造」帖只是功能罗列：我做了个剪切板工具、我做了个提醒小工具。
+    这类东西放进动态列表播一句就够了，硬拆成案例只会念出三句「作者没细说」，
+    听众要的是「这门生意怎么跑」，不是「这个功能怎么用」。
+    """
+    if not raw:
+        return False
+    if any(k in raw for k in CASE_PRICE_SIGNALS):
+        return True
+    return any(
+        CASE_NUMBER_RE.search(s) and any(k in s for k in REVENUE_CUES)
+        for s in _split_sentences(raw)
+    )
+
+
+# 每日金句独立成池，不再挂在案例上。
+# 案例一旦换成当天真实项目，就不该再被迫配一句写死的「配套金句」。
+DAILY_QUOTES = [
+    "你不需要比机器更聪明，你只需要比机器更清楚哪件事值得做。",
+    "生意的本质从来没变：替别人省时间、省钱，或者替他解决他搞不定的麻烦。",
+    "工具越便宜，愿意动手的人越值钱。",
+    "一个人能做的事，正在从「做一份」变成「做一门」。",
+    "别人还在争论机器会不会取代人，有人已经用它多接了三单。",
+    "小不是因为弱，小是因为转身快。",
+    "先有人愿意付钱，再谈产品好不好看。",
+    "所有稳定的现金流，都是从一件别人嫌麻烦的小事开始的。",
+    "信息差不会消失，它只会换一个地方出现。",
+    "真正的门槛不是技术，是你愿不愿意连续三个月做同一件枯燥的事。",
+    "把重复的事交给机器，把判断留给自己。",
+    "收费不是贪心，收费是最诚实的需求验证。",
+    "你能服务多少人，取决于你把多少事标准化了。",
+    "机会不在风口上，在别人懒得弯腰的地方。",
+    "会用工具的人很多，知道自己要什么的人很少。",
+    "一人公司最难的不是获客，是熬过没人理你的那三个月。",
+    "别人看到的是模型很强，你要看到的是模型很便宜。",
+    "不要急着做平台，先做一件能立刻交付的小事。",
+    "定价是一门翻译课：把成本翻译成对方能感知到的价值。",
+    "任何一个你抱怨过三次的麻烦，都可能是一个产品。",
+    "慢一点没关系，停下来才致命。",
+    "复利不在钱上，在你每天多会一点这件事上。",
+    "最好的商业模式，是你睡觉时它还在替人解决问题。",
+    "别问这个赛道还有没有机会，先问自己能不能比别人多做三个月。",
+]
+
+
+# 【已停用，仅作历史存档】原先写死的 14 条一人公司案例。
+#
+# 2026-11 起，案例改为只从当天抓到的真实项目里挑，这个库不再参与选材。
+# 原因：它跟当天真实发生的事没有任何关系，无论怎么轮换，本质都是把同一批
+# 故事换个日子重播一遍——这正是听众说「今天的内容似曾相识」的根源。
+# 保留这些数据只是让历史期次里的引用还能对上，不代表它们会再被播出去。
 OPC_CASE_LIBRARY = [
     {
         "title": "做微型'夜间促单智能客服'，个人单兵作战年入 180 万的完整 SOP 拆解",
@@ -414,13 +562,13 @@ class NewsSummarizer:
     # 最近一次生成的章节切分：[{label, text}]，由 _build_spoken_script 写入
     last_chapters: List[Dict[str, str]] = []
 
-    async def generate_report(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]], recent_leads: List[str] = None) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
+    async def generate_report(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]], recent_leads: List[str] = None, used_quotes: List[str] = None) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
         """
         返回: (title, lead_title, markdown_content, tts_script, sources, category_summary)
 
-        recent_leads: 最近几期已经用过的一人公司案例标题。用来避开「7 天一轮回」——
-                      原版是 toordinal() % 库长度，库只有 7 条，等于上周几讲过什么，
-                      这周同一天一字不差再讲一遍，听众一听就知道是重播。
+        recent_leads: 历史上用过的一人公司案例标题。案例现在优先取当天真实项目，
+                      这份历史用来保证「同一个项目不会讲两遍」。
+        used_quotes:  历史上已经说过的金句，避免每天同一句。
         """
         if settings.OPENAI_API_KEY:
             try:
@@ -428,34 +576,184 @@ class NewsSummarizer:
             except Exception as e:
                 print(f"[Summarizer] LLM 调用受阻，启用内建高品质全景播报引擎: {e}")
 
-        return self._generate_curated(date_str, collected_data, recent_leads)
+        return self._generate_curated(date_str, collected_data, recent_leads, used_quotes)
 
-    def _pick_case(self, date_str: str, recent_leads: List[str] = None) -> Dict[str, Any]:
-        """选案例：先排除最近几期用过的，再按日期轮转取下一个"""
+    def _pick_case(self, date_str: str, recent_leads: List[str] = None,
+                   opc_items: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        今天的案例从哪来：只从当天真实项目里挑，挑不到就不做这一段。
+
+        固定案例库已经不参与挑选了。它跟当天真实发生的事没有任何关系，
+        本质上就是把同一批故事换个日子重播一遍——这正是听众说「似曾相识」的来源。
+        宁可这天没有案例段，也不拿旧故事凑数。
+
+        另一个门槛：帖子必须能看出「怎么收钱 / 有没有人付钱」。
+        纯功能分享（我做了个剪切板工具）放进动态列表就够了，
+        硬拆成案例只会念出三句「作者没细说」，听众一听就知道在凑时长。
+        """
         recent = [t for t in (recent_leads or []) if t]
-        fresh = [c for c in OPC_CASE_LIBRARY if not any(is_similar_title(c["title"], r) for r in recent)] if recent else list(OPC_CASE_LIBRARY)
-        if not fresh:
-            fresh = list(OPC_CASE_LIBRARY)
-        try:
-            ordinal = datetime.datetime.strptime(date_str, "%Y-%m-%d").toordinal()
-        except Exception:
-            ordinal = 0
-        return fresh[ordinal % len(fresh)]
 
-    def _generate_curated(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]], recent_leads: List[str] = None) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
+        cands = [
+            it for it in (opc_items or [])
+            if not it.get("is_fallback") and it.get("title")
+            and not any(is_similar_title(it["title"], r) for r in recent)
+            and _has_money_signal(it.get("raw_text") or "")
+        ]
+        if cands:
+            def _score(it: Dict[str, Any]) -> int:
+                raw = it.get("raw_text") or ""
+                low = raw.lower()
+                s = 0
+                # 叙述型优先：有正常标点的帖子才拆得出「他为什么做、怎么收钱」。
+                # 纯功能罗列（整段没标点）抽出来全是碎片，念着像机器在念说明书。
+                s += min(len(re.findall(r"[。！？，、；]", raw)), 8)
+                if CASE_NUMBER_RE.search(raw):
+                    s += 3
+                if any(k in raw for k in CASE_PRICE_SIGNALS):
+                    s += 3
+                if any(w in low for w in CASE_TOOL_WORDS):
+                    s += 1
+                # 标题本身不完整（「我做了这个…」「这种 xx 有人有兴趣吗」）的，
+                # 念出来听众根本不知道在说什么，宁可让位给标题清楚的帖子
+                t = it.get("title") or ""
+                if "..." in t or "…" in t or re.search(r"(这个|它|这些)\s*$", t) or len(t) < 8:
+                    s -= 5
+                return s + min(len(raw) // 150, 4)
+
+            cands.sort(key=_score, reverse=True)
+            picked = cands[0]
+            # 案例会详细讲一遍，动态列表里就不该再出现同一条，
+            # 否则听众会在同一期里把同一件事听两次。
+            try:
+                opc_items.remove(picked)
+            except ValueError:
+                pass
+            return self._case_from_item(picked, date_str)
+
+        # 今天没有能看出「怎么收钱」的真实项目，就不讲案例。
+        # 固定库留着做历史存档（旧链接还能打开），但不再拿来填今天的节目。
+        return None
+
+    def _case_from_item(self, item: Dict[str, Any], date_str: str) -> Dict[str, Any]:
+        """
+        把一条真实帖子拆成五段播报素材。
+
+        每一段要么引用原文，要么明确说「没写」——
+        绝不生成原文里没有的数字。案例可以朴素，但不能假。
+        """
+        title = _clean_case_title(item.get("title", ""))
+        raw = re.sub(r"https?://\S+", " ", item.get("raw_text") or item.get("summary") or "")
+        raw = re.sub(r"\s+", " ", raw).strip()
+        sents = _split_sentences(raw)
+
+        # 1) 解决什么麻烦：优先找作者自己讲「原来多麻烦」的句子
+        pain = ""
+        for kw in ("痛点", "麻烦", "每次", "以前", "原来", "一直", "找不到", "手动", "重复", "受够"):
+            pain = next((s for s in sents if kw in s), "")
+            if pain:
+                break
+        if not pain:
+            # 帖子里没写动机就不编。
+            # 用正文里第一句有效描述代替「他为了解决什么痛点」这种硬套的说法。
+            if sents:
+                pain = f"帖子里没细讲为什么做，只说了它大概是这样的：{_cut(sents[0], 60)}"
+            else:
+                pain = "帖子里没细说，除了标题基本没有别的描述。"
+
+        # 2) 收钱：原文真的提到价格/订阅才引用
+        money = next((s for s in sents if s != pain and any(k in s for k in CASE_PRICE_SIGNALS)), "")
+        if money:
+            model = _cut(money)
+        elif "免费使用" in raw or "完全免费" in raw:
+            model = "目前还是免费用的，作者没提后面打算怎么收钱。"
+        else:
+            model = "作者没提收费，现在更像是在验证到底有没有人真的需要它。"
+
+        # 3) 工具：只认原文里出现过的名字
+        low = raw.lower()
+        tools: List[str] = []
+        for w in CASE_TOOL_WORDS:
+            if w not in tools and re.search(rf"(?<![a-z]){re.escape(w)}(?![a-z])", low):
+                tools.append(w)
+        stack = ("他用到的是：" + "、".join(t.capitalize() if t.isascii() else t for t in tools[:4]) + "。") \
+            if tools else "作者没细说拿什么做的。"
+
+        # 4) 收入：必须同时出现数字和「钱」相关的词。
+        #    否则会把「每天抓取 500 多个频道」这种规模数字，当成收入念出去。
+        rev_sents = [
+            s for s in sents
+            if s not in (pain, money) and CASE_NUMBER_RE.search(s)
+            and any(k in s for k in ("收入", "赚", "营收", "月入", "年入", "付费", "订阅", "客户", "用户"))
+        ]
+        if rev_sents:
+            revenue = _cut(rev_sents[0])
+        elif money:
+            revenue = "更具体的进账作者还没公开，从上面说的定价看，还处在刚开始收钱的阶段。"
+        else:
+            revenue = "作者没公开收入，这条目前是「做出来了」，还不是「赚到了」。"
+
+        # 5) 抄作业：按项目类型给具体动作，不用放到哪都对的话
+        guide = self._guide_for(title, raw)
+
+        return {
+            "title": title,
+            "quote": "",
+            "pain_point": pain,
+            "model": model,
+            "tech_stack": stack,
+            "revenue": revenue,
+            "guide": guide,
+            "is_real": True,
+            "url": item.get("url", ""),
+            "source_name": item.get("source_name", ""),
+        }
+
+    def _guide_for(self, title: str, raw: str) -> str:
+        """按项目类型给「你能抄的那部分」，避免每天都是同一句空话"""
+        t = (title + " " + raw[:240]).lower()
+        if any(k in t for k in ("小程序", "插件", "脚本", "cli", "小工具", "工具")):
+            return ("别一上来做通用版，先把它钉死在一个人群上，比如只给会计、只给某个行业的老板用。"
+                    "验证方式很土：拿去相关的群里免费给五个人用，看他们第二天还开不开。"
+                    "天天开，再谈收钱；没人开，说明这个痛还不够疼。")
+        if any(k in t for k in ("网站", "平台", "榜单", "导航", "社区", "导航站")):
+            return ("先只做一条数据线，把一个细分领域的真实数据持续更新好，比堆十个功能更能留住人。"
+                    "前期别急着收订阅，先把「每天都想来看一眼」这件事做成，有了回访再谈会员或广告位。")
+        if any(k in t for k in ("游戏", "小游戏")):
+            return ("先做完一个能玩三分钟的最小版本，丢到社区让人试玩，专门收集「哪一步想关掉」。"
+                    "小游戏靠传播不靠功能，把第一次分享的动机设计进去，比多加十个关卡有用。")
+        if any(k in t for k in ("ai", "gpt", "智能体", "大模型", "agent")):
+            return ("别从模型开始，从「一件现在还得人手动做的事」开始。"
+                    "先用现成接口把流程跑通，能省下你自己每天一小时，才说明它对别人也有价值。"
+                    "然后拿这个结果去找三个同类的人，问他们愿不愿意付钱。")
+        return ("先自己用一周，把「每次都要手动的那一步」记下来，那一步就是产品雏形。"
+                "然后免费给三个有同样麻烦的人用，只看他们会不会主动回来。会回来再谈定价。")
+
+    def _pick_quote(self, used: List[str] = None) -> str:
+        """今日金句：优先挑这个节目里还没说过的"""
+        used = [u for u in (used or []) if u]
+        fresh = [q for q in DAILY_QUOTES if not any(is_similar_title(q, u) for u in used)]
+        return fresh[0] if fresh else DAILY_QUOTES[0]
+
+    def _generate_curated(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]], recent_leads: List[str] = None, used_quotes: List[str] = None) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
         self.last_chapters = []
         title = f"全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 ({date_str})"
 
-        # 避开最近用过的案例，保证听众不会连着几天听到同一个项目
-        cur_case = self._pick_case(date_str, recent_leads)
+        # 案例优先用当天真实项目；实在没有才动固定库，用完就跳过整段
+        cur_case = self._pick_case(date_str, recent_leads, collected_data.get("一人公司", []))
 
-        quote_of_the_day = cur_case["quote"]
-        lead_title = cur_case["title"]
-        case_pain_point = cur_case["pain_point"]
-        case_model = cur_case["model"]
-        case_tech_stack = cur_case["tech_stack"]
-        case_revenue_and_traffic = cur_case["revenue"]
-        case_beginner_guide = cur_case["guide"]
+        if cur_case:
+            quote_of_the_day = cur_case.get("quote") or self._pick_quote(used_quotes)
+            lead_title = cur_case["title"]
+            case_pain_point = cur_case["pain_point"]
+            case_model = cur_case["model"]
+            case_tech_stack = cur_case["tech_stack"]
+            case_revenue_and_traffic = cur_case["revenue"]
+            case_beginner_guide = cur_case["guide"]
+        else:
+            quote_of_the_day = self._pick_quote(used_quotes)
+            lead_title = ""
+            case_pain_point = case_model = case_tech_stack = ""
+            case_revenue_and_traffic = case_beginner_guide = ""
 
         # 整理来源列表（权威去重展示），并把解读带进卡片，让手机端也能直接读到
         all_sources: List[Dict[str, str]] = []
@@ -478,7 +776,7 @@ class NewsSummarizer:
 
         category_summary: Dict[str, str] = {
             "今日金句": quote_of_the_day,
-            "搞钱案例": lead_title,
+            "搞钱案例": lead_title or "今日暂无新案例",
             "宏观大势": f"今日识别 {len(collected_data.get('宏观大势', []))} 个跟决策有关的信号",
             "权威要闻": f"权威要闻共 {len(collected_data.get('权威要闻', []))} 条",
             "参考消息": f"国际要闻共 {len(collected_data.get('参考消息', []))} 条",
@@ -500,27 +798,33 @@ class NewsSummarizer:
             "",
             "---",
             "",
-            "## 💰 一人公司搞钱案例深度拆解",
-            "",
-            f"### 【本期课题】{lead_title}",
-            "",
-            "#### 1. 业务切入场景与核心痛点",
-            case_pain_point,
-            "",
-            "#### 2. 商业模式与产品极简设计",
-            case_model,
-            "",
-            "#### 3. 全套 AI 工具链与自动化 SOP",
-            case_tech_stack,
-            "",
-            "#### 4. 流量获客与盈利变现闭环",
-            case_revenue_and_traffic,
-            "",
-            "#### 5. 普通人低门槛复制实操指南",
-            case_beginner_guide,
-            "",
-            "---",
-            "",
+        ]
+
+        # 案例段：今天真的抓到项目才写。没有就整段不出现，绝不拿旧案例填版面。
+        if cur_case:
+            src_note = f"（真实项目 · 来源：{cur_case.get('source_name') or '公开信息'}）" if cur_case.get("is_real") else ""
+            md_lines += [
+                "## 💰 一人公司搞钱案例拆解" + src_note,
+                "",
+                f"### 【本期课题】{lead_title}",
+                "",
+                "#### 1. 这是什么项目",
+                case_pain_point,
+                "",
+                "#### 2. 用了什么工具",
+                case_tech_stack,
+                "",
+                "#### 3. 怎么收钱、有没有真的赚到",
+                f"{case_model}\n\n{case_revenue_and_traffic}",
+                "",
+                "#### 4. 你能抄的那部分",
+                case_beginner_guide,
+                "",
+                "---",
+                "",
+            ]
+
+        md_lines += [
             "## 🤖 全球 AI 与 Agent 前沿要点 (3-5条精选)",
             ""
         ]
@@ -662,15 +966,16 @@ class NewsSummarizer:
 
         add("今日金句", f"先送你今天的一句话：{spoken_quote}。这句话放在搞钱这件事上，特别应景。")
 
-        # 1. 一人公司搞钱案例：五段各自成章，方便回头重听某一段
-        add("案例·痛点", (
-            f"接下来聊今天主推的一人公司案例：{spoken_lead}。我拆成五段讲。"
-            f"第一段，它解决了什么让人头疼的问题？{clean_pain}"
-        ))
-        add("案例·收钱", f"第二段，它是怎么把这事做成生意、怎么收钱的？{clean_model}")
-        add("案例·工具", f"第三段，它用了哪些工具？放心，都不贵。{clean_stack}")
-        add("案例·赚钱", f"第四段，它到底赚到了多少？{clean_rev}")
-        add("案例·抄作业", f"第五段，普通人怎么抄作业？{clean_guide}")
+        # 1. 一人公司案例：真实项目通常没有「SOP 五段」那么完整，
+        #    硬凑五段的结果就是连着三句「作者没细说」。压成四段，每段都有实料。
+        #    今天没抓到真实项目就整段跳过——宁可少一段，也不拿旧案例重播。
+        if spoken_lead.strip():
+            add("案例·项目", f"接下来聊今天真的有人做出来的东西：{spoken_lead}。{clean_pain}")
+            add("案例·工具", f"他拿什么做的？{clean_stack}")
+            add("案例·钱", f"怎么收钱、有没有真的赚到？{clean_model} {clean_rev}")
+            add("案例·抄作业", f"你能抄的是哪一部分？{clean_guide}")
+        else:
+            add("今日说明", "今天这个板块没捞到值得细讲的新项目，我就不拿旧案例来凑数了，直接说 AI 那边的新动静。")
 
         # 同一天里同一句解读只说一次。
         # 原先两条新闻命中同一个信号词时，会连着念两遍一模一样的「要我说……」，
@@ -718,7 +1023,10 @@ class NewsSummarizer:
                 # 抓不到实时动态时，明确说成「判断」而不是冒充新闻，听着才不别扭
                 ai_lines = ["今天 AI 圈没抓到实时动态，我不硬凑新闻，给你几条半年内都不会过时的判断。"]
             else:
-                ai_lines = ["好，案例说完了，来看看过去 24 小时，AI 圈发生了什么。"]
+                # 上一段有没有案例，决定了这句过渡该不该提「案例」
+                lead_in = "好，案例说完了，来看看过去 24 小时，AI 圈发生了什么。" \
+                    if spoken_lead.strip() else "来看看过去 24 小时，AI 圈发生了什么。"
+                ai_lines = [lead_in]
             for i, item in enumerate(ai_items, 1):
                 ai_lines.append(speak_with_reading("AI Agent", item, i))
             add("AI 动态", "\n".join(ai_lines))

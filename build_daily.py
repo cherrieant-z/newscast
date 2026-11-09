@@ -262,9 +262,29 @@ async def build_today_report():
 
     from app.collector import SeenHistory
     history = SeenHistory(hist_titles, hist_urls)
+
+    # 兜底观点、案例、金句这三样是「会反复出现」的东西，判断有没有用过必须看全部历史。
+    # 只看最近 5 期的话，第 6 天就会把同一句话原样端上来——这正是听众说「似曾相识」的来源之一。
+    all_titles, all_urls, all_leads, all_quotes = [], [], [], []
+    for rec in existing_reports:
+        if rec.get("date_str") == date_str:
+            continue
+        for s in (rec.get("sources") or []):
+            if s.get("title"):
+                all_titles.append(s["title"])
+            if s.get("url"):
+                all_urls.append(s["url"])
+        if rec.get("lead_title"):
+            all_leads.append(rec["lead_title"])
+        q = (rec.get("category_summary") or {}).get("今日金句")
+        if q:
+            all_quotes.append(q)
+    all_history = SeenHistory(all_titles, all_urls)
+
     print(f"\n[1/4] 正在抓取 AI、一人公司、时政与财经要闻"
-          f"（已载入最近 {history_episodes} 期共 {len(hist_titles)} 条历史标题做跨期去重）...")
-    collected_data = await collector.collect_all(date_str, history)
+          f"（已载入最近 {history_episodes} 期共 {len(hist_titles)} 条历史标题做跨期去重；"
+          f"另有 {len(all_titles)} 条全量历史用于避免旧观点、旧案例重播）...")
+    collected_data = await collector.collect_all(date_str, history, all_history)
 
     # 打印各板块实际取到的条数，便于在 Actions 日志里一眼看出「今天到底是真没新闻还是被滤空了」
     for cat, items in collected_data.items():
@@ -273,15 +293,10 @@ async def build_today_report():
 
     # 2. 生成调查报道与播客文稿
     print("\n[2/4] 正在生成深度调查与通俗播客聊天风讲稿...")
-    # 最近 7 期用过的一人公司案例，避免和前几天讲重复
-    recent_leads = [
-        r.get("lead_title") for r in existing_reports[:7]
-        if r.get("date_str") != date_str and r.get("lead_title")
-    ]
     title, lead_title, markdown_content, tts_script, sources, cat_summary = await summarizer.generate_report(
-        date_str, collected_data, recent_leads
+        date_str, collected_data, all_leads, all_quotes
     )
-    print(f"    本期主推案例: {lead_title}")
+    print(f"    本期主推案例: {lead_title or '（今日无真实新案例，已跳过该段）'}")
 
     # 3. 合成高保真 Edge-TTS 音频 (直接写入 docs/audio)
     print("\n[3/4] 正在调用 Edge-TTS 合成普通话高保真播客音频...")
