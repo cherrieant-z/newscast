@@ -123,3 +123,17 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 一条硬约束：**案例里出现的每个数字都会回原文比对，找不到就整条作废、退回规则抽取**。
 模型编一个看起来很合理的价格，听众照着试一次就会被现实打回来，这个代价比没有案例大得多。
 
+### 这个仓库公开了，密钥会不会跟着公开？
+
+不会。key 只存在两个地方，两个地方都不进 git：
+
+- **GitHub Actions Secrets**：加密存储，只在 workflow 那一步注入成环境变量，
+  日志里 GitHub 会自动把密钥值打码；代码里只出现 `${{ secrets.DEEPSEEK_API_KEY }}` 这个名字。
+- **本地 `.env`**：已在 `.gitignore` 里。真正把 key 泄出去的常见原因不是开源，
+  而是某次手滑 `git add -f .env` 或者临时改 `import` 路径——所以提交前扫一眼 `git status` 就够了。
+
+Fork 这个仓库的人**拿不到你的 Secret**（GitHub 不会复制 Secrets 到 fork），
+他们跑 Actions 时 `DEEPSEEK_API_KEY` 是空的，会自动降级成规则引擎模式，正常出节目。
+想用完整效果，得自己申请一个 key 填进去——额度花的是他自己的。
+
+

@@ -25,6 +25,14 @@ import httpx
 
 from app.config import settings
 
+# 仓库是公开的，Actions 日志任何人都能翻。失败日志里会带上接口返回的前 160 个
+# 字符，个别服务会在 401 响应里回显 key 的片段，所以打印前统一打码。
+_SECRET_RE = re.compile(r"sk-[A-Za-z0-9_\-]{6,}")
+
+
+def _mask(text: str) -> str:
+    return _SECRET_RE.sub("sk-***", text or "")
+
 
 class LLMClient:
     def __init__(self) -> None:
@@ -98,8 +106,8 @@ class LLMClient:
             if attempt == 0:
                 await asyncio.sleep(1.5)
 
-        self.last_error = last
-        print(f"[LLM] 调用失败，本期改用规则引擎：{last}")
+        self.last_error = _mask(last)
+        print(f"[LLM] 调用失败，本期改用规则引擎：{self.last_error}")
         return None
 
     async def json(
