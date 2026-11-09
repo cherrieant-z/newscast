@@ -89,6 +89,10 @@ ENGLISH_TO_CHINESE_MAP = [
 
 COMPILED_PATTERNS = [(re.compile(_make_en_pattern(word)), repl) for word, repl in ENGLISH_TO_CHINESE_MAP]
 
+
+class TTSFailure(RuntimeError):
+    """音频没能生成出可用产物。调用方必须把它当失败，不能当成功。"""
+
 class TTSEngine:
     """
     负责将新闻底稿转化为高拟真度普通话语音 MP3 文件。
@@ -101,6 +105,9 @@ class TTSEngine:
         # 默认优先使用设置里的 Yunxi 充满活力的播客男声
         self.default_voice = settings.TTS_VOICE or "zh-CN-YunxiNeural"
         self.backup_voice = "zh-CN-XiaoxiaoNeural"
+        # 单次合成上限。6 分钟稿子正常 15~40 秒能出，给到 240 秒已经很宽松；
+        # 超过这个时间基本就是连接半开，继续等没有意义。
+        self.synth_timeout = 240.0
 
     async def generate_audio(self, text: str, date_str: str, output_dir: Path = None) -> Tuple[str, str, int, str, int]:
         """
@@ -116,21 +123,43 @@ class TTSEngine:
         dest_path = target_dir / file_name
         public_url = f"/audio/{file_name}"
 
-        voice_used = self.default_voice
-        try:
-            print(f"[TTS] 正在使用高拟真音色 [{voice_used}] 渲染播客级普通话音频...")
-            await self._run_edge_tts(cleaned_text, str(dest_path), voice_used)
-        except Exception as e:
-            print(f"[TTS] 默认音色 {voice_used} 生成受阻，尝试备用音色 [{self.backup_voice}]: {e}")
-            try:
-                voice_used = self.backup_voice
-                await self._run_edge_tts(cleaned_text, str(dest_path), voice_used)
-            except Exception as e2:
-                print(f"[TTS] 备用音色亦发生异常，使用安全占位帧: {e2}")
-                self._create_silent_fallback(str(dest_path))
+        # 先渲染到临时文件，验收通过了才替换正式文件。
+        # 这样「重跑时 TTS 恰好挂了」不会把早上已经能听的那一版覆盖成静音——
+        # 旧文件原地不动，进程以失败退出，人还能再点一次重跑。
+        tmp_path = dest_path.with_suffix(".part.mp3")
+
+        errors = []
+        for voice in (self.default_voice, self.backup_voice):
+            for attempt in (1, 2):
+                try:
+                    print(f"[TTS] 音色 [{voice}] 第 {attempt} 次渲染...")
+                    await self._run_edge_tts(cleaned_text, str(tmp_path), voice)
+                except Exception as e:
+                    errors.append(f"{voice}#{attempt} 渲染异常: {type(e).__name__}: {e}")
+                    continue
+
+                ok, reason = self._verify_audio(str(tmp_path), cleaned_text)
+                if ok:
+                    os.replace(tmp_path, dest_path)
+                    voice_used = voice
+                    print(f"[TTS] 渲染完成并通过验收（音色 {voice}）")
+                    break
+                errors.append(f"{voice}#{attempt} 产物不合格: {reason}")
+                print(f"[TTS] 产物不合格，重试：{reason}")
+            else:
+                continue
+            break
+        else:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    pass
+            detail = "；".join(errors[-3:]) or "未知原因"
+            raise TTSFailure(f"两个音色共 {len(errors)} 次尝试均未产出可用音频：{detail}")
 
         file_size = os.path.getsize(dest_path) if dest_path.exists() else 0
-        
+
         # 准确估算或读取时长
         duration_sec = self._calc_audio_duration(cleaned_text, str(dest_path))
         mins = duration_sec // 60
@@ -146,7 +175,30 @@ class TTSEngine:
             rate=settings.TTS_RATE,
             pitch=settings.TTS_PITCH
         )
-        await communicate.save(output_path)
+        # edge-tts 已知的故障模式是 WebSocket 半开：连上了、不返回、也不断开。
+        # 不设超时，整个 job 会一直挂到 Actions 的 6 小时上限，
+        # 期间还占着 concurrency 锁，把后面两趟兜底一起拖死。
+        await asyncio.wait_for(communicate.save(output_path), timeout=self.synth_timeout)
+
+    def _verify_audio(self, path: str, text: str) -> Tuple[bool, str]:
+        """
+        产物验收。这是全流程唯一能区分「合成成功」和「合成出一坨垃圾」的地方。
+
+        Edge-TTS 是 48kbps（约 6000 字节/秒），中文播报约 3.7 字/秒，
+        所以字节数大致可以拿字数反推。低于预期一半就是截断，
+        几万字节以内基本可以断定是静音占位或空壳。
+        """
+        p = Path(path)
+        if not p.exists():
+            return False, "临时文件不存在"
+        size = p.stat().st_size
+        if size < 8000:
+            return False, f"只有 {size} 字节，是空壳"
+        chars = len(re.sub(r"\s+", "", text)) or 1
+        expected = chars / 3.7 * 6000
+        if size < expected * 0.5:
+            return False, f"{size} 字节，仅为预期 {int(expected)} 的 {size / expected:.0%}，像是念到一半断了"
+        return True, ""
 
     def _optimize_text_for_podcast(self, text: str) -> str:
         """
@@ -157,7 +209,7 @@ class TTSEngine:
         """
         t = text
         # 1. 移除 Markdown 格式字符与链接
-        t = re.sub(r'https?://\S+', '', t)
+        t = self._strip_urls(t)
         t = re.sub(r'&nbsp;?', ' ', t)
         t = re.sub(r'[*#_`~>\[\]\(\)]', '', t)
         
@@ -176,6 +228,30 @@ class TTSEngine:
         cleaned = "\n\n".join(lines)
         return cleaned
 
+    def _strip_urls(self, text: str) -> str:
+        """
+        处理链接。以前是一刀切成空字符串，于是「地址在：https://xxx 目前支持三端同步」
+        念出来就断在「地址在，」——半句话悬在那儿，听的人会以为音频坏了。
+
+        现在按句处理：先摘掉「地址在/链接是 + URL」这种残段，剩下的 URL 念作「官网」，
+        去掉链接后整句不足 10 个字就直接丢弃（那种句子本来也只是在报网址）。
+        """
+        out = []
+        for sent in re.split(r'(?<=[。！？!?\n])', text):
+            if "http://" not in sent and "https://" not in sent:
+                out.append(sent)
+                continue
+            s = re.sub(r'(地址|链接|网址|入口|报名)(在|是)?[：:，,]?\s*https?://\S+', '', sent)
+            s = re.sub(r'https?://\S+', '官网', s)
+            s = re.sub(r'[，,、]?\s*官网\s*[，,、]?', '官网', s)
+            # 「最近把 Ginkgo 发出来了：官网。」这种，链接就是句尾，念「官网」没意义，收成句号
+            s = re.sub(r'[：:]\s*官网[。]?$', '。', s)
+            s = re.sub(r'[ \t]{2,}', ' ', s).strip()
+            if len(re.sub(r'[^\u4e00-\u9fa5A-Za-z0-9]', '', s)) < 6:
+                continue
+            out.append(s)
+        return "".join(out)
+
     def _calc_audio_duration(self, text: str, file_path: str) -> int:
         """
         计算实际播报时长：
@@ -193,9 +269,5 @@ class TTSEngine:
                 return int(file_size_bytes / 6000)
 
         return max(estimated_sec, 60)
-
-    def _create_silent_fallback(self, path: str):
-        with open(path, "wb") as f:
-            f.write(b'\xff\xfb\x90d\x00\x00\x00\x00' * 50)
 
 tts_engine = TTSEngine()

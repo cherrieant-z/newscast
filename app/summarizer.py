@@ -217,6 +217,9 @@ DAILY_QUOTES = [
 ]
 
 
+# 解读句的引入语。轮换使用，避免一期里同一个词反复出现。
+READING_CUES = ["要我说", "我的看法是", "说白了", "换个角度看", "我琢磨着"]
+
 # 【已停用，仅作历史存档】原先写死的 14 条一人公司案例。
 #
 # 2026-11 起，案例改为只从当天抓到的真实项目里挑，这个库不再参与选材。
@@ -1178,7 +1181,12 @@ class NewsSummarizer:
                     used_readings.add(reading)
             head = f"第{idx}条，{t_sp}。{s_sp}"
             head = re.sub(r'(人工智能|软件服务)\s+(?=[\u4e00-\u9fa5])', r'\1', head)
-            return f"{head}。要我说，{reading}。" if reading else f"{head}。"
+            if not reading:
+                return f"{head}。"
+            # 固定「要我说」的结果是：一期 7 条里念 6 次，听众四分钟听同一个连接词，
+            # 立刻就能感觉到这是模板。按条序轮换，同一个词在一期里最多出现一次。
+            cue = READING_CUES[(idx - 1) % len(READING_CUES)]
+            return f"{head}。{cue}，{reading}。"
 
         # 2. 全球 AI 动态（真实抓取；解读按信号词定向生成，写不出就不写）
         if ai_items:

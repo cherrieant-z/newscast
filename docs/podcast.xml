@@ -16,11 +16,11 @@
   </image>
     <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10)</title>
-      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10) 发布日期：2026-11-10 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「把复杂提示词拆成选项，普通人也能快速出歌。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：V2EX·分享创造） 【本期课题】做了个生成说唱歌曲的 Web 工具 RapSongGen 1. 这是什么项目 通用 AI 音乐工具做说唱得自己拼提示词，太麻烦。他把曲风、人声和 BPM 拆成页面选项，省去折腾。 2. 用了什么工具 底层调用 Suno V6，通过 Kie.ai 接入。他自己做的是应用层交互和工程处理，比如状态检查和额度返还。 3. 怎么收钱、有没有真的赚到 有一次性付费套餐，但原文没写具体价格。免费体验是终身一次生</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-10.mp3" length="2292048" type="audio/mpeg"/>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10) 发布日期：2026-11-10 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「大厂在抢芯片，你不如先用顺手的小工具把活儿干漂亮。」 --- 🤖 全球 AI 与 Agent 前沿要点 (3-5条精选) 📌 【AI Agent】谷歌推出新版TPU芯片，向英伟达发起竞争 - ① 一句话内容摘要：Alphabet旗下谷歌正推出更多品类的AI芯片，力图在这个规模达数千亿美元的市场快速追赶英伟达。 - ② 人话解读：这是已经能直接上手的东西，花二十分钟试一遍，比看十篇评测有用 📌 【AI Agent】具身智能，也到了 API 时刻？ - ① 一句话内容摘要：具身智能的 API 时刻意味着部分具身模型已经开始具备跨本体迁</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-10.mp3" length="1888704" type="audio/mpeg"/>
       <guid isPermaLink="false">2026-11-10</guid>
-      <pubDate>Mon, 09 Nov 2026 20:10:01 -0000</pubDate>
-      <itunes:duration>382</itunes:duration>
+      <pubDate>Mon, 09 Nov 2026 21:53:27 -0000</pubDate>
+      <itunes:duration>314</itunes:duration>
     </item>
     <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-09)</title>

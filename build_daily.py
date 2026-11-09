@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import json
 import shutil
 import asyncio
@@ -9,7 +10,7 @@ import httpx
 from pathlib import Path
 from app.collector import collector
 from app.summarizer import summarizer
-from app.tts_engine import tts_engine
+from app.tts_engine import tts_engine, TTSFailure
 
 BASE_DIR = Path(__file__).resolve().parent
 DOCS_DIR = BASE_DIR / "docs"
@@ -203,6 +204,83 @@ def build_case_html(md_text: str) -> str:
 </div>''')
     return '\n'.join(cards)
 
+def _is_fresh(record: dict, report_day: datetime.datetime) -> bool:
+    """
+    这一期是不是「够新鲜」，配得上锁掉当天剩下的 cron。
+
+    背景：归属日以 19:00 换日，所以晚上 8 点跑一次，就已经把「明天那期」做出来了。
+    之后 23:00 / 23:40 / 00:20 三趟全部判定「已生成」跳过——
+    听众早上 6 点听到的，是前一天晚上 8 点之前的新闻，整整 10 小时空白，
+    而系统日志写着「一切正常」。这正是「今天听着似曾相识」的根因之一。
+
+    判据很简单：生成时刻离听众开听的 6:00 越近越好。
+    超过 FRESH_HOURS 就认为「太早了」，允许后面那趟重新生成，覆盖它。
+    """
+    created = record.get("created_at")
+    if not created:
+        return False
+    try:
+        made_at = datetime.datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return False
+    listen_at = report_day.replace(hour=6, minute=0, second=0, microsecond=0)
+    hours_ahead = (listen_at - made_at).total_seconds() / 3600
+    if hours_ahead < 0:  # 6 点之后才补做的，属于正常兜底
+        return True
+    limit = float(os.getenv("NEWSCAST_FRESH_HOURS", "8"))
+    if hours_ahead > limit:
+        print(f"  上一版生成于 {created}，距 6:00 还有 {hours_ahead:.1f} 小时，"
+              f"超过 {limit:.0f} 小时上限，判定为过旧，重新生成。")
+        return False
+    return True
+
+
+def _audio_is_valid(path: Path, record: dict) -> bool:
+    """
+    音频是否真的可用。以前这里只判 `.exists()`，
+    于是 400 字节的静音占位也算「音频完好」，当天三趟 cron 全被跳过，
+    一整期就这么没了，而且系统认为一切正常。
+    """
+    if not path.exists():
+        return False
+    size = path.stat().st_size
+    if size < 100_000:  # 100KB ≈ 16 秒，短于此基本是空壳
+        return False
+    recorded = record.get("file_size_bytes") or 0
+    if recorded and not (recorded * 0.5 <= size <= recorded * 2.0):
+        return False
+    duration = record.get("audio_duration") or 0
+    if duration and duration < 60:
+        return False
+    return True
+
+
+def _load_reports(path: Path) -> list:
+    """
+    读历史。解析失败时绝对不能当空处理——
+    后面的清理逻辑会按「不在名单里」把全部历史 MP3 删掉，
+    reports.json 一个尾逗号就能让 14 期播客原地消失。
+    这里改成备份 + 中止，让问题停在「今天没更新」，而不是「历史被清空」。
+    """
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            raise ValueError("顶层不是数组")
+        return data
+    except Exception as e:
+        bak = path.with_name(f"{path.stem}.corrupt-{int(datetime.datetime.now().timestamp())}.json")
+        try:
+            shutil.copy(path, bak)
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"reports.json 解析失败（原文件已备份为 {bak.name}）。"
+            f"为避免按空历史清理掉全部音频，本次中止，请人工修复后重跑：{e}"
+        )
+
+
 async def build_today_report():
     # 获取北京时间（UTC+8）当前日期
     utc_now = datetime.datetime.now(datetime.timezone.utc)
@@ -227,24 +305,26 @@ async def build_today_report():
 
     # 先读取既有存档：判断本期是否已经生成过，避免三个兜底时间点重复合成音频
     reports_file = DOCS_DATA_DIR / "reports.json"
-    existing_reports = []
-    if reports_file.exists():
-        try:
-            with open(reports_file, "r", encoding="utf-8") as f:
-                existing_reports = json.load(f)
-        except Exception:
-            existing_reports = []
+    existing_reports = _load_reports(reports_file)
 
     # 手动触发（workflow_dispatch / 本地运行）永远强制重生成；定时触发才做幂等跳过
     force = os.getenv("GITHUB_EVENT_NAME", "").strip() in ("", "workflow_dispatch")
     if not force:
         done_rec = next((r for r in existing_reports if r.get("date_str") == date_str), None)
-        if done_rec:
+        if done_rec and done_rec.get("status") == "completed":
             done_audio = Path(str(done_rec.get("audio_url", "")).split("?")[0]).name
-            if done_audio and (DOCS_AUDIO_DIR / done_audio).exists():
-                print(f"  {date_str} 的早报已于 {done_rec.get('created_at')} 生成且音频完好，本次跳过。")
+            if (done_audio and _audio_is_valid(DOCS_AUDIO_DIR / done_audio, done_rec)
+                    and _is_fresh(done_rec, report_day)):
+                print(f"  {date_str} 的早报已于 {done_rec.get('created_at')} 生成且音频有效，本次跳过。")
+                # 跳过早报，但不能跳过这两步：前端修复、播客 RSS 补录都要在当天生效，
+                # 否则改了 index.html 要等第二天才有变化，订阅端也刷不到新单集。
+                try:
+                    write_podcast_xml(existing_reports)
+                    sync_static_assets()
+                except Exception as e:
+                    print(f"  （跳过路径的静态同步失败，不影响已发布的音频）: {type(e).__name__}: {e}")
                 return
-            print(f"  {date_str} 有记录但音频缺失，继续重新生成。")
+            print(f"  {date_str} 有记录但音频缺失或不合格，继续重新生成。")
 
     # 1. 采集资讯
     # 跨期去重：把最近几期已经播过的条目喂给采集器，避免「昨天念过的今天再念一遍」。
@@ -298,14 +378,35 @@ async def build_today_report():
     )
     print(f"    本期主推案例: {lead_title or '（今日无真实新案例，已跳过该段）'}")
 
+    # 素材太少时宁可标成「降级」，也别标成「完成」：
+    # 标 completed 会锁死当天的三趟 cron，等于用一期残缺节目占掉一整天的机会。
+    total_items = sum(len(v) for v in collected_data.values() if isinstance(v, list))
+    ai_n = len(collected_data.get("AI Agent") or [])
+    opc_n = len(collected_data.get("一人公司") or [])
+    MIN_ITEMS = 8
+    # 只看总数会漏掉「总数够但某个板块整块死掉」：2026-11-09 那次 V2EX 四个源全挂，
+    # 总数仍有 42 条，看起来一切正常，实际一人公司板块只剩 2 条、案例段直接没了。
+    degraded = total_items < MIN_ITEMS or ai_n == 0 or opc_n == 0
+    if degraded:
+        print(f"  [WARN] 素材异常：总计 {total_items} 条（AI {ai_n} 条、一人公司 {opc_n} 条，"
+              f"阈值 {MIN_ITEMS} 条），本期标记为 degraded，后续定时任务仍会重试。")
+
     # 3. 合成高保真 Edge-TTS 音频 (直接写入 docs/audio)
     print("\n[3/4] 正在调用 Edge-TTS 合成普通话高保真播客音频...")
     audio_filename = f"newscast_{date_str}.mp3"
-    target_mp3_path = DOCS_AUDIO_DIR / audio_filename
-    
-    _, audio_url, duration_sec, duration_str, file_size = await tts_engine.generate_audio(
-        tts_script, date_str, output_dir=DOCS_AUDIO_DIR
-    )
+
+    try:
+        _, audio_url, duration_sec, duration_str, file_size = await tts_engine.generate_audio(
+            tts_script, date_str, output_dir=DOCS_AUDIO_DIR
+        )
+    except TTSFailure as e:
+        # 关键：这里不许留下任何「看起来完成了」的痕迹。
+        # reports.json 不写、旧音频不动，进程以非 0 退出，Actions 会标红，
+        # 后面两趟 cron 也会因为「没有有效音频」重新尝试，而不是被判「已生成」跳过。
+        print(f"\n[FATAL] 音频合成失败，本期不发布：{e}")
+        print("        既有音频与 reports.json 均未改动，稍后重跑即可。")
+        sys.exit(1)
+
     print(f"  音频生成成功！时长: {duration_str}, 大小: {file_size / 1024:.1f} KB")
 
     # 4. 更新 docs/data/reports.json
@@ -360,7 +461,8 @@ async def build_today_report():
         "file_size_bytes": file_size,
         "category_summary": cat_summary,
         "sources": sources,
-        "status": "completed",
+        "item_count": total_items,
+        "status": "degraded" if degraded else "completed",
         "created_at": cst_now.strftime("%Y-%m-%d %H:%M:%S")
     }
     existing_reports.insert(0, new_record)
@@ -372,9 +474,13 @@ async def build_today_report():
     with open(reports_file, "w", encoding="utf-8") as f:
         json.dump(kept_reports, f, ensure_ascii=False, indent=2)
 
-    # 自动清理 14 天之前的旧 MP3 文件
-    valid_audio_files = {Path(r["audio_url"].split("?")[0]).name for r in kept_reports if "audio_url" in r}
-    for mp3_file in DOCS_AUDIO_DIR.glob("*.mp3"):
+    # 自动清理超出保留期的旧 MP3 文件（含早期误放在 docs/ 根目录的遗留文件）
+    valid_audio_files = {
+        Path((r.get("audio_url") or "").split("?")[0]).name
+        for r in kept_reports
+        if r.get("audio_url")
+    }
+    for mp3_file in list(DOCS_AUDIO_DIR.glob("*.mp3")) + list(DOCS_DIR.glob("*.mp3")):
         if mp3_file.name not in valid_audio_files:
             try:
                 mp3_file.unlink()
@@ -382,12 +488,19 @@ async def build_today_report():
             except Exception:
                 pass
 
-    # 生成播客订阅 RSS（podcast.xml），支持订阅到 Apple Podcasts / 小宇宙 / 喜马拉雅
+    # 以下两步都是「增强」，任何一步失败都不该让已经生成好的音频丢掉。
+    # 以前它们排在最后且没有兜底，一次前端重命名就能让整期不上线。
     print("\n[5/5] 正在生成播客订阅 RSS (podcast.xml)...")
-    write_podcast_xml(kept_reports)
+    try:
+        write_podcast_xml(kept_reports)
+    except Exception as e:
+        print(f"  [WARN] podcast.xml 生成失败（不影响网页收听）: {type(e).__name__}: {e}")
 
-    # 同步静态前端与 PWA 资源到 docs/
-    sync_static_assets()
+    try:
+        sync_static_assets()
+    except Exception as e:
+        print(f"  [WARN] 静态资源同步失败（网页可能仍是上一版）: {type(e).__name__}: {e}")
+
     print("\n 全流程构建完成！静态站点已准备好部署至 GitHub Pages。")
 
 def sync_static_assets():

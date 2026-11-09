@@ -10,6 +10,9 @@ venv/
 newscast.db
 audio_storage/
 .env
+# reports.json 解析失败时留的现场备份，只用于人工排查，不该进仓库
+*.corrupt-*.json
+*.part.mp3
 
 # IDE
 .vscode/

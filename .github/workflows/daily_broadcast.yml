@@ -7,9 +7,12 @@ on:
     # 所以反过来利用这个延迟：把「发车时间」放到前一天深夜，让延迟把它推进凌晨 2~5 点，
     # 早上 6 点前必定已经生成并部署完毕。三个时间点互为兜底，先跑成功的会写入数据，
     # 后面的检测到当天已生成会自动跳过（见 build_daily.py 的幂等判断）。
-    - cron: '0 15 * * *'   # 北京 23:00 → 实际约 02:00-04:30 跑完
-    - cron: '40 15 * * *'  # 北京 23:40 → 兜底
-    - cron: '20 16 * * *'  # 北京次日 00:20 → 兜底
+    #
+    # 第三趟从 00:20 提到 23:30：按注释里自己写的 5.5 小时延迟上界，00:20 + 5.5h = 05:50，
+    # 再跑 10 分钟构建就必然晚于 6 点——那趟所谓「兜底」在延迟最坏时根本不兜底。
+    - cron: '0 14 * * *'   # 北京 22:00 → 实际约 01:00-03:30 跑完
+    - cron: '45 14 * * *'  # 北京 22:45 → 兜底
+    - cron: '30 15 * * *'  # 北京 23:30 → 最后一趟，最晚 05:00 完成，留出余量
   workflow_dispatch: # 支持在 GitHub 网页上随时一键手动测试触发（手动触发会强制覆盖当天记录）
 
 permissions:
@@ -24,6 +27,9 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # 不设上限时默认 360 分钟。edge-tts 一旦半开连接，整趟会挂满 6 小时，
+    # 期间占着 concurrency 锁，把后面两趟兜底全顶掉。45 分钟足够跑完并重试。
+    timeout-minutes: 45
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -51,11 +57,29 @@ jobs:
           python build_daily.py
 
       - name: Commit & Push New Audio and Data
+        # 构建期间远端可能有新提交（人工改前端、改 README），直接 push 会被拒。
+        # 以前一旦被拒，步骤失败，后面的 Pages 部署跟着跳过——音频已经生成好了却上不了线。
+        # 现在：先 rebase 再推，失败重试三次；三次都失败也只告警，因为 Pages 用的是本地
+        # docs/ 上传的 artifact，不依赖这次 push 成功。
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 自动生成每日深度播客 [$(date '+%Y-%m-%d')]" && git push)
+          if git diff --cached --quiet; then
+            echo "本次无文件变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "🤖 自动生成每日深度播客 [$(date '+%Y-%m-%d')]"
+          for i in 1 2 3; do
+            if git pull --rebase --autostash origin main && git push; then
+              echo "推送成功（第 $i 次尝试）"
+              exit 0
+            fi
+            echo "第 $i 次推送失败，5 秒后重试"
+            sleep 5
+          done
+          echo "::warning::推送三次均失败，本期音频已生成但未写入仓库历史；页面仍会通过 artifact 部署"
+          exit 0
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

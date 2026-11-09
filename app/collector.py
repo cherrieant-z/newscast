@@ -441,6 +441,9 @@ SUMMARY_NOISE_PATTERNS = [
     "题图来自", "头图来自", "头图来源", "题图来源", "图片来源", "图源", "封面图",
     "视觉中国", "如有侵权", "转载请注明", "原文链接",
     "责任编辑", "本文作者", "编辑：", "作者：", "转载请", "版权归",
+    # 各大号的尾巴。爱范儿写的是「#欢迎关注爱范儿官方微信公众号…」，
+    # 不含连续的「关注公众号」四个字，原来的规则拦不住，结果整段被当正文念了出来。
+    "欢迎关注", "官方微信公众号", "微信号", "第一时间为您奉上", "更多精彩内容",
 ]
 
 # 聚合类稿件：一天塞十几条杂讯，命中率低、噪声高，整条丢弃
@@ -484,11 +487,27 @@ def _is_stale(published: str, max_days: int = 2) -> bool:
 
 
 def _clean_summary(text: str) -> str:
-    """剔除摘要里的推广 / 付费墙 / 版权模板句"""
+    """
+    剔除摘要里的推广 / 付费墙 / 版权模板句。
+
+    不能见噪声就整句删：公众号常常把推广直接粘在正文后面、中间没有标点，
+    「还有改图 100 轮都不糊 #欢迎关注爱范儿…」这种整句删掉，正文本体也一起没了。
+    所以从噪声词的第一个字开始往后截，前面还有实质内容的就留下。
+    """
     if not text:
         return ""
     pieces = re.split(r'(?<=[。！？!?；;])', text)
-    kept = [p for p in pieces if p.strip() and not any(n in p for n in SUMMARY_NOISE_PATTERNS)]
+    kept = []
+    for p in pieces:
+        if not p.strip():
+            continue
+        hit = next((n for n in SUMMARY_NOISE_PATTERNS if n in p), None)
+        if hit is None:
+            kept.append(p)
+            continue
+        head = p[:p.find(hit)].strip(" #，,。；;、：:|｜-—")
+        if len(re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", head)) >= 8:
+            kept.append(head + "。")
     return "".join(kept).strip()
 
 
@@ -1183,7 +1202,7 @@ class NewsCollector:
 
         results: Dict[str, List[Dict[str, Any]]] = {cat: [] for cat in CATEGORIES}
 
-        async with httpx.AsyncClient(headers=self.headers, verify=False, timeout=15.0, proxy=self.proxy) as client:
+        async with httpx.AsyncClient(headers=self.headers, timeout=15.0, proxy=self.proxy) as client:
             tasks = [
                 self.fetch_sina_finance_yaowen(client, history),
                 self.fetch_cankao_xiaoxi_yaowen(client, history),
@@ -1192,6 +1211,20 @@ class NewsCollector:
                 self.fetch_ai_agent_and_opc(client, date_str, history, all_history),
             ]
             sina_res, cankao_res, xuexi_res, xm_res, ai_res = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # 源级隔离是好事，但静默吞掉异常会让「只剩两个源」看起来像「今天真没新闻」。
+            # 每个失败的源都要在日志里留一行，否则出了问题根本无从查起。
+            for src_name, src_res in (
+                ("新浪财经", sina_res),
+                ("参考消息", cankao_res),
+                ("权威要闻", xuexi_res),
+                ("喜马拉雅新闻早餐", xm_res),
+                ("AI/一人公司聚合", ai_res),
+            ):
+                if isinstance(src_res, BaseException):
+                    print(f"  [采集失败] {src_name}: {type(src_res).__name__}: {src_res}")
+                elif isinstance(src_res, list) and not src_res:
+                    print(f"  [采集为空] {src_name}: 抓取正常但 0 条（可能是源当天没更新，或被过滤规则清空）")
 
             if isinstance(sina_res, list):
                 results["新浪财经"] = sina_res
