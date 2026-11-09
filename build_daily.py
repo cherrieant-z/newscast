@@ -247,12 +247,41 @@ async def build_today_report():
             print(f"  {date_str} 有记录但音频缺失，继续重新生成。")
 
     # 1. 采集资讯
-    print("\n[1/4] 正在抓取 AI, OPC, 国际经济, YouTube, X, TikTok 重点资讯...")
-    collected_data = await collector.collect_all()
+    # 跨期去重：把最近几期已经播过的条目喂给采集器，避免「昨天念过的今天再念一遍」。
+    # 只回看 5 期：再往前的内容对「今天的新闻」已无参考价值，反而可能把可用素材滤空。
+    history_episodes = 5
+    hist_titles, hist_urls = [], []
+    for rec in existing_reports[:history_episodes]:
+        if rec.get("date_str") == date_str:
+            continue  # 当天重跑时不排除自己，否则重跑会把自己全部滤掉
+        for s in (rec.get("sources") or []):
+            if s.get("title"):
+                hist_titles.append(s["title"])
+            if s.get("url"):
+                hist_urls.append(s["url"])
+
+    from app.collector import SeenHistory
+    history = SeenHistory(hist_titles, hist_urls)
+    print(f"\n[1/4] 正在抓取 AI、一人公司、时政与财经要闻"
+          f"（已载入最近 {history_episodes} 期共 {len(hist_titles)} 条历史标题做跨期去重）...")
+    collected_data = await collector.collect_all(date_str, history)
+
+    # 打印各板块实际取到的条数，便于在 Actions 日志里一眼看出「今天到底是真没新闻还是被滤空了」
+    for cat, items in collected_data.items():
+        names = sorted({it.get("source_name", "") for it in items})
+        print(f"    {cat}: {len(items)} 条 {names if names else ''}")
 
     # 2. 生成调查报道与播客文稿
     print("\n[2/4] 正在生成深度调查与通俗播客聊天风讲稿...")
-    title, lead_title, markdown_content, tts_script, sources, cat_summary = await summarizer.generate_report(date_str, collected_data)
+    # 最近 7 期用过的一人公司案例，避免和前几天讲重复
+    recent_leads = [
+        r.get("lead_title") for r in existing_reports[:7]
+        if r.get("date_str") != date_str and r.get("lead_title")
+    ]
+    title, lead_title, markdown_content, tts_script, sources, cat_summary = await summarizer.generate_report(
+        date_str, collected_data, recent_leads
+    )
+    print(f"    本期主推案例: {lead_title}")
 
     # 3. 合成高保真 Edge-TTS 音频 (直接写入 docs/audio)
     print("\n[3/4] 正在调用 Edge-TTS 合成普通话高保真播客音频...")
