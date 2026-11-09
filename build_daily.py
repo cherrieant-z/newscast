@@ -227,7 +227,9 @@ def _is_fresh(record: dict, report_day: datetime.datetime) -> bool:
     hours_ahead = (listen_at - made_at).total_seconds() / 3600
     if hours_ahead < 0:  # 6 点之后才补做的，属于正常兜底
         return True
-    limit = float(os.getenv("NEWSCAST_FRESH_HOURS", "8"))
+    # 7 小时：宁可多跑一次，也不要让早上 6 点听到前一晚 11 点前的东西。
+    # 8 小时会放过 22:00 生成的版本（那期完全错过美股全天），差一小时就是差一整批消息。
+    limit = float(os.getenv("NEWSCAST_FRESH_HOURS", "7"))
     if hours_ahead > limit:
         print(f"  上一版生成于 {created}，距 6:00 还有 {hours_ahead:.1f} 小时，"
               f"超过 {limit:.0f} 小时上限，判定为过旧，重新生成。")

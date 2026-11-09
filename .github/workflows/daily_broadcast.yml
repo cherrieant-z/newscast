@@ -15,6 +15,17 @@ on:
     - cron: '30 15 * * *'  # 北京 23:30 → 最后一趟，最晚 05:00 完成，留出余量
   workflow_dispatch: # 支持在 GitHub 网页上随时一键手动测试触发（手动触发会强制覆盖当天记录）
 
+  # 只改前端 / 补文案时立刻上线，不用等下一趟定时任务。
+  #
+  # 关键：这类推送只部署、不重新生成（见下面两个步骤的 if 条件）。
+  # 如果让它照常跑一遍生成，任何一次改错字都会在半夜做出一期早报，
+  # 而半夜 12 点前生成的那期必然错过美股全天——还会把后面几趟定时任务
+  # 全部判成「够新鲜」而跳过，等于用一次改错字把当天内容锁死。
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+
 permissions:
   contents: write
   pages: write
@@ -37,26 +48,32 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Python
+        # 纯部署的推送不需要 Python，跳过能省掉装依赖的二十几秒
+        if: github.event_name != 'push'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
       - name: Install Dependencies
+        if: github.event_name != 'push'
         run: |
           python -m pip install --upgrade pip
           pip install edge-tts httpx beautifulsoup4 markdown pydantic pydantic-settings
 
       - name: Generate Daily Briefing & Synthesize Edge-TTS Audio
+        # 推送触发的这趟只部署，不生成：半夜随手改个字不该产出一期错过美股全天的早报。
         # DeepSeek key 存在仓库 Secrets 里，不要写进代码。
         # 没配这个 secret 也能正常跑：模型那一层会自动跳过，
         # 只是少了英文前沿源的中文翻译和案例深度拆解。
+        if: github.event_name != 'push'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           python build_daily.py
 
       - name: Commit & Push New Audio and Data
+        if: github.event_name != 'push'
         # 构建期间远端可能有新提交（人工改前端、改 README），直接 push 会被拒。
         # 以前一旦被拒，步骤失败，后面的 Pages 部署跟着跳过——音频已经生成好了却上不了线。
         # 现在：先 rebase 再推，失败重试三次；三次都失败也只告警，因为 Pages 用的是本地
@@ -80,6 +97,16 @@ jobs:
           done
           echo "::warning::推送三次均失败，本期音频已生成但未写入仓库历史；页面仍会通过 artifact 部署"
           exit 0
+
+      - name: Sync Latest docs Before Deploy
+        # 只部署的那趟，手上是「触发出这次运行的提交」，可能比远端旧。
+        # 如果期间刚好有一趟定时任务生成完并推了新一期，直接拿旧 checkout 上线
+        # 等于把新一期盖回去。上传前先对齐到远端最新，最坏情况也只是重复部署同一份。
+        if: github.event_name == 'push'
+        run: |
+          git fetch --depth=1 origin main
+          git reset --hard FETCH_HEAD
+          echo "已对齐到 $(git log --oneline -1)"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
