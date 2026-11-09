@@ -115,28 +115,31 @@ def _cut(text: str, limit: int = 80) -> str:
 REVENUE_CUES = ("收入", "赚", "营收", "月入", "年入", "付费", "订阅", "客户", "用户")
 
 # ------------------------------------------------------------ 模型：案例拆解
-CASE_SYSTEM = """你是一个中文播客作者，节目是「每日 AI 与一人公司早报」，听众是想靠 AI 做点小生意的普通人。
+CASE_SYSTEM = """你是一个中文播客作者，节目每天早上播给「想靠 AI 多赚点钱」的普通人听。
+现在给你一个独立开发者今天发的帖子。请把它整理成四段能直接念出来的口播稿。
 
-现在给你一个独立开发者今天发的帖子原文。请你把它整理成四段能直接念出来的口播稿。
+听众要的不是「这个产品很酷」，而是「这件事我能不能干、要花多少、第一步点哪里」。
+所以每一段都必须落在钱或者动作上，不许写成产品介绍。
 
 【铁律，违反就整段作废】
-1. 只用原文里的信息。原文没写价格、没写收入、没写用户数，就明说「他没公开」。
-   绝对不许编数字、编价格、编时间。听众按你说的去试，骗他就是害他。
-2. 可以解释「他为什么这么做」「这对普通人意味着什么」，但必须能从原文事实推出来。
-3. 口语，像跟朋友聊天，不要书面腔。不要用「赋能」「闭环」「赛道」「生态」「护城河」。
-4. 每段一到两句，40~80 字。不要括号，不要顿号堆叠，不要英文句子。
-5. 产品名、技术名可以保留英文原词（比如 Claude、Next.js）。
+1. 只用原文里的信息。价格、收入、用户数、时间，原文没写就明说「他没公开」，绝对不许编。
+2. 不许出现原文里没有的阿拉伯数字。想表达「不花钱」就写「不花钱」，不要写「0 元」。
+3. 判断可以给，但要和事实分开：先说原文写了什么，再说你的判断。
+4. 口语，像跟朋友聊天。不要书面腔，不要「赋能」「闭环」「赛道」「生态」「护城河」「抓手」。
+5. 每段一到两句，40~80 字。不要括号，不要顿号堆叠，不要英文句子。
+6. 产品名、技术名可以保留英文原词（比如 Claude、Next.js）。
 
 只输出 JSON：
 {
- "pain": "他解决的是什么麻烦",
- "stack": "他用了什么工具做的（原文提到的），没提就说没提",
- "money": "怎么收钱、定价多少（原文提到的）",
- "traction": "有没有人真的用了、付了钱、给了反馈（原文提到的）",
- "guide": "普通人对这个项目能抄的具体一步，要具体到动作",
+ "who_pays": "谁在为什么掏钱。要具体到人群和那个麻烦，不要写「用户」「企业」这种空话",
+ "money": "怎么收钱：按次、按月还是买断，多少钱。原文没写价格就说他没写",
+ "traction": "有没有人真的付了钱、有多少人在用。原文没写就说没公开",
+ "startup": "他要启动这件事需要投入的钱和时间。只写原文提到的；原文没提就直说没提。不要写技术栈，听众不关心他用什么框架",
+ "barrier": "这件事真正的难处在哪，一个外行最可能卡在哪一步",
+ "first_step": "听众今天就能做的一个具体动作。必须动词开头、能落到手上：打开哪个页面、搜什么词、发一句什么话、算哪一个数。不要「多学习」「多关注」这种",
  "quote": "一句跟这件事相关、能给听众一点行动力的话，不超过 28 字"
 }
-如果原文信息太少、根本拆不出四段，pain 和 money 都填空字符串。"""
+如果 who_pays 和 money 都写不出来，说明原文信息不够，两个都填空字符串。"""
 
 
 QUOTE_SYSTEM = """你是一个中文播客的作者，节目每天早上陪听众听十几分钟。
@@ -167,6 +170,29 @@ def _has_invented_number(text: str, source: str) -> bool:
         if m.group(0) not in (source or ""):
             return True
     return False
+
+
+# 「今天第一步」必须能落到手上。模型很爱写「多关注这类项目」「保持学习」，
+# 那不是动作，是祝福。这里用词表把它拦下来，拦不住就换规则版。
+ACTION_VERBS = (
+    "打开", "注册", "搜索", "搜一下", "发一条", "发个", "发一句", "问", "算一下", "算算",
+    "试", "找", "买", "订", "上架", "挂", "联系", "看", "写", "做一个", "做一版",
+    "定价", "报价", "报个", "填", "列", "拆", "跑一遍", "录", "私信", "留言", "截图",
+    "建一个", "选一个", "查一下", "对比", "砍掉", "退订", "发到", "贴到", "拉一个",
+)
+EMPTY_ADVICE = ("多关注", "多学习", "持续关注", "保持关注", "多了解", "多多", "关注行业")
+
+
+def _looks_like_action(text: str) -> bool:
+    """这段是不是一个真能做的动作，而不是一句正确的废话"""
+    t = (text or "").strip()
+    if len(re.sub(r"\s", "", t)) < 12:
+        return False
+    if any(w in t for w in EMPTY_ADVICE):
+        return False
+    if any(w in t for w in ("作者没", "原文没", "未披露", "没有公开")):
+        return False
+    return any(v in t for v in ACTION_VERBS)
 
 
 def _has_money_signal(raw: str) -> bool:
@@ -737,24 +763,35 @@ class NewsSummarizer:
         if not data:
             return None
 
-        fields = {k: llm_clean(data.get(k), 110) for k in ("pain", "stack", "money", "traction", "guide")}
-        # 四段里最不能缺的是「他解决什么麻烦」和「怎么收钱」，
-        # 缺一段就说明原文信息不够拆解，退回规则版反而更诚实。
-        if not fields["pain"] or not fields["money"]:
+        fields = {
+            k: llm_clean(data.get(k), 110)
+            for k in ("who_pays", "money", "traction", "startup", "barrier", "first_step")
+        }
+        # 前三段是「钱」，缺一段就说明原文信息不够拆解，退回规则版反而更诚实。
+        if not fields["who_pays"] or not fields["money"]:
             return None
         for key, value in fields.items():
             if _has_invented_number(value, raw):
                 print(f"[Summarizer] 案例的「{key}」出现原文没有的数字，已退回规则抽取")
                 return None
 
+        # 「今天第一步」是这一节存在的理由。写不出一个能落到手上的动作，
+        # 这段就退化成了「别人很厉害」，不如不给。
+        if not _looks_like_action(fields["first_step"]):
+            print(f"[Summarizer] 案例的「first_step」不像具体动作，用规则版兜底："
+                  f"{fields['first_step'][:40]}")
+            fields["first_step"] = self._guide_for(title, raw)
+
         return {
             "title": title,
             "quote": llm_clean(data.get("quote"), 40),
-            "pain_point": fields["pain"],
+            "pain_point": fields["who_pays"],
             "model": fields["money"],
-            "tech_stack": fields["stack"] or "他没提具体用什么做的。",
+            "tech_stack": "",
             "revenue": fields["traction"] or "更具体的进账他没公开。",
-            "guide": fields["guide"],
+            "startup": fields["startup"],
+            "barrier": fields["barrier"],
+            "guide": fields["first_step"],
             "is_real": True,
             "url": item.get("url", ""),
             "source_name": item.get("source_name", ""),
@@ -807,10 +844,13 @@ class NewsSummarizer:
 
         # 4) 收入：必须同时出现数字和「钱」相关的词。
         #    否则会把「每天抓取 500 多个频道」这种规模数字，当成收入念出去。
+        #    中文数字（「三十多个付费用户」）抓不到数字，所以再放一条纯措辞通道。
         rev_sents = [
             s for s in sents
-            if s not in (pain, money) and CASE_NUMBER_RE.search(s)
-            and any(k in s for k in ("收入", "赚", "营收", "月入", "年入", "付费", "订阅", "客户", "用户"))
+            if s not in (pain, money) and (
+                (CASE_NUMBER_RE.search(s) and any(k in s for k in REVENUE_CUES))
+                or any(k in s for k in ("付费用户", "付费客户", "已经有人付", "有人买单", "覆盖了服务器"))
+            )
         ]
         if rev_sents:
             revenue = _cut(rev_sents[0])
@@ -819,7 +859,29 @@ class NewsSummarizer:
         else:
             revenue = "作者没公开收入，这条目前是「做出来了」，还不是「赚到了」。"
 
-        # 5) 抄作业：按项目类型给具体动作，不用放到哪都对的话
+        # 5) 起步要准备什么：只认原文提到的成本线索，没有就给「不花钱也能验证」的路子。
+        #    已经拿去讲收入的句子要排除，否则同一句话会被念两遍。
+        already_used = {pain, money, revenue}
+        cost_sents = [
+            s for s in sents
+            if s not in already_used
+            and any(k in s for k in ("成本", "免费", "开源", "不用花钱", "自己搭", "花了", "投入"))
+        ]
+        if cost_sents:
+            startup = _cut(cost_sents[0], 70)
+        else:
+            startup = ("他没写自己花了多少。这类东西的好处是不用先囤货、不用租店面，"
+                       "先用现成的免费额度把第一版跑通，验证有人要再谈投入。")
+
+        # 6) 难在哪：原文自己说过「最难的是……」就直接引，比规则判断准
+        hardest = next(
+            (s for s in sents if s not in already_used
+             and any(k in s for k in ("最难", "难度", "门槛", "不容易", "卡在", "麻烦的是"))),
+            "",
+        )
+        barrier = _cut(hardest, 70) if hardest else self._barrier_for(title, raw)
+
+        # 7) 今天第一步：规则版一直给的是具体动作，直接复用
         guide = self._guide_for(title, raw)
 
         return {
@@ -829,11 +891,26 @@ class NewsSummarizer:
             "model": model,
             "tech_stack": stack,
             "revenue": revenue,
+            "startup": startup,
+            "barrier": barrier,
             "guide": guide,
             "is_real": True,
             "url": item.get("url", ""),
             "source_name": item.get("source_name", ""),
         }
+
+    def _barrier_for(self, title: str, raw: str) -> str:
+        """这件事真正的难处。按类型给，避免每天都念「门槛不高但要坚持」"""
+        t = (title + " " + raw[:240]).lower()
+        if any(k in t for k in ("小程序", "插件", "脚本", "cli", "小工具", "工具")):
+            return "难的不是写出来，是让人知道你写了。做出来只是第一天的事，后面全在找那批人。"
+        if any(k in t for k in ("网站", "平台", "榜单", "导航", "社区")):
+            return "难在数据要天天更新，停一周就没人来了。一个人做这类东西，拼的是更新不断，不是功能多。"
+        if any(k in t for k in ("游戏", "小游戏")):
+            return "难在没人替你传播。玩法做得再好，没有让人想截图分享的那一下，就只是一个自己玩的东西。"
+        if any(k in t for k in ("ai", "gpt", "智能体", "大模型", "agent")):
+            return "难在你得先知道哪个环节真的在浪费时间。技术不是门槛，找对那个环节才是。"
+        return "难在坚持用它解决自己的问题。多数人卡在做出来之后不知道给谁用，而不是卡在做不出来。"
 
     def _guide_for(self, title: str, raw: str) -> str:
         """按项目类型给「你能抄的那部分」，避免每天都是同一句空话"""
@@ -909,13 +986,16 @@ class NewsSummarizer:
             lead_title = cur_case["title"]
             case_pain_point = cur_case["pain_point"]
             case_model = cur_case["model"]
-            case_tech_stack = cur_case["tech_stack"]
+            case_tech_stack = cur_case.get("tech_stack", "")
             case_revenue_and_traffic = cur_case["revenue"]
             case_beginner_guide = cur_case["guide"]
+            case_startup = cur_case.get("startup", "")
+            case_barrier = cur_case.get("barrier", "")
         else:
             lead_title = ""
             case_pain_point = case_model = case_tech_stack = ""
             case_revenue_and_traffic = case_beginner_guide = ""
+            case_startup = case_barrier = ""
 
         # 整理来源列表（权威去重展示），并把解读带进卡片，让手机端也能直接读到
         all_sources: List[Dict[str, str]] = []
@@ -970,16 +1050,16 @@ class NewsSummarizer:
                 "",
                 f"### 【本期课题】{lead_title}",
                 "",
-                "#### 1. 这是什么项目",
+                "#### 1. 谁在为什么掏钱",
                 case_pain_point,
                 "",
-                "#### 2. 用了什么工具",
-                case_tech_stack,
-                "",
-                "#### 3. 怎么收钱、有没有真的赚到",
+                "#### 2. 怎么收钱、有没有真的赚到",
                 f"{case_model}\n\n{case_revenue_and_traffic}",
                 "",
-                "#### 4. 你能抄的那部分",
+                "#### 3. 你要准备什么、难在哪",
+                f"{case_startup}\n\n{case_barrier}" if case_startup or case_barrier else "原帖没写。",
+                "",
+                "#### 4. 今天就能做的第一步",
                 case_beginner_guide,
                 "",
                 "---",
@@ -1073,9 +1153,10 @@ class NewsSummarizer:
 
         # 构建播报底稿：案例 + 前沿动态 + 宏观大势解读
         tts_script = self._build_spoken_script(
-            date_str, quote_of_the_day, lead_title, 
-            case_pain_point, case_model, case_tech_stack, case_revenue_and_traffic, case_beginner_guide,
-            collected_data
+            date_str, quote_of_the_day, lead_title,
+            case_pain_point, case_model, case_tech_stack, case_revenue_and_traffic,
+            case_beginner_guide, collected_data,
+            case_startup=case_startup, case_barrier=case_barrier,
         )
 
         return title, lead_title, markdown_content, tts_script, all_sources[:60], category_summary
@@ -1083,7 +1164,8 @@ class NewsSummarizer:
     def _build_spoken_script(
         self, date_str: str, quote: str, lead_title: str,
         case_pain: str, case_model: str, case_stack: str, case_rev: str, case_guide: str,
-        collected_data: Dict[str, List[Dict[str, Any]]]
+        collected_data: Dict[str, List[Dict[str, Any]]],
+        case_startup: str = "", case_barrier: str = "",
     ) -> str:
         """
         构建「只听就够」的播报底稿：不留任何「去页面看」的内容，
@@ -1101,6 +1183,8 @@ class NewsSummarizer:
         clean_stack = safe_ai_replace(case_stack).replace(chr(10), " ")
         clean_rev = case_rev.replace("API", "接口调用").replace(chr(10), " ")
         clean_guide = safe_ai_replace(case_guide).replace(chr(10), " ")
+        clean_startup = safe_ai_replace(case_startup).replace(chr(10), " ")
+        clean_barrier = safe_ai_replace(case_barrier).replace(chr(10), " ")
 
         ai_items = collected_data.get("AI Agent", [])
         opc_items = collected_data.get("一人公司", [])
@@ -1133,10 +1217,24 @@ class NewsSummarizer:
         #    今天没抓到够格的真实项目就整段不要——开场已经说了今天讲什么，
         #    这里不需要再解释一遍「我没捞到」，直接进入正题更自然。
         if spoken_lead.strip():
-            add("案例·项目", f"接下来聊今天真的有人做出来的东西：{spoken_lead}。{clean_pain}")
-            add("案例·工具", f"他拿什么做的？{clean_stack}")
-            add("案例·钱", f"怎么收钱、有没有真的赚到？{clean_model} {clean_rev}")
-            add("案例·抄作业", f"你能抄的是哪一部分？{clean_guide}")
+            # 案例只讲四件事：谁付钱、怎么收、你要准备什么、今天第一步。
+            # 「他用了什么技术栈」这一段被拿掉了——对听众没有任何可执行价值，
+            # 却要占掉十来秒。省下来的时间给最后那段「今天第一步」。
+            add("案例·谁在付钱", f"先看这东西是给谁做的。{clean_pain}")
+            add("案例·怎么收钱", f"钱是怎么收的？{clean_model} {clean_rev}")
+            # 「原文没提启动成本」这种话在耳朵里是噪音，听众不知道「原文」是什么。
+            # 没写就不念这一句，只说他真正会卡住的地方。
+            startup_known = clean_startup.strip() and not any(
+                k in clean_startup for k in ("没提", "没写", "没公开", "没说", "不清楚")
+            )
+            if startup_known and clean_barrier.strip():
+                add("案例·你要准备什么",
+                    f"你要是想干，先看看要准备什么。{clean_startup} {clean_barrier}".strip())
+            elif clean_barrier.strip():
+                add("案例·你要准备什么", f"你要是想干，最大的坎在这儿。{clean_barrier}")
+            elif startup_known:
+                add("案例·你要准备什么", f"你要是想干，先看看要准备什么。{clean_startup}")
+            add("案例·今天第一步", f"最后给你一个今天就能做的动作。{clean_guide}")
 
         # 同一天里同一句解读只说一次。
         # 原先两条新闻命中同一个信号词时，会连着念两遍一模一样的「要我说……」，
@@ -1250,12 +1348,18 @@ class NewsSummarizer:
             )
         add("宏观大势", "\n".join(macro_lines))
 
-        # 5. 结尾：给一个今天就能动手的具体动作
+        # 5. 结尾：给一个今天就能动手的具体动作。
+        #    今天讲了案例就回扣案例那一步——听众刚听完三分钟，结尾再抛一个
+        #    跟前面无关的「算算负债利率」，等于把最后一口气浪费掉。
         domains = [it.get("domain", "") for it in macro_items]
+        tail = (
+            "刚才那一步，今天挑十分钟做掉，比再听十期都有用。"
+            if spoken_lead.strip()
+            else f"最后给你一件今天就能动手的事：{today_action(bool(ai_items), bool(opc_items), domains)}"
+        )
         add("今天动手的事", (
             "以上就是今天的全部内容，全在这段音频里了，没有藏在别处。"
-            f"最后给你一件今天就能动手的事：{today_action(bool(ai_items), bool(opc_items), domains)}"
-            "明天同一时间，不见不散。"
+            f"{tail}明天同一时间，不见不散。"
         ))
 
         self.last_chapters = [{"label": label, "text": text} for label, text in blocks]
