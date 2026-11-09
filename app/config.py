@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_MODEL: str = "gpt-4o-mini"
+
+    # 整个节目「要不要让模型整篇重写」。
+    # 默认关闭：整篇重写会丢掉章节结构（页面上的跳转胶囊）和行情卡，
+    # 那两样是前端按固定结构渲染的。模型现在只负责它比规则强的地方：
+    # 翻译英文前沿源、读懂一条真实项目、写一句新的金句。
+    LEGACY_LLM_REWRITE: bool = False
+
+    # DeepSeek（OpenAI 兼容协议）。配了就启用，没配全流程自动退回规则引擎。
+    # key 只从环境变量 / .env / GitHub Secrets 读，绝不写进仓库。
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
     
     class Config:
         env_file = ".env"

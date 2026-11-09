@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Tuple
 import httpx
 from app.config import settings
 from app.collector import is_similar_title
+from app.llm import llm, clean as llm_clean, has_cjk
 
 # ============================================================
 # 真实案例抽取：把「今天真的有人在做什么」拆成可播报的五段
@@ -104,6 +105,45 @@ def _cut(text: str, limit: int = 80) -> str:
 
 
 REVENUE_CUES = ("收入", "赚", "营收", "月入", "年入", "付费", "订阅", "客户", "用户")
+
+# ------------------------------------------------------------ 模型：案例拆解
+CASE_SYSTEM = """你是一个中文播客作者，节目是「每日 AI 与一人公司早报」，听众是想靠 AI 做点小生意的普通人。
+
+现在给你一个独立开发者今天发的帖子原文。请你把它整理成四段能直接念出来的口播稿。
+
+【铁律，违反就整段作废】
+1. 只用原文里的信息。原文没写价格、没写收入、没写用户数，就明说「他没公开」。
+   绝对不许编数字、编价格、编时间。听众按你说的去试，骗他就是害他。
+2. 可以解释「他为什么这么做」「这对普通人意味着什么」，但必须能从原文事实推出来。
+3. 口语，像跟朋友聊天，不要书面腔。不要用「赋能」「闭环」「赛道」「生态」「护城河」。
+4. 每段一到两句，40~80 字。不要括号，不要顿号堆叠，不要英文句子。
+5. 产品名、技术名可以保留英文原词（比如 Claude、Next.js）。
+
+只输出 JSON：
+{
+ "pain": "他解决的是什么麻烦",
+ "stack": "他用了什么工具做的（原文提到的），没提就说没提",
+ "money": "怎么收钱、定价多少（原文提到的）",
+ "traction": "有没有人真的用了、付了钱、给了反馈（原文提到的）",
+ "guide": "普通人对这个项目能抄的具体一步，要具体到动作",
+ "quote": "一句跟这件事相关、能给听众一点行动力的话，不超过 28 字"
+}
+如果原文信息太少、根本拆不出四段，pain 和 money 都填空字符串。"""
+
+
+def _has_invented_number(text: str, source: str) -> bool:
+    """
+    模型给的数字能不能在原文里找到。
+
+    案例最有说服力的就是数字（「月费 9 块」「已经有 30 个付费用户」），
+    也最容易在这里出错——模型很擅长顺手编一个看起来合理的数。
+    校验方法很土但有效：把这句话里的每个数字抠出来，去原文里找，
+    找不到就是编的，整条案例作废。
+    """
+    for m in re.finditer(r"\d+(?:\.\d+)?", text or ""):
+        if m.group(0) not in (source or ""):
+            return True
+    return False
 
 
 def _has_money_signal(raw: str) -> bool:
@@ -570,16 +610,18 @@ class NewsSummarizer:
                       这份历史用来保证「同一个项目不会讲两遍」。
         used_quotes:  历史上已经说过的金句，避免每天同一句。
         """
-        if settings.OPENAI_API_KEY:
+        # 整篇重写会丢掉章节结构和行情卡（前端按固定结构渲染），
+        # 所以只保留给显式开启的人；日常一律走下面的结构化生成。
+        if settings.LEGACY_LLM_REWRITE and settings.OPENAI_API_KEY:
             try:
                 return await self._generate_with_llm(date_str, collected_data)
             except Exception as e:
-                print(f"[Summarizer] LLM 调用受阻，启用内建高品质全景播报引擎: {e}")
+                print(f"[Summarizer] LLM 整篇重写受阻，改用结构化播报引擎: {e}")
 
-        return self._generate_curated(date_str, collected_data, recent_leads, used_quotes)
+        return await self._generate_curated(date_str, collected_data, recent_leads, used_quotes)
 
-    def _pick_case(self, date_str: str, recent_leads: List[str] = None,
-                   opc_items: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _pick_case(self, date_str: str, recent_leads: List[str] = None,
+                         opc_items: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         今天的案例从哪来：只从当天真实项目里挑，挑不到就不做这一段。
 
@@ -628,13 +670,66 @@ class NewsSummarizer:
                 opc_items.remove(picked)
             except ValueError:
                 pass
-            return self._case_from_item(picked, date_str)
+            return await self._case_from_item(picked, date_str)
 
         # 今天没有能看出「怎么收钱」的真实项目，就不讲案例。
         # 固定库留着做历史存档（旧链接还能打开），但不再拿来填今天的节目。
         return None
 
-    def _case_from_item(self, item: Dict[str, Any], date_str: str) -> Dict[str, Any]:
+    async def _case_from_item(self, item: Dict[str, Any], date_str: str) -> Dict[str, Any]:
+        """
+        优先让模型读懂这条帖子；模型不可用或结果不可信，退回规则抽取。
+
+        「不可信」有明确判据：出现原文没有的数字，直接作废。
+        案例里一个编造的价格，比没有案例更伤——听众照着去试，会被现实打回来。
+        """
+        if llm.enabled:
+            case = await self._case_with_llm(item)
+            if case:
+                return case
+        return self._case_from_item_rules(item, date_str)
+
+    async def _case_with_llm(self, item: Dict[str, Any]) -> Dict[str, Any] | None:
+        raw = re.sub(r"https?://\S+", " ", item.get("raw_text") or item.get("summary") or "")
+        raw = re.sub(r"\s+", " ", raw).strip()
+        title = _clean_case_title(item.get("title", ""))
+        if len(raw) < 60 or not title:
+            return None
+
+        data = await llm.json(
+            CASE_SYSTEM,
+            f"标题：{title}\n\n正文：{raw[:1800]}",
+            temperature=0.4,
+            max_tokens=900,
+        )
+        if not data:
+            return None
+
+        fields = {k: llm_clean(data.get(k), 110) for k in ("pain", "stack", "money", "traction", "guide")}
+        # 四段里最不能缺的是「他解决什么麻烦」和「怎么收钱」，
+        # 缺一段就说明原文信息不够拆解，退回规则版反而更诚实。
+        if not fields["pain"] or not fields["money"]:
+            return None
+        for key, value in fields.items():
+            if _has_invented_number(value, raw):
+                print(f"[Summarizer] 案例的「{key}」出现原文没有的数字，已退回规则抽取")
+                return None
+
+        return {
+            "title": title,
+            "quote": llm_clean(data.get("quote"), 40),
+            "pain_point": fields["pain"],
+            "model": fields["money"],
+            "tech_stack": fields["stack"] or "他没提具体用什么做的。",
+            "revenue": fields["traction"] or "更具体的进账他没公开。",
+            "guide": fields["guide"],
+            "is_real": True,
+            "url": item.get("url", ""),
+            "source_name": item.get("source_name", ""),
+            "by_llm": True,
+        }
+
+    def _case_from_item_rules(self, item: Dict[str, Any], date_str: str) -> Dict[str, Any]:
         """
         把一条真实帖子拆成五段播报素材。
 
@@ -734,12 +829,12 @@ class NewsSummarizer:
         fresh = [q for q in DAILY_QUOTES if not any(is_similar_title(q, u) for u in used)]
         return fresh[0] if fresh else DAILY_QUOTES[0]
 
-    def _generate_curated(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]], recent_leads: List[str] = None, used_quotes: List[str] = None) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
+    async def _generate_curated(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]], recent_leads: List[str] = None, used_quotes: List[str] = None) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
         self.last_chapters = []
         title = f"全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 ({date_str})"
 
         # 案例优先用当天真实项目；实在没有才动固定库，用完就跳过整段
-        cur_case = self._pick_case(date_str, recent_leads, collected_data.get("一人公司", []))
+        cur_case = await self._pick_case(date_str, recent_leads, collected_data.get("一人公司", []))
 
         if cur_case:
             quote_of_the_day = cur_case.get("quote") or self._pick_quote(used_quotes)
@@ -1004,9 +1099,14 @@ class NewsSummarizer:
                     .replace("Agent", "智能体").replace("OPC", "一人公司")
                     .replace("丨", "，").replace("｜", "，")).rstrip("。；;，,、 ")
             reading = ""
-            if not item.get('is_fallback'):
+            if item.get('is_frontier') and item.get('why_matter'):
+                # 前沿条目由模型翻译时就写好了「这说明什么」，比规则库里
+                # 按关键词配的通用解读准得多，直接用。
+                reading = item['why_matter']
+            elif not item.get('is_fallback'):
                 reading = targeted_reading(category, item['title'], item.get('summary', ''))
-                if reading and reading in used_readings:
+            if reading:
+                if reading in used_readings:
                     # 撞车了：换一句当天还没说过的备用解读；实在没有就不硬凑
                     spare = [x for x in alt_readings.get(category, []) if x not in used_readings]
                     reading = spare[0] if spare else ""

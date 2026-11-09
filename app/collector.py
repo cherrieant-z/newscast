@@ -4,6 +4,7 @@ import datetime
 import email.utils
 import hashlib
 import html as _html
+import json
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -13,6 +14,8 @@ from bs4 import BeautifulSoup
 import warnings
 from bs4 import XMLParsedAsHTMLWarning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
+from app.llm import llm, clean as llm_clean, has_cjk
 
 CATEGORIES = [
     "AI Agent",
@@ -54,6 +57,52 @@ OPC_RSS_SOURCES = [
     {"name": "构建我的被动收入",   "url": "https://www.bmpi.dev/index.xml"},
     {"name": "透明创业实验",       "url": "https://blog.t9t.io/atom.xml"},
 ]
+
+
+# ============================================================
+# 英文前沿源：全球最新的一手产品发布流
+#
+# 中文源能解决「今天发生了什么」，解决不了「全球最前沿在做什么」——
+# 36氪、量子位报的是二手编译，往往晚半天到两天，而且只挑大厂。
+# Show HN 是独立开发者当天发布的真实项目，Product Hunt 是当天上新的产品，
+# 两个源都是「此刻」的一手信息，但全是英文，必须翻译才能播。
+#
+# 所以这两个源只有在配了模型时才启用；没配就整段跳过，绝不硬念英文。
+# ============================================================
+FRONTIER_SOURCES = [
+    {
+        "name": "Hacker News·Show HN",
+        "kind": "hn_json",
+        "url": "https://hn.algolia.com/api/v1/search_by_date?tags=show_hn&hitsPerPage=30",
+    },
+    {
+        "name": "Product Hunt",
+        "kind": "atom",
+        "url": "https://www.producthunt.com/feed",
+    },
+]
+
+FRONTIER_SYSTEM = """你是一名中文科技播客的选题编辑，服务对象是想靠 AI 做一人公司的普通人。
+
+我会给你一批今天刚发布的英文产品（Show HN 的独立开发者作品、Product Hunt 的新品）。
+你的任务是：挑出真正值得讲给中文听众的，翻译成地道中文口语。
+
+【筛选标准，从严】
+- 只保留「一个人或极小团队，用 AI / 软件解决了一个具体问题」的项目
+- 排除：纯硬件、游戏、加密货币、招聘工具、纯营销套壳、需要大团队才能做的事、
+  政治宗教内容、只有一句口号没有实物的
+- 一个都不符合就返回空数组，绝不凑数
+
+【翻译要求】
+- 用中文口语，不要书面腔，不要「赋能」「闭环」「生态」这类词
+- 专有名词、产品名保留英文原名即可
+- 不要出现英文句子
+- 不许编造原文没有的信息：没有数字就不写数字
+
+只输出 JSON，格式：
+{"items":[{"i":3,"category":"AI","title_zh":"中文标题","summary_zh":"两句话说清它做了什么、给谁用","why_zh":"一句话说清这反映了什么趋势"}]}
+i 是候选编号；category 取 "AI" 或 "OPC"（OPC 指更偏个人做生意/收钱的）。
+title_zh 不超过 26 字，summary_zh 40~70 字，why_zh 不超过 34 字。最多挑 3 条。"""
 
 
 def is_mostly_english(text: str) -> bool:
@@ -892,6 +941,141 @@ class NewsCollector:
             for title, summary in picked
         ]
 
+    async def _fetch_frontier_candidates(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
+        """抓今天刚发布的英文产品（Show HN / Product Hunt），只抓不译。"""
+        cands: List[Dict[str, Any]] = []
+        for src in FRONTIER_SOURCES:
+            try:
+                resp = await client.get(src["url"], timeout=12.0)
+                if resp.status_code != 200:
+                    continue
+                rows: List[Dict[str, Any]] = []
+                if src["kind"] == "hn_json":
+                    for h in (resp.json().get("hits") or []):
+                        title = (h.get("title") or "").strip()
+                        # 只要 Show HN：它是作者自己发的「我做了个东西」，
+                        # 其余 HN 帖子是讨论别人的新闻，跟这里要的东西不是一类。
+                        if not title.lower().startswith("show hn"):
+                            continue
+                        rows.append({
+                            "orig_title": title,
+                            "orig_text": _strip_html(h.get("story_text") or "")[:600],
+                            "url": h.get("url") or f"https://news.ycombinator.com/item?id={h.get('objectID')}",
+                            "published": h.get("created_at") or "",
+                        })
+                else:
+                    for fi in _parse_feed_items(resp.text):
+                        title = (fi.get("title") or "").strip()
+                        if not title:
+                            continue
+                        rows.append({
+                            "orig_title": title,
+                            "orig_text": _clean_summary(fi.get("summary") or "")[:600],
+                            "url": fi.get("link") or "",
+                            "published": fi.get("published") or "",
+                        })
+                for r in rows:
+                    if _is_stale(r.get("published", ""), max_days=2):
+                        continue
+                    r["source_name"] = src["name"]
+                    cands.append(r)
+            except Exception as e:
+                print(f"[Collector] 前沿源 {src['name']} 抓取异常: {e}")
+                continue
+
+        # 同一件事可能两个源都有（比如某产品既上 PH 又发了 Show HN）
+        uniq: List[Dict[str, Any]] = []
+        seen_keys = set()
+        for c in cands:
+            key = _norm_title(c["orig_title"])
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            uniq.append(c)
+        return uniq[:28]
+
+    async def fetch_frontier(self, client: httpx.AsyncClient, history: "SeenHistory" = None,
+                             max_ai: int = 1, max_opc: int = 2) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        英文前沿 → 中文播报条目。
+
+        没有模型就整段返回空：英文标题念出来是灾难，宁可这块没有。
+        有模型时一次调用批量处理，成本约一两分钱，失败也只是少了这两条，
+        不影响整期生成——这是「模型是加法」的具体体现。
+        """
+        empty = {"AI Agent": [], "一人公司": []}
+        if not llm.enabled:
+            return empty
+        history = history or SeenHistory()
+
+        cands = await self._fetch_frontier_candidates(client)
+        if not cands:
+            return empty
+
+        # 已经播过的链接直接不进候选，省一次翻译钱
+        cands = [c for c in cands if not (c.get("url") and history.seen("", c["url"]))]
+        if not cands:
+            return empty
+
+        lines = []
+        for idx, c in enumerate(cands):
+            snippet = re.sub(r"\s+", " ", c.get("orig_text") or "")[:220]
+            lines.append(f'{idx}. [{c["source_name"]}] {c["orig_title"]} || {snippet}')
+
+        data = await llm.json(
+            FRONTIER_SYSTEM,
+            "今天的候选如下，编号 + 来源 + 标题 || 简介：\n\n" + "\n".join(lines),
+            temperature=0.3,
+            max_tokens=1200,
+        )
+        picked = (data or {}).get("items") or []
+        if not isinstance(picked, list):
+            return empty
+
+        out: Dict[str, List[Dict[str, Any]]] = {"AI Agent": [], "一人公司": []}
+        for p in picked:
+            if not isinstance(p, dict):
+                continue
+            try:
+                src = cands[int(p.get("i"))]
+            except Exception:
+                continue
+            title_zh = llm_clean(p.get("title_zh"), 40)
+            summary_zh = llm_clean(p.get("summary_zh"), 90)
+            why_zh = llm_clean(p.get("why_zh"), 60)
+            # 翻译没落地（还是英文、或者空的）就不要，绝不把英文塞进播报
+            if not title_zh or not summary_zh or not has_cjk(title_zh):
+                continue
+            if is_mostly_english(title_zh) or is_mostly_english(summary_zh):
+                continue
+            if history.seen(title_zh, src.get("url", "")):
+                continue
+
+            cat = "AI Agent" if str(p.get("category", "")).upper().startswith("AI") else "一人公司"
+            if len(out[cat]) >= (max_ai if cat == "AI Agent" else max_opc):
+                continue
+            if any(is_similar_title(title_zh, x["title"]) for x in out["AI Agent"] + out["一人公司"]):
+                continue
+
+            out[cat].append({
+                "title": title_zh,
+                "category": cat,
+                "summary": summary_zh,
+                "raw_text": "",
+                # 前沿条目列表里直接带上「这说明什么」，省得再走一遍规则解读
+                "why_matter": why_zh,
+                "source_name": src["source_name"],
+                "url": src.get("url", ""),
+                "published_at": (src.get("published") or "")[:19] or datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "is_fallback": False,
+                "is_frontier": True,
+                "orig_title": src["orig_title"],
+            })
+
+        if out["AI Agent"] or out["一人公司"]:
+            print(f"[Collector] 前沿源命中：AI {len(out['AI Agent'])} 条、一人公司 {len(out['一人公司'])} 条（已译成中文）")
+        return out
+
     async def fetch_ai_agent_and_opc(self, client: httpx.AsyncClient, date_str: str = None, history: "SeenHistory" = None, all_history: "SeenHistory" = None) -> Dict[str, List[Dict[str, Any]]]:
         """真实抓取全球 AI 与一人公司中文资讯，抓取失败才降级到精选观点库"""
         if not date_str:
@@ -912,6 +1096,17 @@ class NewsCollector:
             gate_keywords=OPC_GATE_KEYWORDS, block_keywords=OPC_BLOCK_KEYWORDS,
             history=history, day_offset=day_offset
         )
+
+        # 全球前沿：当天刚发布的英文产品，由模型挑并译成中文。
+        # 放在中文源之后，播报顺序就是「国内发生了什么 → 全球此刻在做什么」。
+        frontier: Dict[str, List[Dict[str, Any]]] = {"AI Agent": [], "一人公司": []}
+        try:
+            frontier = await self.fetch_frontier(client, history)
+        except Exception as e:
+            print(f"[Collector] 前沿板块跳过（不影响本期）：{e}")
+
+        ai_items = ai_items + frontier["AI Agent"]
+        opc_items = opc_items + frontier["一人公司"]
 
         # 观点兜底要用「全部历史」判断，不是最近几期：
         # 只看最近 5 期的话，早就播过的观点过几天又会重新出现。
