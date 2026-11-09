@@ -131,6 +131,21 @@ CASE_SYSTEM = """你是一个中文播客作者，节目是「每日 AI 与一�
 如果原文信息太少、根本拆不出四段，pain 和 money 都填空字符串。"""
 
 
+QUOTE_SYSTEM = """你是一个中文播客的作者，节目每天早上陪听众听十几分钟。
+
+我会给你今天节目里要讲的几条内容标题。请你据此写一句「今日金句」。
+
+要求：
+- 25 字以内，一句话，能直接念出来
+- 说人话，像跟朋友聊天，不要名人名言腔，不要「愿每一个」「让我们」这种腔调
+- 不要空泛的励志，要有具体指向：能让人听完想做点什么
+- 不要用「赋能」「闭环」「赛道」「认知」「底层逻辑」这些词
+- 不要复述标题，要说出标题背后的那层意思
+- 不要说「今天这几条」「这几样东西」这类指代节目本身的话，金句要能自己站得住
+
+只输出 JSON：{"quote":"你的金句"}"""
+
+
 def _has_invented_number(text: str, source: str) -> bool:
     """
     模型给的数字能不能在原文里找到。
@@ -824,10 +839,40 @@ class NewsSummarizer:
                 "然后免费给三个有同样麻烦的人用，只看他们会不会主动回来。会回来再谈定价。")
 
     def _pick_quote(self, used: List[str] = None) -> str:
-        """今日金句：优先挑这个节目里还没说过的"""
+        """今日金句（规则版）：优先挑这个节目里还没说过的"""
         used = [u for u in (used or []) if u]
         fresh = [q for q in DAILY_QUOTES if not any(is_similar_title(q, u) for u in used)]
         return fresh[0] if fresh else DAILY_QUOTES[0]
+
+    async def _quote_from_today(self, collected_data: Dict[str, List[Dict[str, Any]]],
+                               used: List[str] = None) -> str:
+        """
+        让模型看着今天的具体内容写一句，而不是从固定句库里轮流取。
+
+        固定库只有 24 句，按「还没说过」往后取，等于 24 天一轮回；
+        而且它跟今天讲的事没关系，放在任何一天都成立——这本身就是重复的来源。
+        写不出来就返回空，调用方退回固定库。
+        """
+        if not llm.enabled:
+            return ""
+        titles = [it.get("title", "") for cat in ("AI Agent", "一人公司")
+                  for it in (collected_data.get(cat) or [])][:8]
+        if not titles:
+            return ""
+        used = [u for u in (used or []) if u][-8:]
+        data = await llm.json(
+            QUOTE_SYSTEM,
+            "今天要讲的内容：\n" + "\n".join(f"- {t}" for t in titles)
+            + ("\n\n这些是这个节目以前说过的，不要重复：\n" + "\n".join(f"- {u}" for u in used) if used else ""),
+            temperature=0.95,
+            max_tokens=200,
+        )
+        quote = llm_clean((data or {}).get("quote"), 40)
+        if not quote or not has_cjk(quote) or len(quote) < 8:
+            return ""
+        if any(is_similar_title(quote, u) for u in used):
+            return ""
+        return quote
 
     async def _generate_curated(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]], recent_leads: List[str] = None, used_quotes: List[str] = None) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
         self.last_chapters = []
@@ -836,8 +881,14 @@ class NewsSummarizer:
         # 案例优先用当天真实项目；实在没有才动固定库，用完就跳过整段
         cur_case = await self._pick_case(date_str, recent_leads, collected_data.get("一人公司", []))
 
+        # 金句优先级：案例里现写的那句 → 模型看今天内容现写 → 固定句库
+        quote_of_the_day = (cur_case.get("quote") if cur_case else "") or ""
+        if not quote_of_the_day:
+            quote_of_the_day = await self._quote_from_today(collected_data, used_quotes)
+        if not quote_of_the_day:
+            quote_of_the_day = self._pick_quote(used_quotes)
+
         if cur_case:
-            quote_of_the_day = cur_case.get("quote") or self._pick_quote(used_quotes)
             lead_title = cur_case["title"]
             case_pain_point = cur_case["pain_point"]
             case_model = cur_case["model"]
@@ -845,7 +896,6 @@ class NewsSummarizer:
             case_revenue_and_traffic = cur_case["revenue"]
             case_beginner_guide = cur_case["guide"]
         else:
-            quote_of_the_day = self._pick_quote(used_quotes)
             lead_title = ""
             case_pain_point = case_model = case_tech_stack = ""
             case_revenue_and_traffic = case_beginner_guide = ""

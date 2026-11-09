@@ -96,3 +96,30 @@ https://cherrieant-z.github.io/newscast/podcast.xml
 - **小宇宙 / 喜马拉雅 / Apple Podcasts / Pocket Casts**：在“添加节目 / 添加 RSS”里粘贴上面地址即可。
 - 音频地址默认指向 `https://cherrieant-z.github.io/newscast/`；若使用自定义域名，请在 GitHub Actions 环境变量里设置 `PODCAST_BASE_URL`。
 - 播客封面目前用的是 SVG 图标；若要在 Apple Podcasts 上架，建议替换成一张 1400×1400 的 JPG/PNG 封面。
+
+---
+
+## 🔑 模型配置（可选，不配也能跑）
+
+配了 DeepSeek 之后，节目会多出两样东西；不配则全流程照常，只是少了这两块：
+
+| 有了模型 | 没有模型 |
+|---|---|
+| 抓 Show HN、Product Hunt 当天上新的英文产品，筛出与「一个人用 AI 解决具体问题」相关的，译成中文播报 | 这两块直接跳过，只用中文源 |
+| 把一条真实帖子的原文读成四段：解决什么麻烦 / 用什么做的 / 怎么收钱 / 你能不能抄 | 只能照抄原句，遇到没写背景的帖子就是「作者没细说」 |
+
+**生产环境**：仓库 → Settings → Secrets and variables → Actions → New repository secret，
+名字填 `DEEPSEEK_API_KEY`，值填 `sk-` 开头那串。工作流已经接好，推一次就会自动带上。
+
+**本地调试**：在项目根目录建一个 `.env`（已在 `.gitignore` 里，不会被提交）：
+
+```bash
+DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxx
+# 可选
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+```
+
+一条硬约束：**案例里出现的每个数字都会回原文比对，找不到就整条作废、退回规则抽取**。
+模型编一个看起来很合理的价格，听众照着试一次就会被现实打回来，这个代价比没有案例大得多。
+
