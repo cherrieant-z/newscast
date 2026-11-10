@@ -5,6 +5,12 @@ name: Probe Sources
 # 本地能不能连通参考价值有限，必须用和生产同一出口去看。
 on:
   workflow_dispatch:
+  # 改探活清单就顺手跑一遍：加源这件事，写代码的人当场就该看到
+  # 「这个源到底有没有东西」，而不是等第二天早上的节目里才发现是空的。
+  push:
+    paths:
+      - 'tools/probe_sources.py'
+      - '.github/workflows/probe_sources.yml'
 
 permissions:
   contents: read
