@@ -23,8 +23,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.11'   # 比生产的 3.12 更严格，能在本地之外提前抓到语法兼容问题
+          cache: 'pip'
       - name: Install deps
-        run: pip install httpx
+        # 装齐生产同款依赖：探活要 import app.collector 里的解析器，
+        # 少一个 bs4 就直接 ModuleNotFoundError，白跑一趟。
+        run: |
+          python -m pip install --upgrade pip
+          pip install edge-tts httpx beautifulsoup4 markdown pydantic pydantic-settings
+      - name: Syntax check
+        run: python -m compileall -q build_daily.py app tools
       - name: Probe
         run: python tools/probe_sources.py
