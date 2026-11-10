@@ -1,0 +1,24 @@
+name: Probe Sources
+
+# 加源前的探活专用：只抓 RSS / API，不生成、不合成音频、不碰 docs。
+# 放在这里是刻意的——生产跑在 GitHub 的机器上（海外网络），
+# 本地能不能连通参考价值有限，必须用和生产同一出口去看。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: pip install httpx
+      - name: Probe
+        run: python tools/probe_sources.py

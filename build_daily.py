@@ -483,6 +483,10 @@ async def build_today_report():
         "lead_title": lead_title,
         "quote_of_the_day": quote,
         "summary_text": tts_script[:300] + "...",
+        # 逐字稿全文单独存一份：以前只留前 300 字当摘要，
+        # 想要「今天音频里到底念了什么」只能听写，专有名词必然写错。
+        # 全文约 1.7k 字，一天一条，体积可以忽略。
+        "script_text": tts_script,
         "case_html": case_html,
         "markdown_content": markdown_content,
         "audio_url": f"audio/{audio_filename}?v={int(cst_now.timestamp())}",
