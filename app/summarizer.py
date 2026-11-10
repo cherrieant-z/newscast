@@ -37,7 +37,13 @@ CASE_PRICE_SIGNALS_EN = (
     "paying", "subscription", "subscribers", "per month", "/month", "/mo",
     "mrr", "revenue", "pricing", "price", "churn", "paid plan", "customers pay",
 )
-CASE_NUMBER_RE = re.compile(r"\d+\s*(万|千|百|位|个用户|名用户|订阅|美元|元|块|刀|单|人)")
+CASE_NUMBER_RE = re.compile(
+    r"\d+\s*(?:万|千|百|位|个用户|名用户|订阅|美元|元|块|刀|单|人)"
+    # 英文收入帖的写法：$99、$500/mo、30 paying customers、120 subscribers
+    r"|\$\s?\d+(?:\.\d+)?"
+    r"|\d+\s*(?:paying|customers?|subscribers?|users?|clients?)",
+    re.I,
+)
 CASE_TOOL_WORDS = [
     "claude", "codex", "cursor", "windsurf", "copilot", "chatgpt", "gpt", "gemini",
     "deepseek", "qwen", "dify", "n8n", "coze", "扣子", "langchain", "ragflow",
@@ -717,7 +723,8 @@ class NewsSummarizer:
                 s = 0
                 # 叙述型优先：有正常标点的帖子才拆得出「他为什么做、怎么收钱」。
                 # 纯功能罗列（整段没标点）抽出来全是碎片，念着像机器在念说明书。
-                s += min(len(re.findall(r"[。！？，、；]", raw)), 8)
+                # 英文帖子用的是 . ! ? 和空格，只数中文标点会把它们全判成碎片。
+                s += min(len(re.findall(r"[。！？，、；]|[.!?](?:\s|$)", raw)), 8)
                 if CASE_NUMBER_RE.search(raw):
                     s += 3
                 if any(k in raw for k in CASE_PRICE_SIGNALS):
