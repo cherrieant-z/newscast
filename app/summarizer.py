@@ -29,6 +29,14 @@ CASE_PRICE_SIGNALS = [
     "年费", "月费", "买断", "定价", "收费", "免费试用", "价格", "收费版",
     "增值服务", "元/月", "元每月", "块钱一个月", "客单价", "开始收钱",
 ]
+
+# 英文社区的「收入帖」：作者往往直接把定价和付费人数写在正文里，
+# 这是全网少见的、能直接拆成「谁付钱、收多少」的一手材料。
+# 只认中文关键词的话，这类帖子会被判成「看不出怎么收钱」而整条丢掉。
+CASE_PRICE_SIGNALS_EN = (
+    "paying", "subscription", "subscribers", "per month", "/month", "/mo",
+    "mrr", "revenue", "pricing", "price", "churn", "paid plan", "customers pay",
+)
 CASE_NUMBER_RE = re.compile(r"\d+\s*(万|千|百|位|个用户|名用户|订阅|美元|元|块|刀|单|人)")
 CASE_TOOL_WORDS = [
     "claude", "codex", "cursor", "windsurf", "copilot", "chatgpt", "gpt", "gemini",
@@ -206,6 +214,9 @@ def _has_money_signal(raw: str) -> bool:
     if not raw:
         return False
     if any(k in raw for k in CASE_PRICE_SIGNALS):
+        return True
+    low = raw.lower()
+    if any(k in low for k in CASE_PRICE_SIGNALS_EN):
         return True
     return any(
         CASE_NUMBER_RE.search(s) and any(k in s for k in REVENUE_CUES)

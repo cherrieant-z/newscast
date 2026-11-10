@@ -76,6 +76,17 @@ FRONTIER_SOURCES = [
         "url": "https://hn.algolia.com/api/v1/search_by_date?tags=show_hn&hitsPerPage=30",
     },
     {
+        # 光有「我做了个东西」还不够，案例段要的是「谁在付钱、收多少钱」。
+        # Show HN 大多只是产品说明，而 HN 上那些「我把价格从 99 涨到 500，
+        # 付费用户还剩几个」的帖子，是全网少见的、作者亲口报数字的一手材料。
+        # 探活实测：这一路的候选里 25 条有 13 条直接提到钱，密度远高于任何 RSS。
+        "name": "Hacker News·收入帖",
+        "kind": "hn_json",
+        "url": ("https://hn.algolia.com/api/v1/search_by_date"
+                "?query=paying%20customers&tags=story&numericFilters=points%3E3&hitsPerPage=30"),
+        "require_show": False,
+    },
+    {
         "name": "Product Hunt",
         "kind": "atom",
         "url": "https://www.producthunt.com/feed",
@@ -84,14 +95,17 @@ FRONTIER_SOURCES = [
 
 FRONTIER_SYSTEM = """你是一名中文科技播客的选题编辑，服务对象是想靠 AI 做一人公司的普通人。
 
-我会给你一批今天刚发布的英文产品（Show HN 的独立开发者作品、Product Hunt 的新品）。
+我会给你一批今天刚发布的英文内容（Show HN 的独立开发者作品、Product Hunt 的新品、
+以及 HN 上作者自述「我这门生意收多少钱、有多少付费用户」的帖子）。
 你的任务是：挑出真正值得讲给中文听众的，翻译成地道中文口语。
 
 【筛选标准，从严但不苛刻】
 - 保留「一个人或极小团队，做出了一件具体能用的东西」的项目，开发工具也算，
   只要它解决的是真人真事，不是玩具 demo、不是只有一句口号
+- 「作者亲口报数字」的帖子优先级最高：涨价后还剩多少付费用户、月收入多少、
+  一个客户付多少钱——这类内容听众能直接对照自己的营生，比新产品发布有用得多
 - 排除：纯硬件、游戏、加密货币、招聘工具、纯营销套壳、需要大团队才能做的事、
-  政治宗教内容
+  政治宗教内容，以及纯讨论/求建议的帖子（没有具体产品或具体数字）
 - 目标 2~4 条。如果候选里既有偏技术的，也有偏「普通人拿它赚钱」的，两类都要有；
   确实一个都不行才返回空数组，不要凑数
 
@@ -500,6 +514,9 @@ AGGREGATOR_NOISE = [
     "8点1氪", "9点1氪", "10点1氪", "点1氪", "科氪", "早报", "晚报", "午报", "日报", "周报",
     "快讯汇总", "热点汇总", "热点导览", "一周要闻", "今日要闻", "新闻盘点", "盘前", "盘中",
     "收盘播报", "一文读懂", "一文看懂", "速览", "合集",
+    # 「极客早知道」这类一天打包三条的栏目，标题本身就是清单，
+    # 摘要却只对应其中一条，念出来像两句话拼在一起。2026-11-10 期就中招了。
+    "早知道", "早知天下事",
 ]
 
 
@@ -563,6 +580,36 @@ def _clean_summary(text: str) -> str:
 def _is_aggregator(title: str) -> bool:
     """判断是否为聚合类稿件（早报、快讯汇总等）"""
     return any(n in (title or "") for n in AGGREGATOR_NOISE)
+
+
+def _is_digest_title(title: str) -> bool:
+    """
+    标题里并排堆了好几件事——结构上就是一份清单，不是一条新闻。
+
+    只靠词表拦不住：极客公园的「极客早知道」在词表里，但同类栏目天天换名字。
+    结构判据更稳：正式新闻标题不会用两个以上分号/竖线把三四件不相干的事串起来。
+    """
+    t = title or ""
+    seps = sum(t.count(c) for c in ("；", ";", "|", "｜"))
+    return seps >= 2
+
+
+# 摘要剥掉链接和这些词之后如果什么都不剩，说明原文正文压根没抓到。
+# V2EX 的产品帖常把 README 直接当摘要，「项目地址：https://… ## 项目简介」就是全部，
+# 2026-11-10 期因此念出过「项目 项目简介 Cyber 接口」这种没人听得懂的句子。
+_SUMMARY_BOILERPLATE = (
+    "项目地址", "项目简介", "项目链接", "仓库地址", "官网", "直达链接",
+    "原文链接", "阅读原文", "关键词", "标签", "详情见", "详见",
+)
+
+
+def _is_junk_summary(text: str) -> bool:
+    """摘要剥掉链接、markdown 符号和样板词之后，还剩不剩人话。"""
+    s = re.sub(r"https?://\S+", "", text or "")
+    s = re.sub(r"[#*>`\[\]()（）]", "", s)
+    for w in _SUMMARY_BOILERPLATE:
+        s = s.replace(w, "")
+    return len(re.findall(r"[\u4e00-\u9fa5A-Za-z0-9]", s)) < 12
 
 
 # 人民网/学习强国挂在首页的固定专题栏目：位置常年不变，标题也极少变。
@@ -917,12 +964,13 @@ class NewsCollector:
                     continue
                 feed_items = _parse_feed_items(resp.text)
                 bucket: List[Dict[str, Any]] = []
+                drop_junk = 0
                 for fi in feed_items:
                     title = fi.get("title", "").strip()
                     if not title or len(title) < 4:
                         continue
                     # 聚合类稿件（早报、快讯汇总）噪声极高，整条不要
-                    if _is_aggregator(title):
+                    if _is_aggregator(title) or _is_digest_title(title):
                         continue
                     # 固定专题栏目（学习卡、镜观·足迹等）天天挂在首页，不是今日新闻
                     if _is_evergreen(title):
@@ -932,6 +980,11 @@ class NewsCollector:
                         continue
                     # 摘要先洗掉付费墙 / 推广模板句，再压到一两句
                     summary = _clean_summary(fi.get("summary", "")[:400])
+                    # 正文只有链接和样板词的条目，对听众等于什么都没说，
+                    # 还会占掉「一人公司」那三个宝贵名额，直接丢。
+                    if category == "一人公司" and _is_junk_summary(fi.get("summary", "")):
+                        drop_junk += 1
+                        continue
                     if len(summary) < 8:
                         summary = title
                     summary = _shorten_summary(summary, 60)
@@ -967,6 +1020,8 @@ class NewsCollector:
                             "published_at": (fi.get("published", "")[:19]) or datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "is_fallback": False,
                         })
+                if drop_junk:
+                    print(f"    {src['name']}: 丢弃 {drop_junk} 条「只有链接/样板词」的空帖")
                 if bucket:
                     # 一人公司板块：讲到钱的排前面，名额有限，先给有料的
                     if category == "一人公司":
@@ -1076,11 +1131,14 @@ class NewsCollector:
                         title = (h.get("title") or "").strip()
                         # 只要 Show HN：它是作者自己发的「我做了个东西」，
                         # 其余 HN 帖子是讨论别人的新闻，跟这里要的东西不是一类。
-                        if not title.lower().startswith("show hn"):
+                        # 例外是「收入帖」那一路：它按关键词捞，标题不带 Show HN。
+                        if src.get("require_show", True) and not title.lower().startswith("show hn"):
                             continue
                         rows.append({
                             "orig_title": title,
-                            "orig_text": _strip_html(h.get("story_text") or "")[:600],
+                            # 收入帖的关键信息（原来多少钱、涨到多少、还剩几个付费用户）
+                            # 常写在正文中段，600 字会切掉，放宽到 1500。
+                            "orig_text": _strip_html(h.get("story_text") or "")[:1500],
                             "url": h.get("url") or f"https://news.ycombinator.com/item?id={h.get('objectID')}",
                             "published": h.get("created_at") or "",
                         })
@@ -1182,7 +1240,9 @@ class NewsCollector:
                 "title": title_zh,
                 "category": cat,
                 "summary": summary_zh,
-                "raw_text": "",
+                # 原文留着：案例段要判断「这条能不能拆出谁付钱、收多少」，
+                # 只有译文摘要不够——数字和语气都在原文里。
+                "raw_text": (src.get("orig_text") or "")[:1200],
                 # 前沿条目列表里直接带上「这说明什么」，省得再走一遍规则解读
                 "why_matter": why_zh,
                 "source_name": src["source_name"],

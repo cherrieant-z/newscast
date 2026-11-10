@@ -44,6 +44,13 @@ CANDIDATES = [
     ("HN·MRR", "https://hn.algolia.com/api/v1/search_by_date?query=MRR&tags=story&hitsPerPage=25"),
     ("HN·paying customers",
      "https://hn.algolia.com/api/v1/search_by_date?query=paying%20customers&tags=story&hitsPerPage=25"),
+    # 真正要上线的那条：带热度过滤，剔掉没人理的碎帖
+    ("HN·收入帖(已上线)",
+     "https://hn.algolia.com/api/v1/search_by_date?query=paying%20customers"
+     "&tags=story&numericFilters=points%3E3&hitsPerPage=30"),
+    ("HN·pricing",
+     "https://hn.algolia.com/api/v1/search_by_date?query=pricing%20experiment"
+     "&tags=story&numericFilters=points%3E3&hitsPerPage=30"),
 ]
 
 
