@@ -1221,14 +1221,18 @@ class NewsSummarizer:
         except Exception:
             date_cn = date_str
 
-        # 开场：一句话交代今天听什么，并明确「不用看」
+        # 开场：一句话交代今天听什么，并明确「不用看」。
+        # 末句是关键：光说「听起来很爽」不够，得给一个具体的兑现承诺——
+        # 听完这一期，至少知道今天该先动哪一件。这句在每期都成立。
         add("开场", (
             f"早上好，今天是 {date_cn}。接下来这几分钟，我把全球 AI 圈、一人公司圈，"
             "还有几个跟你钱包有关的大环境信号，全部讲给你听。"
-            "你不用看任何文字，闭上眼跟着听就行。"
+            "你不用看任何文字，闭上眼跟着听就行；听完你会知道今天该先动哪一件事。"
         ))
 
-        add("今日金句", f"先送你今天的一句话：{spoken_quote}。这句话放在搞钱这件事上，特别应景。")
+        # 金句后面原本跟一句「这句话放在搞钱这件事上，特别应景」——
+        # 这是一句谁都能接的空话，占五秒却不提供任何信息，删掉更利落。
+        add("今日金句", f"先送你今天的一句话：{spoken_quote}。")
 
         # 1. 一人公司案例：真实项目通常没有「SOP 五段」那么完整，
         #    硬凑五段的结果就是连着三句「作者没细说」。压成四段，每段都有实料。
@@ -1288,6 +1292,13 @@ class NewsSummarizer:
                 reading = item['why_matter']
             elif not item.get('is_fallback'):
                 reading = targeted_reading(category, item['title'], item.get('summary', ''))
+            # 一人公司的每一条都该回答「这跟我有什么关系」。
+            # 规则库匹配不上信号词时，以前是整句不写，听众连听三条纯事实，
+            # 这一块就退化成念清单。没有定向解读时补一句通用的「怎么抄」，
+            # 三句轮换、当期不重复；轮完了就不硬凑。
+            if not reading and category == "一人公司" and not item.get('is_fallback'):
+                spare = [x for x in alt_readings["一人公司"] if x not in used_readings]
+                reading = spare[0] if spare else ""
             if reading:
                 if reading in used_readings:
                     # 撞车了：换一句当天还没说过的备用解读；实在没有就不硬凑
