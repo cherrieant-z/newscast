@@ -224,6 +224,14 @@ def _is_fresh(record: dict, report_day: datetime.datetime) -> bool:
     except Exception:
         return False
     listen_at = report_day.replace(hour=6, minute=0, second=0, microsecond=0)
+    # created_at 是按北京时间存的字符串，解析出来不带时区；而 report_day 在线上是带时区的。
+    # 两者相减会直接抛 TypeError: can't subtract offset-naive and offset-aware datetimes，
+    # 于是每次「当天已有记录」的检查都在这里崩掉——而这条路径恰恰是每期都要走的。
+    # 本地测试时传的是不带时区的日期，所以没暴露。这里补齐到同一时区再比。
+    if listen_at.tzinfo is not None and made_at.tzinfo is None:
+        made_at = made_at.replace(tzinfo=listen_at.tzinfo)
+    elif listen_at.tzinfo is None and made_at.tzinfo is not None:
+        made_at = made_at.replace(tzinfo=None)
     hours_ahead = (listen_at - made_at).total_seconds() / 3600
     if hours_ahead < 0:  # 6 点之后才补做的，属于正常兜底
         return True
