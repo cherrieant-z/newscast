@@ -204,45 +204,68 @@ def build_case_html(md_text: str) -> str:
 </div>''')
     return '\n'.join(cards)
 
-def _is_fresh(record: dict, report_day: datetime.datetime) -> bool:
-    """
-    这一期是不是「够新鲜」，配得上锁掉当天剩下的 cron。
+# ------------------------------------------------------------ 发布窗口
+# 2026-11-09 实测：GitHub 免费版的定时排队延迟从 4.0~4.2 小时（11-07/08）跳到
+# 8.3~9.2 小时（11-09）。之前那套「把发车时间放到前一天深夜、让延迟把它推进凌晨」
+# 的做法，延迟一变就整盘落空——按 9 小时算，22:00 发车要到次日 07:00 才开跑，
+# 比听众还晚一小时，而且日志里一切正常。
+#
+# 现在改成不猜延迟：cron 摊成每 3 小时一格（UTC 06~21 点，共 6 趟），
+# 窗口宽 3h45m > 间隔 3h，数学上保证无论延迟在 0~15 小时内如何浮动，
+# 总有一格会落进窗口。窗口由下面这段代码判定，与延迟无关。
+PUBLISH_WINDOW_START = 1.5    # 北京 01:30 之前不开工，太早做出来必然错过美股尾盘
+PUBLISH_WINDOW_END = 5.5      # 北京 05:30 之后不再开工：构建实测 6~8 分钟，留 30 分钟给部署
+REDO_AFTER_MINUTES = 90       # 窗口内又跑一趟时，距上一版超过 90 分钟就重做（拿更新的隔夜消息）
+LATE_FALLBACK_END = 9.0       # 窗口全错过时，最晚到 9:00 仍允许补一期给白天听
 
-    背景：归属日以 19:00 换日，所以晚上 8 点跑一次，就已经把「明天那期」做出来了。
-    之后 23:00 / 23:40 / 00:20 三趟全部判定「已生成」跳过——
-    听众早上 6 点听到的，是前一天晚上 8 点之前的新闻，整整 10 小时空白，
-    而系统日志写着「一切正常」。这正是「今天听着似曾相识」的根因之一。
 
-    判据很简单：生成时刻离听众开听的 6:00 越近越好。
-    超过 FRESH_HOURS 就认为「太早了」，允许后面那趟重新生成，覆盖它。
+def _publish_decision(existing_reports: list, date_str: str, cst_now: datetime.datetime):
     """
-    created = record.get("created_at")
-    if not created:
-        return False
-    try:
-        made_at = datetime.datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
-    except Exception:
-        return False
-    listen_at = report_day.replace(hour=6, minute=0, second=0, microsecond=0)
-    # created_at 是按北京时间存的字符串，解析出来不带时区；而 report_day 在线上是带时区的。
-    # 两者相减会直接抛 TypeError: can't subtract offset-naive and offset-aware datetimes，
-    # 于是每次「当天已有记录」的检查都在这里崩掉——而这条路径恰恰是每期都要走的。
-    # 本地测试时传的是不带时区的日期，所以没暴露。这里补齐到同一时区再比。
-    if listen_at.tzinfo is not None and made_at.tzinfo is None:
-        made_at = made_at.replace(tzinfo=listen_at.tzinfo)
-    elif listen_at.tzinfo is None and made_at.tzinfo is not None:
-        made_at = made_at.replace(tzinfo=None)
-    hours_ahead = (listen_at - made_at).total_seconds() / 3600
-    if hours_ahead < 0:  # 6 点之后才补做的，属于正常兜底
-        return True
-    # 7 小时：宁可多跑一次，也不要让早上 6 点听到前一晚 11 点前的东西。
-    # 8 小时会放过 22:00 生成的版本（那期完全错过美股全天），差一小时就是差一整批消息。
-    limit = float(os.getenv("NEWSCAST_FRESH_HOURS", "7"))
-    if hours_ahead > limit:
-        print(f"  上一版生成于 {created}，距 6:00 还有 {hours_ahead:.1f} 小时，"
-              f"超过 {limit:.0f} 小时上限，判定为过旧，重新生成。")
-        return False
-    return True
+    这一趟到底要不要真的生成。返回 (是否生成, 原因)。
+
+    判据从「距 6:00 多少小时」换成了「现在是不是处在发布窗口里」：
+    前者是在猜延迟，后者是对现实的直接观测，延迟怎么变都不会失效。
+    """
+    hour = cst_now.hour + cst_now.minute / 60.0
+    done = next((r for r in existing_reports if r.get("date_str") == date_str), None)
+
+    valid, made_at = False, None
+    if done and done.get("status") == "completed":
+        audio_name = Path(str(done.get("audio_url", "")).split("?")[0]).name
+        if audio_name and _audio_is_valid(DOCS_AUDIO_DIR / audio_name, done):
+            valid = True
+            try:
+                made_at = datetime.datetime.strptime(done.get("created_at", ""), "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                made_at = None
+
+    in_window = PUBLISH_WINDOW_START <= hour < PUBLISH_WINDOW_END
+    window_desc = f"{PUBLISH_WINDOW_START:g}~{PUBLISH_WINDOW_END:g} 点"
+
+    if in_window:
+        if not valid:
+            return True, f"北京 {hour:.2f} 点在发布窗口内，本日尚无可用产物，开始生成。"
+        age_min = (cst_now.replace(tzinfo=None) - made_at).total_seconds() / 60 if made_at else 1e9
+        if age_min > REDO_AFTER_MINUTES:
+            return True, (f"北京 {hour:.2f} 点在发布窗口内，上一版生成于 {done.get('created_at')}"
+                          f"（{age_min:.0f} 分钟前），重做一版拿更新的隔夜消息。")
+        return False, f"北京 {hour:.2f} 点在发布窗口内，上一版 {age_min:.0f} 分钟前刚生成，跳过。"
+
+    if valid:
+        if hour < PUBLISH_WINDOW_START:
+            return False, f"北京 {hour:.2f} 点早于发布窗口（{window_desc}），等窗口内那趟来做。"
+        return False, (f"北京 {hour:.2f} 点已过发布窗口，本日已有 {done.get('created_at')} "
+                       f"的有效一期，跳过。")
+
+    if hour < PUBLISH_WINDOW_START or hour >= 12:
+        # 深夜或傍晚：离窗口还有好几个小时，现在做出来必然过时
+        return False, (f"北京 {hour:.2f} 点不在发布窗口（{window_desc}），"
+                       f"本次只做静态同步，不留早报。")
+    if PUBLISH_WINDOW_END <= hour < LATE_FALLBACK_END:
+        return True, (f"北京 {hour:.2f} 点已过发布窗口，但本日仍无可用产物，"
+                      f"按迟到兜底生成一期（最晚 {LATE_FALLBACK_END:g} 点）。")
+    return False, (f"北京 {hour:.2f} 点已过补做时限（{LATE_FALLBACK_END:g} 点）且本日无产物，"
+                   f"不再生成以免产出过期早报。")
 
 
 def _audio_is_valid(path: Path, record: dict) -> bool:
@@ -310,31 +333,29 @@ async def build_today_report():
     print(f"  触发方式: {os.getenv('GITHUB_EVENT_NAME', 'local')}")
     print(f"==================================================")
 
-    # 无论本期是否重跑，都刷新一次收盘行情快照，给页面做兜底
-    await write_market_snapshot()
-
-    # 先读取既有存档：判断本期是否已经生成过，避免三个兜底时间点重复合成音频
+    # 先读取既有存档，再判定要不要动手。
+    # 这个顺序很要紧：以前是先刷新行情快照再判断，于是发布窗口外的趟次
+    # 白抓一次行情、还会留下一个「行情变了但内容没变」的提交。
     reports_file = DOCS_DATA_DIR / "reports.json"
     existing_reports = _load_reports(reports_file)
 
-    # 手动触发（workflow_dispatch / 本地运行）永远强制重生成；定时触发才做幂等跳过
+    # 手动触发（workflow_dispatch / 本地运行）永远强制重生成；定时触发才做发布窗口判定
     force = os.getenv("GITHUB_EVENT_NAME", "").strip() in ("", "workflow_dispatch")
     if not force:
-        done_rec = next((r for r in existing_reports if r.get("date_str") == date_str), None)
-        if done_rec and done_rec.get("status") == "completed":
-            done_audio = Path(str(done_rec.get("audio_url", "")).split("?")[0]).name
-            if (done_audio and _audio_is_valid(DOCS_AUDIO_DIR / done_audio, done_rec)
-                    and _is_fresh(done_rec, report_day)):
-                print(f"  {date_str} 的早报已于 {done_rec.get('created_at')} 生成且音频有效，本次跳过。")
-                # 跳过早报，但不能跳过这两步：前端修复、播客 RSS 补录都要在当天生效，
-                # 否则改了 index.html 要等第二天才有变化，订阅端也刷不到新单集。
-                try:
-                    write_podcast_xml(existing_reports)
-                    sync_static_assets()
-                except Exception as e:
-                    print(f"  （跳过路径的静态同步失败，不影响已发布的音频）: {type(e).__name__}: {e}")
-                return
-            print(f"  {date_str} 有记录但音频缺失或不合格，继续重新生成。")
+        should_build, reason = _publish_decision(existing_reports, date_str, cst_now)
+        print(f"  发布窗口判定：{reason}")
+        if not should_build:
+            # 不做早报，但这两步不能跳：前端修复、播客 RSS 补录都要在当天生效，
+            # 否则改了 index.html 要等第二天才有变化，订阅端也刷不到新单集。
+            try:
+                write_podcast_xml(existing_reports)
+                sync_static_assets()
+            except Exception as e:
+                print(f"  （跳过路径的静态同步失败，不影响已发布的音频）: {type(e).__name__}: {e}")
+            return
+
+    # 确实要生成，才刷新收盘行情快照
+    await write_market_snapshot()
 
     # 1. 采集资讯
     # 跨期去重：把最近几期已经播过的条目喂给采集器，避免「昨天念过的今天再念一遍」。
