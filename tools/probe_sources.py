@@ -73,7 +73,8 @@ async def probe(client: httpx.AsyncClient, name: str, url: str) -> None:
     )
     print(f"{name:22s} HTTP 200  {len(body)/1024:.0f}KB  条目 {len(titles):2d}  提到钱 {money:2d}")
     for t in titles[:3]:
-        print(f"    · {re.sub(r'\s+', ' ', t)[:70]}")
+        one_line = re.sub(r"\s+", " ", t)
+        print(f"    · {one_line[:70]}")
 
 
 async def main() -> None:
