@@ -425,6 +425,21 @@ def _spoken_len(t: str) -> int:
     return len(re.sub(r"\s", "", _scrub_unknown(t or "")))
 
 
+def _same_event(a: str, b: str) -> bool:
+    """
+    两条标题是不是同一件事。
+
+    字面相似度不够用：「日本推动修订安保三文件」和「日本学者称安保三文件
+    相关修订将加剧紧张」措辞差很远，但说的是同一件事，连着念两遍很刺眼。
+    改用引号里的专有名词判断——同一件事的报道通常都带着同一个词。
+    """
+    if is_similar_title(a, b):
+        return True
+    qa = set(re.findall(r"[「“\"]([^」”\"]{4,12})[」”\"]", a or ""))
+    qb = set(re.findall(r"[「“\"]([^」”\"]{4,12})[」”\"]", b or ""))
+    return bool(qa & qb)
+
+
 def _describe_from_raw(item: Dict[str, Any]) -> str:
     """
     摘要不能用时，从正文里找一句「它到底能干什么」。
@@ -1957,9 +1972,9 @@ class NewsSummarizer:
                 # 采购公告、评论员文章、理论版：这类东西念出来对听众没有任何用
                 if any(k in t for k in NEWS_NOISE):
                     continue
-                if any(is_similar_title(t, s) for s in seen):
+                if any(_same_event(t, s) for s in seen):
                     continue
-                if any(is_similar_title(t, e) for e in exclude_titles):
+                if any(_same_event(t, e) for e in exclude_titles):
                     continue
                 seen.append(t)
                 kept.append(it)
