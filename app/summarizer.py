@@ -143,14 +143,20 @@ CASE_SYSTEM = """你是一个中文播客作者，节目每天早上播给「想
 5. 每段一到两句，40~80 字。不要括号，不要顿号堆叠，不要英文句子。
 6. 产品名、技术名可以保留英文原词（比如 Claude、Next.js）。
 
+【最重要的一段】
+听众没看过这个帖子，也不知道你说的是什么东西。所以第一句必须先把「这是个啥」交代清楚：
+叫什么名字、是个 App 还是一个网站还是一个服务、打开之后能干什么，一句话说完。
+不许用「这东西」「它」「这个项目」开头——上一句没有名词，听众接不上。
+
 只输出 JSON：
 {
+ "what": "这是个什么。具体到：名字、形态（App/网站/工具/服务）、以及用它的人能干什么。一句话，不要评价，不要夸",
  "who_pays": "谁在为什么掏钱。要具体到人群和那个麻烦，不要写「用户」「企业」这种空话",
  "money": "怎么收钱：按次、按月还是买断，多少钱。原文没写价格就说他没写",
  "traction": "有没有人真的付了钱、有多少人在用。原文没写就说没公开",
  "startup": "他要启动这件事需要投入的钱和时间。只写原文提到的；原文没提就直说没提。不要写技术栈，听众不关心他用什么框架",
  "barrier": "这件事真正的难处在哪，一个外行最可能卡在哪一步",
- "first_step": "听众今天就能做的一个具体动作。必须动词开头、能落到手上：打开哪个页面、搜什么词、发一句什么话、算哪一个数。不要「多学习」「多关注」这种",
+ "first_step": "听众今天就能做的一个具体动作。必须动词开头、能落到手上：打开哪个页面、搜什么词、发一句什么话、算哪一个数。注意三点：① 不要叫听众去下载、试用、关注、支持这个产品本身，那不是他能抄的路子；② 默认听众手上还没有自己的产品，所以像「打开你的产品后台」这种前提要先写清楚，或者干脆换成不需要前提的动作；③ 不要「多学习」「多关注」这种",
  "quote": "一句跟这件事相关、能给听众一点行动力的话，不超过 28 字"
 }
 如果 who_pays 和 money 都写不出来，说明原文信息不够，两个都填空字符串。"""
@@ -209,6 +215,46 @@ def _looks_like_action(text: str) -> bool:
     return any(v in t for v in ACTION_VERBS)
 
 
+def _needs_product_premise(text: str) -> bool:
+    """
+    这个动作是不是要求听众「已经有一个自己的产品」。
+
+    「打开你浏览器里已装插件的后台数据页」对做这件事的人成立，可听众多半
+    手上什么都没有——这一步他今天做不了，等于这一节白讲。
+    """
+    t = text or ""
+    return any(k in t for k in ("已装的", "你的插件", "你的应用", "你的产品", "你的网站",
+                                "你浏览器里", "你的账号后台", "你上架的那个", "你自己做的",
+                                "你准备上架", "你打算上架", "你打算做", "你做的产品",
+                                "你的 App", "你的小程序", "你手上", "后台"))
+
+
+def _is_self_promo(text: str) -> bool:
+    """
+    这一步是在「帮作者拉新」还是在「听众自己用得上」。
+
+    「打开应用商店搜『静日』下载用一下，回帖说感受，等兑换码」——
+    这是让听众去当小白鼠，听完什么也没落下。案例段存在的意义是让人能抄，
+    所以这类动作一律退回规则版，换成听众自己那边能动的事。
+    """
+    t = text or ""
+    return any(w in t for w in ("兑换码", "激活码", "回帖", "留言领", "支持下作者", "帮忙测试"))
+
+
+def _fallback_what(title: str, summary: str) -> str:
+    """
+    模型没给「这是什么」时，用标题和摘要拼一句——宁可朴素，也不能缺这一句。
+    没有它，后面每一句「它怎么收钱」听众都无处安放。
+    """
+    t = (title or "").strip()
+    s = re.sub(r"https?://\S+", "", summary or "").strip()
+    m = re.search(r"叫\s*[「“\"']([^」”\"']{2,16})[」”\"']", s)
+    name = m.group(1) if m else ""
+    if name and name not in t:
+        return f"他做的东西叫「{name}」。{_cut(t, 40)}"
+    return _cut(t, 70) if t else "帖子里只有标题，没细说这是什么。"
+
+
 def _has_money_signal(raw: str) -> bool:
     """
     这条帖子能不能看出「怎么收钱 / 有没有人付钱」。
@@ -262,6 +308,230 @@ DAILY_QUOTES = [
 
 # 解读句的引入语。轮换使用，避免一期里同一个词反复出现。
 READING_CUES = ["要我说", "我的看法是", "说白了", "换个角度看", "我琢磨着"]
+
+# ------------------------------------------------------------ 口播：把「看的字」变成「听的话」
+#
+# 这一层的存在理由：稿子是给人耳朵听的，听众看不到标点、括号、段落、加粗。
+# 所有靠排版表达的主次关系，在音频里都必须变成词——否则听众听到的是一串
+# 没有层次的名词，听完不知道刚才那段在说什么。
+#
+# 另外，每天用同一句开场和同一个转折，听三天就能预判下一句，这是「体感差」
+# 的主要来源。所以这里所有固定句式都走 _day_pick 按日期轮换。
+
+# 「作者没写」这类话，说一次是诚实，说三次是敷衍
+UNKNOWN_MARKS = ("原文没", "作者没", "没公开", "没说", "没写", "没讲", "没提",
+                 "未披露", "未提", "没有公开", "不清楚")
+
+_SOURCE_TAIL_RE = re.compile(
+    r"[（(]\s*(新浪财经|36氪|极客公园|爱范儿|少数派|量子位|InfoQ|参考消息|中新网|新华网|钛媒体|虎嗅)[^）)]{0,10}[）)]"
+)
+
+
+CN_NUM = "一二三四五六七八九十"
+
+
+def _cn_num(n: int) -> str:
+    return CN_NUM[n - 1] if 1 <= n <= len(CN_NUM) else str(n)
+
+
+def _day_pick(pool: List[str], date_str: str, salt: int = 0) -> str:
+    """按日期从一组句子里挑一句。
+
+    用「距今天的第几天」做下标：相邻两天必然落到不同句子上，不会出现
+    「昨天今天同一句开场」。不用随机数——随机可能连撞三天，而且没法复现。
+    """
+    if not pool:
+        return ""
+    try:
+        ord_ = datetime.date.fromisoformat(date_str).toordinal()
+    except Exception:
+        ord_ = datetime.date.today().toordinal()
+    return pool[(ord_ + salt) % len(pool)]
+
+
+def _lcs_len(a: str, b: str) -> int:
+    """最长公共子串长度。用来判断两段文字是不是在说同一件事。"""
+    if not a or not b:
+        return 0
+    prev = [0] * (len(b) + 1)
+    best = 0
+    for i in range(1, len(a) + 1):
+        cur = [0] * (len(b) + 1)
+        ai = a[i - 1]
+        for j in range(1, len(b) + 1):
+            if ai == b[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best:
+                    best = cur[j]
+        prev = cur
+    return best
+
+
+def _speakable(text: str) -> str:
+    """
+    洗成能直接念的样子：去掉链接、方括号标签、Markdown 记号、来源尾巴。
+
+    这些符号在页面上是排版，在耳朵里就是乱码——念出「左方括号 daydaymoney」
+    比不念更糟。
+    """
+    t = text or ""
+    t = re.sub(r"https?://\S+", "", t)
+    # [送永久 Pro] / 【补送码】这类是帖子的板块标签，念出来只是噪音
+    t = re.sub(r"[\[【][^\]】]{0,14}[\]】]", "", t)
+    t = t.replace("`", "").replace("*", "").replace("#", "")
+    t = t.replace("~", "").replace(">", "")
+    t = t.replace("丨", "，").replace("｜", "，").replace("|", "，")
+    t = _SOURCE_TAIL_RE.sub("", t)
+    t = re.sub(r"[\u200b-\u200f]", "", t)
+    # 帖子里的客套话和送码细节：「大家好」「祝大家天天赚钱」「前 100 位领兑换码」。
+    # 这些是论坛发帖的礼节，念出来像在读广告，跟听众没有关系。
+    t = re.sub(r"(祝大家|祝各位|祝你们|谢谢大家)[^。！？]{0,16}[。！？]?", "", t)
+    t = re.sub(r"^(大家好|各位好|大家好呀)[，,、\s]*", "", t)
+    t = re.sub(r"(补送码|送码|送一些|送\s*\d+\s*[个位份]|领取|可以领|留邮箱|欢迎留言)"
+               r"[^。！？]{0,24}[。！？]?", "", t)
+    t = re.sub(r"\s+", " ", t)
+    # 冒号分号换成逗号而不是删掉：「三大指数低开：贵金属领跌」删了冒号会粘成
+    # 「低开贵金属」，多一个字就多一个歧义。
+    t = re.sub(r"[:：;；]+", "，", t)
+    t = re.sub(r"，{2,}", "，", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    # 送码帖：整句讲「前 100 位领激活码」的，念出来跟听众毫无关系
+    if any(k in t for k in ("送码", "激活码", "兑换码", "领码")):
+        sents = re.split(r"(?<=[。！？])", t)
+        t = "".join(s for s in sents
+                    if not any(k in s for k in ("送码", "激活码", "兑换码", "领码", "领取")))
+    t = re.sub(r"\s+", " ", t).strip()
+    # 去掉括号但保留里面的字：「（参考消息）」已删，「（iOS）」念 iOS 就行
+    t = re.sub(r"[（(]\s*[）)]", "", t)
+    # 只删「替换出来的」那个空格：「企业 AI 的」→「企业 人工智能 的」。
+    # 原稿里本来就有的分隔空格要留着，那是标题自己的断句点。
+    t = re.sub(r"(?<=[\u4e00-\u9fa5])\s+(?=人工智能|软件服务|智能体)", "", t)
+    t = re.sub(r"(人工智能|软件服务|智能体)\s+(?=[\u4e00-\u9fa5])", r"\1", t)
+    # 「外媒：」「日媒：」是来源标签，不是新闻内容，念出来像在念目录
+    t = re.sub(r"^(外媒|日媒|德媒|法媒|台媒|英媒|美媒|韩媒|俄媒|印媒|澳媒)[，,、]\s*", "", t)
+    return t.strip("，、；;:：。·-—— ")
+
+
+def _end(t: str) -> str:
+    """收尾标点只补一次。摘要本身是问句时再拼句号，会念出「么？。」。"""
+    t = (t or "").strip()
+    if not t:
+        return ""
+    return t if t.endswith(("。", "！", "？", "…")) else t + "。"
+
+
+def _spoken_len(t: str) -> int:
+    """剔掉「他没写…」之后还剩多少字。用来判断这一段到底有没有实料。"""
+    return len(re.sub(r"\s", "", _scrub_unknown(t or "")))
+
+
+def _describe_from_raw(item: Dict[str, Any]) -> str:
+    """
+    摘要不能用时，从正文里找一句「它到底能干什么」。
+
+    「我制作了 Mac 的活动追踪器「日影」」——听众听完了还是不知道这工具能干啥。
+    正文里通常有一句「主要用来…」，把它捞出来补上。
+    """
+    raw = item.get("raw_text") or ""
+    if not raw:
+        return ""
+    for s in _split_sentences(raw):
+        s = s.strip()
+        # 以「所以」「但是」开头的句子，是接着上一句说的，单拎出来听很突兀
+        if s.startswith(("所以", "因此", "但是", "但", "而且", "然后", "另外", "不过")):
+            continue
+        if any(k in s for k in ("用来", "帮你", "适合", "支持", "能把", "就能", "可以")):
+            t = _speakable(s)
+            if 14 <= len(t) <= 56:
+                return t
+    return ""
+
+
+def _looks_like_revenue(model: str) -> bool:
+    """
+    这段讲的是「钱怎么进来」还是「钱怎么花出去」。
+
+    「上架时交了 5 美元一次性注册费，不年费不抽成」是成本，不是商业模式。
+    把它当收钱方式讲，听众会以为这个插件靠注册费赚钱——恰好相反。
+    所以只认明确的收入动词，认不出来就按「没有商业模式」处理。
+    """
+    # 先剔掉「不年费」「不抽成」「不是订阅」这类否定说法，否则「不抽成」里的
+    # 「抽成」会把一段讲成本的话判成讲收入
+    t = re.sub(r"不[^，。！？]{0,4}(年费|抽成|收费|收钱|订阅|赚钱|变现)", "", model or "")
+    return any(k in t for k in ("订阅", "买断", "按次", "按月", "按年", "年付",
+                                "收费", "卖掉", "卖", "定价", "付费用户", "付费客户",
+                                "会员费", "广告位", "佣金", "抽佣", "分成"))
+
+
+def _case_has_substance(pain: str, model: str) -> bool:
+    """
+    这个案例有没有拆的价值。
+
+    「他没写谁在掏钱」+「他没写怎么收钱」两条一起出现，这段就只剩四句
+    「没写」，等于占两分钟告诉听众没什么可说。这种情况宁可今天不做案例。
+    """
+    return _spoken_len(pain) >= 12 or _spoken_len(model) >= 12
+
+
+def _summary_offtopic(title: str, summary: str) -> bool:
+    """
+    摘要跟标题是不是同一件事。
+
+    源站偶尔把正文开头抓串——今天那条「千问办公押注 Team 智能体」后面
+    跟的是一段北欧神话。这种摘要念出来，听众只会觉得节目在胡言乱语。
+    判据用最长公共子串：同一件事的摘要至少有 3 个字连续重合。
+    """
+    if not summary or len(summary) < 16:
+        return False
+    a = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", title or "")
+    b = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", summary)
+    if len(a) < 4 or len(b) < 8:
+        return False
+    return _lcs_len(a, b) < 3
+
+
+def _summary_echoes_title(title: str, summary: str) -> bool:
+    """摘要只是把标题再说一遍（源站常见），念两遍纯属浪费听众时间。"""
+    a = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", title or "")
+    b = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", summary or "")
+    if not a or not b:
+        return False
+    if a in b or b in a:
+        return True
+    if min(len(a), len(b)) >= 8 and _lcs_len(a, b) >= min(len(a), len(b)) * 0.8:
+        return True
+    # 标题里的产品名（「」里的词）在摘要里又出现一次，摘要多半只是换个说法
+    # 重说一遍：「做了个记录演唱会的 App「也在场」」+「叫「也在场」的那个」
+    names = re.findall(r"[「“\"]([^」”\"]{2,12})[」”\"]", title or "")
+    if names and any(n in (summary or "") for n in names) and len(summary or "") <= len(title or "") * 2:
+        return True
+    return False
+
+
+def _scrub_unknown(text: str) -> str:
+    """剔掉「原文没写…」这类分句。听众不知道「原文」是什么，听两句就烦了。"""
+    out = []
+    for sent in re.split(r"(?<=[。！？])", text or ""):
+        if not sent.strip():
+            continue
+        kept = [c for c in re.split(r"(?<=[，、；;])", sent)
+                if not any(k in c for k in UNKNOWN_MARKS)]
+        piece = "".join(kept).strip().rstrip("，、；; ")
+        if piece:
+            out.append(piece if piece.endswith(("。", "！", "？")) else piece + "。")
+    return "".join(out)
+
+
+def _merge_money(model: str, rev: str) -> str:
+    """把「怎么收钱」和「赚没赚到」合成一段，并且只允许说一次「他没公开」。"""
+    mu = any(k in (model or "") for k in UNKNOWN_MARKS)
+    ru = any(k in (rev or "") for k in UNKNOWN_MARKS)
+    m = _scrub_unknown(model)
+    r = _scrub_unknown(rev)
+    if mu and ru:
+        return (m.rstrip("。") + "。" if m else "") + "具体进账他没公开。"
+    return "".join(x for x in (m, r) if x)
+
 
 # 【已停用，仅作历史存档】原先写死的 14 条一人公司案例。
 #
@@ -634,6 +904,56 @@ MACRO_READING = {
 }
 
 
+# 这些标题进不了宏观板块：评论、个股推荐、采购公告、疑问式分析稿。
+#
+# 关键词匹配只能看出「标题里出现了 A 股」，看不出「这条讲的是破产重整」。
+# 于是「A 股破产重整门槛抬高」会被配上「股市在放量波动」——每句话单看都对，
+# 连起来就是错的。加一道形状判断，宁可少讲两条。
+MACRO_NOT_SIGNAL = (
+    "掘金", "推荐", "评级", "目标价", "个股", "龙头股", "涨停", "翻倍", "布局良机",
+    "评论员", "观察", "侧记", "综述", "专访", "理论", "讲好", "蕴藏", "那些事",
+    "面临哪些", "如何看", "怎么看", "怎么办", "意味着什么", "有何深意",
+    "采购", "中标", "招标", "招聘启事", "拍卖",
+)
+
+# 宏观板块只接「有动作或数字」的标题。没有动作的标题，讲不出影响。
+MACRO_ACTION_WORDS = (
+    "加息", "降息", "降准", "上调", "下调", "提高", "降低", "扩大", "收紧", "放开", "取消",
+    "印发", "出台", "发布", "实施", "修订", "开征", "减免", "补贴", "关税", "配额",
+    "同比", "环比", "增长", "下降", "下跌", "上涨", "突破", "创新高", "新低", "倍增",
+    "破产", "重整", "退市", "上市", "裁员", "扩产", "减产", "出口", "进口", "投产",
+)
+
+
+# 要闻简报里不该出现的：公告、评论员文章、理论版、历史趣闻。
+# 这些是版面上的填充料，念出来只占时间。今天实测 42 条里至少 6 条是这类。
+NEWS_NOISE = (
+    "采购项目", "中标公告", "招标公告", "拍卖公告", "成交公告", "结果公告",
+    "评论员", "社论", "讲好", "理响中国", "焦点访谈", "国际论坛", "人民论坛",
+    "蕴藏着", "有何深意", "那些事", "侧记", "综述", "专访", "到“瓷”一游",
+    "招聘启事", "讣告", "更正",
+)
+
+
+def _macro_worthy(title: str, cue_hit_at: int) -> bool:
+    """
+    这条够不够格进「大环境」这段。
+
+    额外两条判据，都是被真实错位逼出来的：
+    - 标题像评论/推荐/公告 → 不进（讲不出确定的影响）
+    - 命中的关键词不在前半句 → 说明它只是个配角，不是这条新闻在讲的事
+    """
+    t = (title or "").lower()
+    if any(w in t for w in MACRO_NOT_SIGNAL):
+        return False
+    if not any(w.lower() in t for w in MACRO_ACTION_WORDS):
+        return False
+    # 命中的关键词必须出现在标题前半句：那才是这条新闻在讲的事。
+    # 「路条稀缺 承诺加码 A股破产重整门槛抬高」里的 A股 是背景板，
+    # 不是主角；按它配上「股市在放量波动」，听众会觉得主播没读标题。
+    return 0 <= cue_hit_at <= 9
+
+
 def macro_reading(domain: str, title: str) -> Tuple[str, str]:
     """返回 (这意味着什么, 你该怎么做)"""
     cfg = MACRO_READING.get(domain)
@@ -644,6 +964,23 @@ def macro_reading(domain: str, title: str) -> Tuple[str, str]:
         if any(_cue_hit(t, k) for k in kws):
             return meaning, action
     return cfg["default"]
+
+
+def macro_reading_ex(domain: str, title: str) -> Tuple[str, str, int, bool]:
+    """
+    在 macro_reading 基础上多给两个信息：关键词出现在标题的哪个位置、是不是落到了
+    域级默认句。宏观板块要靠这两条把「其实没看懂」的条目挡在外面。
+    """
+    cfg = MACRO_READING.get(domain)
+    if not cfg:
+        return "", "", -1, True
+    t = (title or "").lower()
+    for kws, meaning, action in cfg["cues"]:
+        for k in kws:
+            if _cue_hit(t, k):
+                return meaning, action, t.find(k.lower()), False
+    d = cfg["default"]
+    return d[0], d[1], -1, True
 
 
 def today_action(has_ai: bool, has_opc: bool, domains: List[str] = None) -> str:
@@ -783,7 +1120,7 @@ class NewsSummarizer:
 
         fields = {
             k: llm_clean(data.get(k), 110)
-            for k in ("who_pays", "money", "traction", "startup", "barrier", "first_step")
+            for k in ("what", "who_pays", "money", "traction", "startup", "barrier", "first_step")
         }
         # 前三段是「钱」，缺一段就说明原文信息不够拆解，退回规则版反而更诚实。
         if not fields["who_pays"] or not fields["money"]:
@@ -795,13 +1132,16 @@ class NewsSummarizer:
 
         # 「今天第一步」是这一节存在的理由。写不出一个能落到手上的动作，
         # 这段就退化成了「别人很厉害」，不如不给。
-        if not _looks_like_action(fields["first_step"]):
-            print(f"[Summarizer] 案例的「first_step」不像具体动作，用规则版兜底："
+        if (not _looks_like_action(fields["first_step"])
+                or _is_self_promo(fields["first_step"])
+                or _needs_product_premise(fields["first_step"])):
+            print(f"[Summarizer] 案例的「first_step」不像听众能自用的动作，用规则版兜底："
                   f"{fields['first_step'][:40]}")
             fields["first_step"] = self._guide_for(title, raw)
 
         return {
             "title": title,
+            "what": fields["what"],
             "quote": llm_clean(data.get("quote"), 40),
             "pain_point": fields["who_pays"],
             "model": fields["money"],
@@ -904,6 +1244,7 @@ class NewsSummarizer:
 
         return {
             "title": title,
+            "what": _fallback_what(title, item.get("summary") or raw),
             "quote": "",
             "pain_point": pain,
             "model": model,
@@ -931,24 +1272,29 @@ class NewsSummarizer:
         return "难在坚持用它解决自己的问题。多数人卡在做出来之后不知道给谁用，而不是卡在做不出来。"
 
     def _guide_for(self, title: str, raw: str) -> str:
-        """按项目类型给「你能抄的那部分」，避免每天都是同一句空话"""
+        """
+        按项目类型给「你能抄的那部分」。
+
+        全部写成调查型动作，而不是「去做一个产品」型动作：听众多半手上还没有
+        任何产品，任何以「你的产品后台」为前提的建议，他今天都做不了。
+        调查型动作今天就能做，而且做完手里就有东西（一份抱怨清单、一句痛点）。
+        """
         t = (title + " " + raw[:240]).lower()
         if any(k in t for k in ("小程序", "插件", "脚本", "cli", "小工具", "工具")):
-            return ("别一上来做通用版，先把它钉死在一个人群上，比如只给会计、只给某个行业的老板用。"
-                    "验证方式很土：拿去相关的群里免费给五个人用，看他们第二天还开不开。"
-                    "天天开，再谈收钱；没人开，说明这个痛还不够疼。")
-        if any(k in t for k in ("网站", "平台", "榜单", "导航", "社区", "导航站")):
-            return ("先只做一条数据线，把一个细分领域的真实数据持续更新好，比堆十个功能更能留住人。"
-                    "前期别急着收订阅，先把「每天都想来看一眼」这件事做成，有了回访再谈会员或广告位。")
+            return ("去应用商店翻三个同类工具的差评，只记重复出现的那条抱怨。"
+                    "重复三次以上的，就是有人愿意为解决它掏钱的信号；"
+                    "只有一条的，是你自己觉得有意思，不是市场觉得。")
+        if any(k in t for k in ("网站", "平台", "榜单", "导航", "社区")):
+            return ("打开这个领域现有的三个网站，各看一眼：它们每天更新什么、靠什么收钱、"
+                    "哪一块做得最敷衍。敷衍的那块通常就是留给后来者的口子。")
         if any(k in t for k in ("游戏", "小游戏")):
-            return ("先做完一个能玩三分钟的最小版本，丢到社区让人试玩，专门收集「哪一步想关掉」。"
-                    "小游戏靠传播不靠功能，把第一次分享的动机设计进去，比多加十个关卡有用。")
+            return ("去玩三个同类小游戏，一边玩一边记你在第几分钟想关掉。"
+                    "记满三个，你就知道这类东西真正的生死线在哪，比想功能有用。")
         if any(k in t for k in ("ai", "gpt", "智能体", "大模型", "agent")):
-            return ("别从模型开始，从「一件现在还得人手动做的事」开始。"
-                    "先用现成接口把流程跑通，能省下你自己每天一小时，才说明它对别人也有价值。"
-                    "然后拿这个结果去找三个同类的人，问他们愿不愿意付钱。")
-        return ("先自己用一周，把「每次都要手动的那一步」记下来，那一步就是产品雏形。"
-                "然后免费给三个有同样麻烦的人用，只看他们会不会主动回来。会回来再谈定价。")
+            return ("打开你每天用得最多的三个软件，各找一个让你烦的步骤，写成一句话。"
+                    "三句话里如果有两句在说同一件事，那就是你该动手的地方。")
+        return ("打开备忘录，写下你今天重复做了三遍以上的一件事，以及它卡在哪一步。"
+                "写不出来，说明你要做的需求是你想象出来的；写得出来，那就是起点。")
 
     def _pick_quote(self, used: List[str] = None) -> str:
         """今日金句（规则版）：优先挑这个节目里还没说过的"""
@@ -1002,6 +1348,7 @@ class NewsSummarizer:
 
         if cur_case:
             lead_title = cur_case["title"]
+            case_what = cur_case.get("what", "")
             case_pain_point = cur_case["pain_point"]
             case_model = cur_case["model"]
             case_tech_stack = cur_case.get("tech_stack", "")
@@ -1011,6 +1358,7 @@ class NewsSummarizer:
             case_barrier = cur_case.get("barrier", "")
         else:
             lead_title = ""
+            case_what = ""
             case_pain_point = case_model = case_tech_stack = ""
             case_revenue_and_traffic = case_beginner_guide = ""
             case_startup = case_barrier = ""
@@ -1067,6 +1415,9 @@ class NewsSummarizer:
                 "## 💰 一人公司搞钱案例拆解" + src_note,
                 "",
                 f"### 【本期课题】{lead_title}",
+                "",
+                "#### 0. 这是个什么",
+                case_what or _fallback_what(lead_title, case_pain_point),
                 "",
                 "#### 1. 谁在为什么掏钱",
                 case_pain_point,
@@ -1174,7 +1525,7 @@ class NewsSummarizer:
             date_str, quote_of_the_day, lead_title,
             case_pain_point, case_model, case_tech_stack, case_revenue_and_traffic,
             case_beginner_guide, collected_data,
-            case_startup=case_startup, case_barrier=case_barrier,
+            case_startup=case_startup, case_barrier=case_barrier, case_what=case_what,
         )
 
         return title, lead_title, markdown_content, tts_script, all_sources[:60], category_summary
@@ -1183,30 +1534,41 @@ class NewsSummarizer:
         self, date_str: str, quote: str, lead_title: str,
         case_pain: str, case_model: str, case_stack: str, case_rev: str, case_guide: str,
         collected_data: Dict[str, List[Dict[str, Any]]],
-        case_startup: str = "", case_barrier: str = "",
+        case_startup: str = "", case_barrier: str = "", case_what: str = "",
     ) -> str:
         """
-        构建「只听就够」的播报底稿：不留任何「去页面看」的内容，
-        值得知道的全部念出来，被筛掉的明确交代一句为什么没念。
-        风格：口语化开场、案例故事化、每条新闻配一句人话解读、结尾给一个可动手的小建议。
-        同时把段落切分写进 self.last_chapters，前端据此做章节跳转。
+        构建「只听就够」的播报底稿。
+
+        三条硬规则，都来自「听众只能听、看不到页面」这一件事：
+        1. 先报结构再讲内容。开头就说清今天有几块、每块讲什么，听众才知道
+           现在听到的是第几块、还有多少。
+        2. 每块内部有编号，编号前先说这块叫什么。光念「第三条」而没有归属，
+           听众不知道在数什么。
+        3. 不用固定句式。所有转折和收尾按日期轮换，同一个说法不会连着两天出现。
+
+        被筛掉的内容也明确交代一句——但只交代一次，不解释「页面上有」。
         """
-        # 金句末尾自带的句号先剥掉，避免与模板句号拼成「。。」双句号
-        spoken_quote = safe_ai_replace(quote).strip().rstrip("。！？!?；;，,、 ")
-        spoken_lead = safe_ai_replace(lead_title.replace("SOP", "标准实操流程"))
+        spoken_quote = _speakable(safe_ai_replace(quote))
+        spoken_lead = _speakable(safe_ai_replace(lead_title.replace("SOP", "标准实操流程")))
 
-        # 案例正文做适度口语化清理，保留 Claude / Dify / n8n / Shopify 等业界通称
-        clean_pain = case_pain.replace("7x24", "全天候24").replace("7*24", "全天候24")
-        clean_model = case_model.replace("7x24", "全天候24").replace("7*24", "全天候24")
-        clean_stack = safe_ai_replace(case_stack).replace(chr(10), " ")
-        clean_rev = case_rev.replace("API", "接口调用").replace(chr(10), " ")
-        clean_guide = safe_ai_replace(case_guide).replace(chr(10), " ")
-        clean_startup = safe_ai_replace(case_startup).replace(chr(10), " ")
-        clean_barrier = safe_ai_replace(case_barrier).replace(chr(10), " ")
+        def clean(s: str, api: bool = False) -> str:
+            t = safe_ai_replace(s or "").replace("7x24", "全天候24").replace("7*24", "全天候24")
+            if api:
+                t = t.replace("API", "接口")
+            return _speakable(t.replace(chr(10), " "))
 
-        ai_items = collected_data.get("AI Agent", [])
-        opc_items = collected_data.get("一人公司", [])
-        macro_items = collected_data.get("宏观大势", [])
+        clean_pain = clean(case_pain)
+        clean_model = clean(case_model)
+        clean_rev = clean(case_rev, api=True)
+        clean_guide = clean(case_guide)
+        clean_startup = clean(case_startup)
+        clean_barrier = clean(case_barrier)
+        clean_what = clean(case_what)
+
+        ai_items = [i for i in collected_data.get("AI Agent", []) if (i.get("title") or "").strip()]
+        opc_items = [i for i in collected_data.get("一人公司", []) if (i.get("title") or "").strip()]
+        macro_items = [i for i in collected_data.get("宏观大势", []) if (i.get("title") or "").strip()]
+        has_news = any(collected_data.get(c) for c in ("权威要闻", "参考消息", "新浪财经"))
 
         # 每段既进播报稿，也作为前端章节（点了能跳到对应分钟）
         blocks: List[Tuple[str, str]] = []
@@ -1221,42 +1583,129 @@ class NewsSummarizer:
         except Exception:
             date_cn = date_str
 
-        # 开场：一句话交代今天听什么，并明确「不用看」。
-        # 末句是关键：光说「听起来很爽」不够，得给一个具体的兑现承诺——
-        # 听完这一期，至少知道今天该先动哪一件。这句在每期都成立。
-        add("开场", (
-            f"早上好，今天是 {date_cn}。接下来这几分钟，我把全球 AI 圈、一人公司圈，"
-            "还有几个跟你钱包有关的大环境信号，全部讲给你听。"
-            "你不用看任何文字，闭上眼跟着听就行；听完你会知道今天该先动哪一件事。"
-        ))
+        has_case = bool(spoken_lead) and _case_has_substance(clean_pain, clean_model)
+        # 块序号要跟着当天实际有几块走：今天有案例，AI 就是第二块。
+        # 写死「第一块 AI」的话，有案例那天听众会听到两个「第一块」。
+        sec = 1 if has_case else 0
 
-        # 金句后面原本跟一句「这句话放在搞钱这件事上，特别应景」——
-        # 这是一句谁都能接的空话，占五秒却不提供任何信息，删掉更利落。
-        add("今日金句", f"先送你今天的一句话：{spoken_quote}。")
+        # ---- 开场：先说今天有几块，听众才知道自己在第几块
+        plan_bits = []
+        if has_case:
+            # 免费 / 开源项目没有「赚钱」这回事，开场就别许这个诺。
+            # 说成「赚钱案例」然后讲四分钟「它是免费的」，听众会觉得被骗。
+            case_has_biz = (_spoken_len(clean_model) >= 10
+                            and _looks_like_revenue(clean_model))
+            plan_bits.append("一个能直接抄的赚钱案例" if case_has_biz
+                             else "一个值得看的真实案例")
+        if ai_items:
+            plan_bits.append(f"人工智能圈的 {len(ai_items)} 件事")
+        if opc_items:
+            plan_bits.append(f"一人公司的 {len(opc_items)} 条路子")
+        if macro_items:
+            plan_bits.append("几个跟钱包有关的大环境信号")
+        if has_news:
+            plan_bits.append("国内外和财经的要闻")
+        plan = "、".join(plan_bits[:-1]) + "，最后是" + plan_bits[-1] if len(plan_bits) > 1 else "".join(plan_bits)
+        plan_line = f"今天一共 {len(plan_bits)} 块：{plan}。" if plan_bits else ""
+
+        if has_case:
+            open_pool = [
+                "{d}。今天先说一件挺反常识的事：{h}。{plan}",
+                "早上好，{d}。开头先给你一个可抄的例子：{h}。{plan}",
+                "{d}，我们开始。今天最有意思的一条是{h}。{plan}",
+                "{d}。今天先讲一个人怎么把一件小事做成生意的：{h}。{plan}",
+                "早上好，{d}。{h}——这事今天值得花三分钟听听。{plan}",
+            ]
+            opening = _day_pick(open_pool, date_str, 0).format(
+                d=date_cn, h=spoken_lead.rstrip("。"), plan=plan_line)
+        else:
+            open_pool = [
+                "{d}。今天没有特别够格的案例可拆，直接进正题。{plan}",
+                "早上好，{d}。{plan}",
+                "{d}，我们开始。{plan}",
+            ]
+            opening = _day_pick(open_pool, date_str, 0).format(d=date_cn, plan=plan_line)
+        add("开场", opening)
+
+        if spoken_quote:
+            quote_prefix = _day_pick([
+                "今天这句话你带着听：",
+                "先给你一句今天用得上的：",
+                "今天记这一句就够了：",
+                "出门前带一句话：",
+            ], date_str, 2)
+            add("今日金句", f"{quote_prefix}{spoken_quote}。")
 
         # 1. 一人公司案例：真实项目通常没有「SOP 五段」那么完整，
         #    硬凑五段的结果就是连着三句「作者没细说」。压成四段，每段都有实料。
         #    今天没抓到够格的真实项目就整段不要——开场已经说了今天讲什么，
         #    这里不需要再解释一遍「我没捞到」，直接进入正题更自然。
-        if spoken_lead.strip():
-            # 案例只讲四件事：谁付钱、怎么收、你要准备什么、今天第一步。
-            # 「他用了什么技术栈」这一段被拿掉了——对听众没有任何可执行价值，
-            # 却要占掉十来秒。省下来的时间给最后那段「今天第一步」。
-            add("案例·谁在付钱", f"先看这东西是给谁做的。{clean_pain}")
-            add("案例·怎么收钱", f"钱是怎么收的？{clean_model} {clean_rev}")
-            # 「原文没提启动成本」这种话在耳朵里是噪音，听众不知道「原文」是什么。
-            # 没写就不念这一句，只说他真正会卡住的地方。
-            startup_known = clean_startup.strip() and not any(
-                k in clean_startup for k in ("没提", "没写", "没公开", "没说", "不清楚")
-            )
-            if startup_known and clean_barrier.strip():
-                add("案例·你要准备什么",
-                    f"你要是想干，先看看要准备什么。{clean_startup} {clean_barrier}".strip())
-            elif clean_barrier.strip():
-                add("案例·你要准备什么", f"你要是想干，最大的坎在这儿。{clean_barrier}")
+        # 案例：先交代「这是个啥」，再谈钱。
+        #
+        # 之前第一句是「先看这东西是给谁做的」——听众根本没听过「这东西」，
+        # 上一句里也没有它。整段最要命的问题就在这：四句话各自都对，但连起来
+        # 听不出在讲什么产品。
+        if has_case:
+            what_sp = clean_what or _fallback_what(spoken_lead, clean_pain)
+            case_open = _day_pick([
+                "第一块，先拆刚才那个案例。{w}",
+                "第一块，先说这件事具体是怎么回事：{w}",
+                "第一块，回到开头那个例子。{w}",
+            ], date_str, 4).format(w=_end(what_sp))
+            add("案例·这是什么生意", case_open)
+
+            # 先判断这个项目到底有没有「向用户收钱」这回事。
+            # 免费 / 开源 / 自用的项目，讲「谁在掏钱」只会讲出「它是免费的」——
+            # 那不是答案，听众会觉得你答非所问。
+            has_biz = _spoken_len(clean_model) >= 10 and _looks_like_revenue(clean_model)
+            pain_known = _scrub_unknown(clean_pain)
+
+            # 「谁掏钱」这一段，只在真答得出来的时候念。
+            # 内容本身是「他没写谁在掏钱」时还硬套「他盯上的是这样一群人：」，
+            # 会念出「他盯上的是这样一群人：他没写谁在掏钱」——自己打自己。
+            if has_biz and _spoken_len(pain_known) >= 12:
+                add("案例·谁在掏钱", _day_pick([
+                    f"他盯上的是这样一群人：{_end(pain_known)}",
+                    f"愿意为这个掏钱的是这类人：{_end(pain_known)}",
+                    f"这事解决的是这么个麻烦：{_end(pain_known)}",
+                ], date_str, 13))
+
+            # 有些项目压根没有「收钱」这回事（免费 / 开源 / 自用）。这类案例的
+            # 价值不在商业模式，而在它暴露出来的真实数字。硬套「钱是这么收的」
+            # 只会得到「他没写怎么收钱」这种自相矛盾的句子。
+            rev_sp = _scrub_unknown(clean_rev)
+            if has_biz:
+                money_line = _merge_money(clean_model, clean_rev)
+                money_prefix = _day_pick([
+                    "钱是这么收的：",
+                    "他靠这个挣钱的方式是：",
+                    "这门生意的钱从这儿来：",
+                ], date_str, 5)
+                add("案例·怎么收钱", f"{money_prefix}{_end(money_line)}")
+            elif _spoken_len(rev_sp) >= 15:
+                add("案例·真实数字", _day_pick([
+                    f"这东西不靠它收钱，但有几个数字值得你记住：{_end(rev_sp)}",
+                    f"它本身是免费的，所以别指望从这儿看商业模式。倒是这几个数更有用：{_end(rev_sp)}",
+                ], date_str, 14))
+
+            # 启动成本只念一次；模型说「没提」就不念，别让听众连听两句「没写」
+            startup_known = clean_startup and not any(k in clean_startup for k in UNKNOWN_MARKS)
+            barrier_sp = _scrub_unknown(clean_barrier)
+            if startup_known and barrier_sp:
+                add("案例·难在哪",
+                    f"你要真想干，得准备这些：{_end(clean_startup)}难的还在后头：{_end(barrier_sp)}")
+            elif barrier_sp:
+                add("案例·难在哪", f"你要真想干，先想清楚这一关：{_end(barrier_sp)}")
             elif startup_known:
-                add("案例·你要准备什么", f"你要是想干，先看看要准备什么。{clean_startup}")
-            add("案例·今天第一步", f"最后给你一个今天就能做的动作。{clean_guide}")
+                add("案例·难在哪", f"你要真想干，得准备这些：{_end(clean_startup)}")
+
+            if clean_guide:
+                step_prefix = _day_pick([
+                    "今天就能做的一步：",
+                    "不用等，今天先做这一件事：",
+                    "你现在可以动手的第一步：",
+                ], date_str, 6)
+                add("案例·今天第一步", f"{step_prefix}{_end(clean_guide)}")
 
         # 同一天里同一句解读只说一次。
         # 原先两条新闻命中同一个信号词时，会连着念两遍一模一样的「要我说……」，
@@ -1269,130 +1718,254 @@ class NewsSummarizer:
                 "先别急着换工具，看它有没有真的把你的交付时间缩短",
             ],
             "一人公司": [
-                "真正能抄的不是它的产品，是它挑客户和定价的方式",
-                "这类生意的关键是先找到一百个愿意付钱的人，而不是先做功能",
-                "先算清楚它一个月能帮你省多少时间，再决定值不值得学",
+                "这类东西的门槛不在做出来，在于让需要它的人知道它存在",
+                "先看它替用户省了哪一步，再想自己那门活儿里有没有同一步",
+                "一个功能能被一个人做完，说明这个需求窄得刚好能下手",
             ],
         }
 
-        def speak_with_reading(category: str, item: Dict[str, Any], idx: int) -> str:
-            """一条新闻 = 标题 + 摘要 +（有信号才给的）定向解读"""
+        def speak_item(category: str, item: Dict[str, Any], idx: int, judge_budget: list) -> str:
+            """
+            一条内容 = 序号 + 它是什么 + （不重复的）补充 + （限量给的）判断。
+
+            摘要这一层要过三道关，因为源站的摘要经常不能用：
+            - 只是把标题说一遍 → 不念（等于让听众多听十秒废话）
+            - 正文抓串了 → 不念（今天那条 AI 新闻后面跟的是北欧神话）
+            - 太长 → 压到一两个分句，念重点
+            """
             t_sp = (safe_ai_replace(item['title'])
                     .replace("Personal Agent", "个人智能体")
-                    .replace("Agent", "智能体").replace("OPC", "一人公司").replace("SaaS", "软件服务")
-                    .replace("丨", "，").replace("｜", "，").replace("|", "，")
-                    .rstrip("。；;，,、！？!? "))
-            s_sp = (safe_ai_replace(item.get('summary', ''))
                     .replace("Agent", "智能体").replace("OPC", "一人公司")
-                    .replace("丨", "，").replace("｜", "，")).rstrip("。；;，,、 ")
+                    .replace("SaaS", "软件服务"))
+            t_sp = _speakable(t_sp)
+            # 替换后常留下「企业 人工智能 的」这种中英夹白，念出来会多两个停顿
+            t_sp = re.sub(r"(人工智能|软件服务|智能体)\s+(?=[\u4e00-\u9fa5])", r"\1", t_sp)
+            t_sp = re.sub(r"([A-Za-z0-9])([\u4e00-\u9fa5])", r"\1 \2", t_sp)
+
+            s_raw = item.get('summary', '') or ''
+            s_sp = ""
+            if s_raw and not _summary_echoes_title(item['title'], s_raw) \
+                    and not _summary_offtopic(item['title'], s_raw):
+                s_sp = _speakable(safe_ai_replace(s_raw)
+                                  .replace("Agent", "智能体").replace("OPC", "一人公司"))
+                s_sp = _cut(s_sp, 60)
+            if not s_sp and not item.get('is_fallback'):
+                # 摘要被判定为「只是重复标题」时，正文里往往还有一句更具体的，
+                # 补上它，听众才知道这东西到底能干什么
+                s_sp = _describe_from_raw(item)
+
+            # 判断句限量：AI 这块一天四条，每条都来一句「这意味着什么」，
+            # 听众听到的就不是新闻而是评论，而且那些评论换条新闻照样成立。
             reading = ""
             if item.get('is_frontier') and item.get('why_matter'):
-                # 前沿条目由模型翻译时就写好了「这说明什么」，比规则库里
-                # 按关键词配的通用解读准得多，直接用。
-                reading = item['why_matter']
+                reading = _speakable(item['why_matter'])
             elif not item.get('is_fallback'):
                 reading = targeted_reading(category, item['title'], item.get('summary', ''))
-            # 一人公司的每一条都该回答「这跟我有什么关系」。
-            # 规则库匹配不上信号词时，以前是整句不写，听众连听三条纯事实，
-            # 这一块就退化成念清单。没有定向解读时补一句通用的「怎么抄」，
-            # 三句轮换、当期不重复；轮完了就不硬凑。
+            # 没有收入信号的帖子，不能说「收钱闭环跑通了」。
+            # 一条送激活码的帖子被配上这句，听众会以为主播在瞎编。
+            if reading and not _has_money_signal(item.get("raw_text") or item.get("summary") or ""):
+                if any(k in reading for k in ("收钱", "付费", "闭环", "定价", "收费", "变现")):
+                    reading = ""
             if not reading and category == "一人公司" and not item.get('is_fallback'):
                 spare = [x for x in alt_readings["一人公司"] if x not in used_readings]
                 reading = spare[0] if spare else ""
             if reading:
                 if reading in used_readings:
-                    # 撞车了：换一句当天还没说过的备用解读；实在没有就不硬凑
                     spare = [x for x in alt_readings.get(category, []) if x not in used_readings]
                     reading = spare[0] if spare else ""
                 if reading:
                     used_readings.add(reading)
-            head = f"第{idx}条，{t_sp}。{s_sp}"
-            head = re.sub(r'(人工智能|软件服务)\s+(?=[\u4e00-\u9fa5])', r'\1', head)
+                if judge_budget[0] <= 0:
+                    reading = ""
+                else:
+                    judge_budget[0] -= 1
+
+            body = f"第{idx}条，{_end(t_sp)}"
+            if s_sp:
+                body += _end(s_sp)
             if not reading:
-                return f"{head}。"
-            # 固定「要我说」的结果是：一期 7 条里念 6 次，听众四分钟听同一个连接词，
-            # 立刻就能感觉到这是模板。按条序轮换，同一个词在一期里最多出现一次。
+                return body
             cue = READING_CUES[(idx - 1) % len(READING_CUES)]
-            return f"{head}。{cue}，{reading}。"
+            return f"{body}{cue}，{_end(reading)}"
 
-        # 2. 全球 AI 动态（真实抓取；解读按信号词定向生成，写不出就不写）
+        # 2. AI 动态：这块是「外面发生了什么事」，判断只给最值得的一两条
         if ai_items:
+            sec += 1
             if all(it.get("is_fallback") for it in ai_items):
-                # 抓不到实时动态时，明确说成「判断」而不是冒充新闻，听着才不别扭
-                ai_lines = ["今天 AI 圈没抓到实时动态，我不硬凑新闻，给你几条半年内都不会过时的判断。"]
+                ai_lines = [f"第{_cn_num(sec)}块，AI 这块今天没抓到实时动态，我不硬凑新闻，"
+                            "给你几条半年内都不会过时的判断。"]
             else:
-                # 上一段有没有案例，决定了这句过渡该不该提「案例」
-                lead_in = "好，案例说完了，来看看过去 24 小时，AI 圈发生了什么。" \
-                    if spoken_lead.strip() else "来看看过去 24 小时，AI 圈发生了什么。"
-                ai_lines = [lead_in]
+                ai_lines = [_day_pick([
+                    "第{c}块，AI 圈。今天一共 {n} 条，我一条条说。",
+                    "先说第{c}块，AI 圈今天发生的事，{n} 条。",
+                    "第{c}块是 AI。过去一天有 {n} 条值得知道的。",
+                ], date_str, 7).format(c=_cn_num(sec), n=len(ai_items))]
+            budget = [2]
             for i, item in enumerate(ai_items, 1):
-                ai_lines.append(speak_with_reading("AI Agent", item, i))
+                ai_lines.append(speak_item("AI Agent", item, i, budget))
             add("AI 动态", "\n".join(ai_lines))
-        else:
-            add("AI 动态", "今天 AI 圈的实时动态暂时没抓到，这段先跳过，不影响后面的内容。")
 
-        # 3. 一人公司 / 独立开发者动态
+        # 3. 一人公司 / 独立开发者动态：每条都要能回答「这跟我有什么关系」
         if opc_items:
+            sec += 1
             if all(it.get("is_fallback") for it in opc_items):
-                opc_lines = ["再看一人公司这边。今天圈子里没大的新动静，我也不硬凑，给你三条值得记住的判断。"]
+                opc_lines = [f"第{_cn_num(sec)}块，一人公司。今天没大的新动静，给你三条值得记住的判断。"]
             else:
-                opc_lines = ["再看一人公司和独立开发者那边，这里通常藏着普通人能抄的近路。"]
+                opc_lines = [_day_pick([
+                    "第{c}块，一人公司。这几条都是别人正在做的具体生意，看看有没有你能抄的。",
+                    "第{c}块，一人公司那边。同样的事别人已经跑起来了，我挑了几条。",
+                    "第{c}块，看看一人公司这块。这几条都有明确的活儿在里面。",
+                ], date_str, 8).format(c=_cn_num(sec))]
+            budget = [99]  # 一人公司这块本来就靠「能不能抄」立住，不设上限
             for i, item in enumerate(opc_items, 1):
-                opc_lines.append(speak_with_reading("一人公司", item, i))
+                opc_lines.append(speak_item("一人公司", item, i, budget))
             add("一人公司动态", "\n".join(opc_lines))
 
-        # 4. 宏观大势：不念标题，只讲「发生了什么 / 这意味着什么 / 你该怎么做」
+        # 4. 大环境：只讲能在「这条新闻 → 对你的影响」之间建立因果的那几条。
+        #    对不上号的一律不进这块，退回后面的要闻简报念标题——
+        #    听者一听逻辑断了，整段的可信度就没了。
         macro_lines = []
-        if macro_items:
-            if len(macro_items) < 3:
-                macro_lines.append("接下来这段聊大环境。今天真正值得说的信号不多，我不给你凑数，只讲这几条。")
-            else:
-                macro_lines.append(
-                    "接下来这段，是今天最该留意的几个大环境信号。我不给你念标题，"
-                    "只讲三件事：发生了什么，这意味着什么，以及落到你身上该怎么办。"
-                )
-            for i, it in enumerate(macro_items, 1):
-                label = it.get("domain_label") or "大势"
-                title_spoken = (safe_ai_replace(it["title"])
-                                .replace("丨", "，").replace("｜", "，")
-                                .rstrip("。；;，,、！？!? "))
-                meaning, action = macro_reading(it.get("domain", ""), it["title"])
-                macro_lines.append(
-                    f"第{i}条，看{label}。{title_spoken}。这意味着，{meaning}。落到你身上，{action}。"
-                )
-        else:
-            macro_lines.append("今天没筛出特别值得说的大环境信号，这段就跳过，不给你凑数。")
+        matched = []
+        for it in macro_items:
+            meaning, action, pos, is_default = macro_reading_ex(it.get("domain", ""), it["title"])
+            if is_default or not meaning or not action:
+                continue
+            if not _macro_worthy(it["title"], pos):
+                continue
+            matched.append((it, meaning, action))
+        # 这块是「说了就得管用」的高浓度段落，超过四条听众记不住，
+        # 也会把后面的要闻挤没
+        matched = matched[:4]
 
-        # 明确交代「剩下的被筛掉了」，而不是让听众去别处翻文字
-        backlog = (
-            len(collected_data.get("权威要闻", []))
-            + len(collected_data.get("参考消息", []))
-            + len(collected_data.get("新浪财经", []))
-        )
-        if backlog:
-            macro_lines.append(
-                f"政策和市场那几个渠道，我今天也全过了一遍，加起来 {backlog} 条。"
-                "真正跟你判断有关的，上面已经讲完了；剩下的大多是看一眼就忘的消息，"
-                "念了只会占你时间，我就不念了。"
-            )
-        add("宏观大势", "\n".join(macro_lines))
+        if matched:
+            sec += 1
+            if len(matched) == 1:
+                # 一条就说「一条」。说「几条」然后只念一条，听众会以为漏了
+                macro_lines.append(_day_pick([
+                    f"第{_cn_num(sec)}块，今天只有一条大环境消息真跟你钱包有关，我单独说。",
+                    f"第{_cn_num(sec)}块，外面的事今天大多跟你没关系，只有这一条值得知道。",
+                ], date_str, 9))
+            else:
+                macro_lines.append(_day_pick([
+                    f"第{_cn_num(sec)}块，说几个跟钱包有关的外部变化。",
+                    f"第{_cn_num(sec)}块，看看外面正在变的几件事，都跟钱有关。",
+                    f"第{_cn_num(sec)}块，几条大环境消息，我挑能落到你身上的说。",
+                ], date_str, 9))
+            for i, (it, meaning, action) in enumerate(matched, 1):
+                title_spoken = _speakable(safe_ai_replace(it["title"]))
+                lead = _day_pick([
+                    "这条的实际影响是：", "这事的传导是这样：",
+                    "它往下会影响到：", "往你身上落是这样：",
+                ], date_str, 20 + i)
+                macro_lines.append(
+                    f"第{i}条，{_end(title_spoken)}{lead}{_end(meaning)}"
+                    f"对你来说，{_end(action)}"
+                )
+        elif macro_items:
+            macro_lines.append("大环境这块今天没什么能直接落到你身上的，我跳过，不硬凑。")
+
+        if macro_lines:
+            add("宏观大势", "\n".join(macro_lines))
+
+        # 5. 要闻简报：剩下的国内 / 国际 / 财经要闻，分组带编号念出来。
+        #
+        # 之前这里的做法是「加起来 N 条，念了只会占你时间，我就不念了」——
+        # 说一次叫体贴，天天说就是偷懒：听众要的是「今天外面发生了什么」。
+        # 现在逐条念标题，分组、编号、不解读。已经在大环境那段讲过的，
+        # 这里不再念第二遍。
+        news_groups = self._collect_news_groups(
+            collected_data, exclude_titles=[it["title"] for it, _, _ in matched])
+        if news_groups:
+            sec += 1
+            total = sum(len(v) for _, v in news_groups)
+            brief = [_day_pick([
+                f"第{_cn_num(sec)}块，把今天剩下的要闻过一遍，一共 {total} 条。"
+                "这块不解读，你听着有个数就行。",
+                f"第{_cn_num(sec)}块，剩下的要闻我念一遍，{total} 条，"
+                "不放解读，你自己判断哪条跟你有关。",
+                f"第{_cn_num(sec)}块，过一下今天的要闻清单，{total} 条。"
+                "念得快一点，听到相关的记个关键词就行。",
+            ], date_str, 10)]
+            for gi, (gname, items) in enumerate(news_groups):
+                if gi:
+                    brief.append(f"接着是{gname}的，{len(items)} 条。")
+                else:
+                    brief.append(f"先看{gname}的，{len(items)} 条。")
+                for i, it in enumerate(items, 1):
+                    t = _speakable(safe_ai_replace(it["title"]))
+                    if not t:
+                        continue
+                    brief.append(f"第{i}条，{_end(t)}")
+            add("要闻简报", "\n".join(brief))
 
         # 5. 结尾：给一个今天就能动手的具体动作。
         #    今天讲了案例就回扣案例那一步——听众刚听完三分钟，结尾再抛一个
         #    跟前面无关的「算算负债利率」，等于把最后一口气浪费掉。
-        domains = [it.get("domain", "") for it in macro_items]
-        tail = (
-            "刚才那一步，今天挑十分钟做掉，比再听十期都有用。"
-            if spoken_lead.strip()
-            else f"最后给你一件今天就能动手的事：{today_action(bool(ai_items), bool(opc_items), domains)}"
-        )
-        add("今天动手的事", (
-            "以上就是今天的全部内容，全在这段音频里了，没有藏在别处。"
-            f"{tail}明天同一时间，不见不散。"
-        ))
+        # 6. 收尾：不再说「以上就是今天的全部内容」这种零信息的话，
+        #    直接把听众要带走的那一件事再说一遍。收尾句按日期轮换。
+        if has_case and clean_guide:
+            close_body = _day_pick([
+                "今天就到这儿。别的都可以忘，先把第一块里那个动作做掉，十分钟的事。",
+                "就说到这儿。这一期只留一件事：第一块最后那个动作，今天做掉。",
+                "今天这些就是全部。真要动手，就动第一块最后那一步，别拖到下一期。",
+            ], date_str, 11)
+        else:
+            act = today_action(bool(ai_items), bool(opc_items),
+                               [it.get("domain", "") for it in macro_items])
+            close_body = _day_pick([
+                f"今天就到这儿。非要带走一件事的话：{act}",
+                f"就说到这儿。今天能动手的一件是：{act}",
+            ], date_str, 11)
+        add("今天动手的事", close_body + _day_pick([
+            "明天这个时间，我再来。",
+            "就这些，明早见。",
+            "明早同一时间，接着给你讲。",
+        ], date_str, 12))
 
         self.last_chapters = [{"label": label, "text": text} for label, text in blocks]
         return "\n\n".join(text for _, text in blocks)
+
+    def _collect_news_groups(self, collected_data: Dict[str, List[Dict[str, Any]]],
+                             exclude_titles: List[str] = None):
+        """
+        要闻简报的分组。
+
+        按「国内 / 国际 / 财经」三组，是因为听众脑子里的抽屉就是这三个：
+        国内政策、外面发生了什么、钱的动向。混在一起念，听完记不住任何一条。
+
+        exclude_titles：已经在大环境那段讲过的条目。同一件事在一期里念两遍，
+        听众第一反应是「刚才不是说过了吗」，然后开始怀疑是不是在凑时长。
+        """
+        exclude_titles = [t for t in (exclude_titles or []) if t]
+        groups = []
+        for cat, gname in (("权威要闻", "国内"), ("参考消息", "国际"), ("新浪财经", "财经")):
+            items = [it for it in collected_data.get(cat, []) if (it.get("title") or "").strip()]
+            if not items:
+                continue
+            seen = []
+            kept = []
+            for it in items:
+                t = _speakable(it["title"])
+                # 按「去掉标点后还剩几个字」判断：带引号的残句按字符数算会漏网，
+                # 比如「试图营造"一切如常"」实际只有 8 个字，念出来没头没尾
+                core = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", t)
+                if not core or len(core) < 10:
+                    continue
+                # 超长标题多半是微博体长句或拼接稿，念到一半听众就丢了
+                if len(t) > 42:
+                    t = _cut(t, 36)
+                # 采购公告、评论员文章、理论版：这类东西念出来对听众没有任何用
+                if any(k in t for k in NEWS_NOISE):
+                    continue
+                if any(is_similar_title(t, s) for s in seen):
+                    continue
+                if any(is_similar_title(t, e) for e in exclude_titles):
+                    continue
+                seen.append(t)
+                kept.append(it)
+            if kept:
+                groups.append((gname, kept))
+        return groups
 
     async def _generate_with_llm(self, date_str: str, collected_data: Dict[str, List[Dict[str, Any]]]) -> Tuple[str, str, str, str, List[Dict[str, str]], Dict[str, str]]:
         # 如果配置了 LLM，使用同样的严格原则

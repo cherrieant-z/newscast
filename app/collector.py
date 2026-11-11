@@ -438,20 +438,30 @@ def build_macro_trends(pools: Dict[str, List[Dict[str, Any]]], exclude_titles: L
         pool = candidates.get(dom) or []
         if not pool:
             continue
-        chosen = next((it for it in pool if it.get("source_name") not in used_sources), pool[0])
-        used_sources.add(chosen.get("source_name"))
-        trends.append({
-            "title": chosen["title"],
-            "category": "宏观大势",
-            "domain": dom,
-            "domain_label": MACRO_DOMAINS[dom],
-            "summary": chosen.get("summary", chosen["title"]),
-            "why_matter": "",
-            "source_name": chosen.get("source_name", ""),
-            "url": chosen.get("url", ""),
-            "published_at": chosen.get("published_at", ""),
-            "is_fallback": False,
-        })
+        # 每个域给两个候选，而不是一条定生死。
+        # 采集层只能靠关键词猜「这条属于哪个域」，猜不出「这条到底讲没讲清这件事」；
+        # 多给一个名额，让播报层用更严的判据去挑，比整块只剩一条强得多。
+        picked: List[Dict[str, Any]] = []
+        for it in pool:
+            if picked and it.get("source_name") in used_sources:
+                continue
+            picked.append(it)
+            used_sources.add(it.get("source_name"))
+            if len(picked) >= 2:
+                break
+        for chosen in picked:
+            trends.append({
+                "title": chosen["title"],
+                "category": "宏观大势",
+                "domain": dom,
+                "domain_label": MACRO_DOMAINS[dom],
+                "summary": chosen.get("summary", chosen["title"]),
+                "why_matter": "",
+                "source_name": chosen.get("source_name", ""),
+                "url": chosen.get("url", ""),
+                "published_at": chosen.get("published_at", ""),
+                "is_fallback": False,
+            })
     return trends
 
 

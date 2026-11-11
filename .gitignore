@@ -18,3 +18,6 @@ audio_storage/
 .vscode/
 .idea/
 .DS_Store
+
+# 本地调试用的采集快照（几十 KB 的真实抓取结果，只为离线调稿子）
+tools/_snap.json
