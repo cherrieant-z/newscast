@@ -15,6 +15,14 @@
     <link>https://cherrieant-z.github.io/newscast/</link>
   </image>
     <item>
+      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-12)</title>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-12) 发布日期：2026-11-12 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先找一首你唱不上去的歌，看看原版伴奏值不值得花钱。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：V2EX·分享创造） 【本期课题】做了个在线去人声的工具，从原曲里拆出伴奏和人声两轨 0. 这是个什么 一个叫不出名字的在线工具，打开网页就能把一首歌拆成伴奏和人声两轨，还能先试听再下载。 1. 谁在为什么掏钱 想唱原版伴奏的人，和做 remix 或剪 vlog 需要干净人声或纯说话声的人。 2. 怎么收钱、有没有真的赚到 免费每天一首，登录后两首；Pro 每月四块九九美元最多一百二十首，或一次性三块九九美元买十五首不过期。</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-12.mp3" length="2738304" type="audio/mpeg"/>
+      <guid isPermaLink="false">2026-11-12</guid>
+      <pubDate>Thu, 12 Nov 2026 03:25:19 -0000</pubDate>
+      <itunes:duration>456</itunes:duration>
+    </item>
+    <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-11)</title>
       <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-11) 发布日期：2026-11-11 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「改代码有即时反馈，做推广没有，别用前者逃避后者。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：V2EX·分享创造） 【本期课题】Chrome 插件上架一周：后台 188 次安装 0. 这是个什么 QR Right-Click 是一个 Chrome 浏览器插件，装上之后在网页图片上点右键就能直接识别出二维码里的内容。 1. 谁在为什么掏钱 他没写谁在付钱，这个插件本身也没提收费。 2. 怎么收钱、有没有真的赚到 他没写怎么收钱，只提到上架 Chrome 商店交了一次性 5 美元注册费，不年费不抽成。 后台显示安装请求 1</description>
       <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-11.mp3" length="2629728" type="audio/mpeg"/>
@@ -117,14 +125,6 @@
       <guid isPermaLink="false">2026-10-30</guid>
       <pubDate>Fri, 30 Oct 2026 09:33:14 -0000</pubDate>
       <itunes:duration>511</itunes:duration>
-    </item>
-    <item>
-      <title>科技早咖啡 · 全球深度调查与晨间播客 (2026-10-29)</title>
-      <description>科技早咖啡 · 全球深度调查与晨间播客 (2026-10-29) 主播：云希 &amp;nbsp;&amp;nbsp; 发布时间：2026-10-29 早上 06:00 &amp;nbsp;&amp;nbsp; 播客时长：约 7-9 分钟 (深度长篇) --- ☕ 今日主打调查报道 普通人也能开&apos;一人变形金刚公司&apos;？深度拆解智能体如何砸碎传统职场饭碗 1. 发生了什么？（背景简述） 在过去 24 小时里，开源社区和极客圈发生了一件震荡性的大事：几位独立开发者仅凭几套 AI 自动化工具链，单月营收突破百万美元，并且完全不需要招聘程序员、客服或运营。所谓的 OPC (One Person Company，一人企业)，正在以超乎想象的速度从科幻设定变成真实存在的商业奇迹。 2. 通俗拆解：小白如何理解这件事？ - 什么是“智能体工作流”？ 简单打个比方，以往开发一个软件或运营一个网店，你得招产品经理出图纸、招程序员写代码、招客</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-10-29.mp3" length="3219840" type="audio/mpeg"/>
-      <guid isPermaLink="false">2026-10-29</guid>
-      <pubDate>Thu, 29 Oct 2026 20:25:32 -0000</pubDate>
-      <itunes:duration>764</itunes:duration>
     </item>
 </channel>
 </rss>
