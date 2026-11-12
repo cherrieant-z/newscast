@@ -2,6 +2,7 @@
 import json
 import re
 import datetime
+import email.utils
 import hashlib
 from typing import Dict, List, Any, Tuple
 import httpx
@@ -549,6 +550,31 @@ def _has_ops_number(raw: str) -> bool:
         r"|\d{2,7}\s*(?:installs?|users?|signups?|visits?)", raw or "", re.I))
 
 
+def _case_age_days(published: str) -> int | None:
+    """
+    这条帖子是几天前发的。解析不出日期就返回 None，不参与新鲜度打分。
+
+    案例池的窗口有一个月，池子里躺着的都是能讲的故事。但同样能讲的两条，
+    应该先讲今天刚发的——三周前的帖子多半已经在别处被讲透了。
+    """
+    raw = (published or "").strip()
+    if not raw:
+        return None
+    dt = None
+    try:
+        dt = email.utils.parsedate_to_datetime(raw)
+    except Exception:
+        dt = None
+    if dt is None:
+        try:
+            dt = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return max(0, (datetime.datetime.now(datetime.timezone.utc) - dt).days)
+
+
 def _case_kind(case: Dict[str, Any]) -> str:
     """
     这一节该按「赚钱案例」讲，还是按「反面样本」讲。
@@ -559,17 +585,28 @@ def _case_kind(case: Dict[str, Any]) -> str:
 
     所以先分档：
     - money：原文里有付费用户数、订阅收入、MRR 这类硬证据
-    - sample：做出来了，有真实运营数字，但没人付钱
+    - sample：做出来了，但原文明确写了没做成（没人用、放弃、关掉）
+    - howto：两样都没有，但这条路本身讲得清——按「能抄的做法」讲，
+      开场第一句就说明白，不装成赚钱故事，也不替人下「他失败了」的结论
 
     分档之后开场、结构、用词全部跟着变，听众的预期才不会落空。
     """
+    if (case.get("kind") or "") == "howto":
+        return "howto"
     if (case.get("paid") or "").strip().startswith("有"):
         return "money"
     blob = " ".join(str(case.get(k) or "") for k in
                     ("pain_point", "model", "revenue")).lower()
     if any(k in blob for k in PAID_PROOF_CN) or any(k in blob for k in PAID_PROOF_EN):
         return "money"
-    return "sample"
+    # 没有付费证据，不等于失败。刚上线的产品谁都还没付钱，
+    # 把它说成「反面样本」，听众会觉得节目在替人下结论——
+    # 「这东西没人用」这句话，原文没写就不能说。
+    fail_blob = " ".join(str(case.get(k) or "") for k in
+                         ("pain_point", "revenue", "barrier", "what")).lower()
+    if any(k in fail_blob for k in CASE_FAIL_SIGNALS):
+        return "sample"
+    return "howto"
 
 
 def _ratio_line(text: str) -> str:
@@ -602,6 +639,17 @@ PAID_PROOF_CN = ("付费用户", "付费客户", "付费订阅", "有人付了",
                  "已经开始收钱", "月收入", "年收入", "订阅收入", "客单价", "营收")
 PAID_PROOF_EN = ("paying customer", "paying user", "mrr", "arr", "revenue",
                  "subscribers", "paid plan", "conversion to paid")
+
+# 「这事没做成」的明确说法。只有原文真的这么写，才允许把案例叫「反面样本」。
+# 没有这段判据，任何一条还没开始收钱的新品都会被说成「失败的例子」——
+# 那是节目替作者下结论，听众一听就知道在硬套模板。
+CASE_FAIL_SIGNALS = (
+    "没人用", "没人买", "没人下载", "没人付", "零用户", "没有用户",
+    "放弃了", "关掉了", "关停了", "做不下去", "撑不住", "砍掉了", "失败了",
+    "留存很低", "几乎没人", "只有几个人",
+    "no users", "zero users", "gave up", "shut down", "shutting down",
+    "failed", "didn't work", "flop", "abandoned", "sunset", "almost no",
+)
 
 
 def _looks_like_revenue(model: str) -> bool:
@@ -1250,26 +1298,36 @@ class NewsSummarizer:
         return await self._generate_curated(date_str, collected_data, recent_leads, used_quotes)
 
     async def _pick_case(self, date_str: str, recent_leads: List[str] = None,
-                         opc_items: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+                         opc_items: List[Dict[str, Any]] = None,
+                         case_pool: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        今天的案例从哪来：只从当天真实项目里挑，挑不到就不做这一段。
+        今天的案例从哪来。这一段是每天固定的，所以源头不能只靠一条路。
 
-        固定案例库已经不参与挑选了。它跟当天真实发生的事没有任何关系，
-        本质上就是把同一批故事换个日子重播一遍——这正是听众说「似曾相识」的来源。
-        宁可这天没有案例段，也不拿旧故事凑数。
+        两条路，按命中率排：
+          1. case_pool——按「谁在付钱」专门捞的帖子池（近一个月，几十条）
+          2. opc_items——当天资讯里的一人公司条目（2~4 条，顺带也能当案例）
 
-        另一个门槛：帖子得能撑起一段话。
+        原来只有第 2 条路。资讯选题每期只留几条，标准还是「今天有什么新东西」，
+        撞上能拆成故事的就少，案例段于是经常整段空着——这就是「案例靠运气」。
+        第 1 条路是给这一段单开的采集口，池子大一个数量级。
 
-        「能不能撑起」分两档，这是今天这条案例翻车的根源：
-        - 有人掏过钱 → 按「赚钱案例」讲（谁付钱、怎么收）
-        - 做出来了、有真实运营数字、但没人付钱 → 按「反面样本」讲
-          （做到什么程度、卡在哪、这说明什么）
-        两样都没有的，不进案例——那只能念出三句「他没写」，听众一听就知道在凑时长。
+        三档，从强到弱，哪一档成立就停：
+        - money：原文里有付费用户数、MRR 这类硬证据 → 讲「赚钱案例」
+        - sample：做出来了、有真实运营数字、但没人付钱 → 讲「反面样本」
+        - howto：两样都没有，但这条路本身讲得清 → 讲「能抄的做法」
+        最后一档是新增的：宁可换口径讲「怎么干」，也不让这一段空着。
+        但三档共用一条硬门槛——「这是什么」必须说得具体，
+        「一个叫不出名字的在线工具」一律换下一条。
 
         旧判据 `_has_money_signal` 只看「提没提到钱」，被「5 美元注册费」
         「免费开源」这种话骗过，把没有商业模式的产品放进了搞钱案例的位置。
         """
         recent = [t for t in (recent_leads or []) if t]
+        pool_items = [it for it in (case_pool or []) if it.get("title")]
+        news_items = [it for it in (opc_items or []) if it.get("title")]
+        # 池子里的帖子已经按「讲到钱」捞过一轮，门槛可以放宽；
+        # 资讯条目门槛照旧，否则当天的新闻条目会被挤进案例位。
+        from_pool = {id(it) for it in pool_items}
 
         def _score(it: Dict[str, Any]) -> int:
             raw = it.get("raw_text") or ""
@@ -1297,25 +1355,35 @@ class NewsSummarizer:
             t = it.get("title") or ""
             if "..." in t or "…" in t or re.search(r"(这个|它|这些)\s*$", t) or len(t) < 8:
                 s -= 5
+            # 越新越优先。池子有一个月窗口、天天都能挑；同样能讲的两条里，
+            # 今天刚发的那条最可能还没被讲透。
+            age = _case_age_days(it.get("published", ""))
+            if age is not None:
+                s += max(0, 6 - age)
             return s + min(len(raw) // 150, 4)
 
         money_pool: List[Dict[str, Any]] = []
         sample_pool: List[Dict[str, Any]] = []
-        for it in (opc_items or []):
-            if it.get("is_fallback") or not it.get("title"):
+        howto_pool: List[Dict[str, Any]] = []
+        for it in pool_items + news_items:
+            if it.get("is_fallback"):
                 continue
             if any(is_similar_title(it["title"], r) for r in recent):
                 continue
             raw = it.get("raw_text") or ""
             if _payer_signal(raw) == "有":
                 money_pool.append(it)
-            elif (_has_ops_number(raw) or len(raw) >= 200
+            elif (id(it) in from_pool or _has_ops_number(raw) or len(raw) >= 200
                   or len(it.get("summary") or "") >= 40):
                 # 没来得及有数字的项目也先当候选：客户是谁、麻烦在哪，
                 # 有时候比安装量更能说明一门生意。拆不出来再换下一条。
                 sample_pool.append(it)
+            else:
+                # 资讯条目里既没钱、也没运营数字的，只剩「做法」能讲。
+                # 这一档不假装讲别人的收入，只讲这条路怎么走。
+                howto_pool.append(it)
 
-        for pool in (money_pool, sample_pool):
+        for pool, forced_kind in ((money_pool, ""), (sample_pool, ""), (howto_pool, "howto")):
             if not pool:
                 continue
             pool.sort(key=_score, reverse=True)
@@ -1324,24 +1392,63 @@ class NewsSummarizer:
             # 「一个叫不出名字的工具」开这一节——那是今天这期最难听的一句。
             for picked in pool[:3]:
                 case = await self._case_from_item(picked, date_str)
+                if forced_kind:
+                    case["kind"] = forced_kind
                 if not _case_ok(case):
                     print(f"[Summarizer] 拆不出清楚的东西，换下一条：{picked.get('title', '')[:28]}")
                     continue
-                if not _case_has_substance(
+                if forced_kind == "howto":
+                    # 做法档要的不是「谁掏钱」，是「这事怎么干」：
+                    # 说清了是什么，再有「难在哪」或「今天能做什么」，就够一段。
+                    # 今天那条 Builderoom 没有客户画像、没有定价，但把双向冷启动
+                    # 和一个能上手的动作讲清楚了——那正是这一段该有的东西。
+                    ok = (_spoken_len(case.get("pain_point") or "") >= 12
+                          or _spoken_len(case.get("model") or "") >= 12
+                          or _spoken_len(case.get("barrier") or "") >= 12
+                          or _spoken_len(case.get("guide") or "") >= 12)
+                else:
+                    ok = _case_has_substance(
                         case.get("pain_point", ""), case.get("model", ""),
-                        rev=case.get("revenue", ""), kind=_case_kind(case)):
+                        rev=case.get("revenue", ""), kind=_case_kind(case))
+                if not ok and not forced_kind:
+                    # 素材够不上「赚钱案例」也够不上「反面样本」，但不代表没得讲：
+                    # 只要说清了这是什么，再把难在哪或今天能做什么讲明白，
+                    # 就降一档按「做法」讲，而不是整段丢掉。
+                    # 今天那条 Builderoom 就是这样——没有客户画像、没有定价，
+                    # 但双向冷启动那个坎和能上手的动作都写在原文里。
+                    if (_spoken_len(case.get("barrier") or "") >= 12
+                            or _spoken_len(case.get("guide") or "") >= 12):
+                        case["kind"] = "howto"
+                        ok = True
+                if not ok:
                     print(f"[Summarizer] 拆出来没有实料，换下一条：{picked.get('title', '')[:28]}")
                     continue
                 # 案例会详细讲一遍，动态列表里就不该再出现同一条，
                 # 否则听众会在同一期里把同一件事听两次。
-                try:
-                    opc_items.remove(picked)
-                except ValueError:
-                    pass
+                #
+                # 这里必须按链接判，不能只按对象身份：案例池和前沿译稿抓的
+                # 是同一篇帖子，一个是英文原文、一个是中文译稿，对象不同、
+                # 标题不同，只有 URL 一样。今天那条「月费 99 涨到 500」
+                # 就同时在两处，只在案例段讲一遍才对。
+                # 记下这条的来源，两个用途：
+                #   1. 前端案例卡片要能点回原帖
+                #   2. 跨期去重靠 sources 里的 url 做永久记忆——案例池里的帖子
+                #      不进 sources 列表，不记这一笔，这篇明天还会被抓到、被选中，
+                #      同一门生意一周能讲三次。
+                case["url"] = picked.get("url") or ""
+                case["source_name"] = picked.get("source_name") or ""
+                case["is_real"] = True
+                if opc_items:
+                    picked_url = (picked.get("url") or "").split("?")[0].rstrip("/")
+                    for it in list(opc_items):
+                        it_url = (it.get("url") or "").split("?")[0].rstrip("/")
+                        if it is picked or (picked_url and it_url == picked_url):
+                            opc_items.remove(it)
                 return case
 
-        # 今天既没有人在收钱、也没有像样的运营数字，就不讲案例。
-        # 固定库留着做历史存档（旧链接还能打开），但不再拿来填今天的节目。
+        # 三档全空只有一种情况：采集整体失败，池子和资讯条目都没东西可拆。
+        # 这时不做案例段，但日志要留痕——它是故障，不是「今天真没有」。
+        print("[Summarizer] 案例三档全空：采集侧可能整体异常，本期不做案例段")
         return None
 
     async def _case_from_item(self, item: Dict[str, Any], date_str: str) -> Dict[str, Any]:
@@ -1620,7 +1727,12 @@ class NewsSummarizer:
         title = f"全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 ({date_str})"
 
         # 案例优先用当天真实项目；实在没有才动固定库，用完就跳过整段
-        cur_case = await self._pick_case(date_str, recent_leads, collected_data.get("一人公司", []))
+        cur_case = await self._pick_case(date_str, recent_leads,
+                                         collected_data.get("一人公司", []),
+                                         collected_data.get("案例候选", []))
+        # 这一节按什么口径讲，由案例自己的档位决定（money / sample / howto），
+        # 一处判、两处用：开场白和正文都用这个值，不各判一次。
+        case_kind = _case_kind(cur_case) if cur_case else ""
 
         # 金句优先级：案例里现写的那句 → 模型看今天内容现写 → 固定句库
         quote_of_the_day = (cur_case.get("quote") if cur_case else "") or ""
@@ -1652,6 +1764,10 @@ class NewsSummarizer:
         # 整理来源列表（权威去重展示），并把解读带进卡片，让手机端也能直接读到
         all_sources: List[Dict[str, str]] = []
         for cat, items in collected_data.items():
+            # 案例候选是英文原文、且只在案例段用，不能混进来源列表——
+            # 混进去，手机端卡片上会出现一条没翻译的英文标题。
+            if cat == "案例候选":
+                continue
             for item in items:
                 note = (item.get("why_matter") or "").strip()
                 if cat == "宏观大势":
@@ -1667,6 +1783,18 @@ class NewsSummarizer:
                     "url": item.get("url", "#"),
                     "why_matter": note,
                 })
+
+        # 案例单独补一条来源。它已经不在 collected_data 里（选完就从资讯条目移除了），
+        # 但两个地方要用到它：前端案例卡片得能点回原帖；跨期去重靠 url 记住
+        # 「这篇讲过」——不记这一笔，案例池里同一篇过几天又会被选中。
+        if cur_case and cur_case.get("is_real"):
+            all_sources.insert(0, {
+                "title": cur_case.get("title", ""),
+                "category": "搞钱案例",
+                "source_name": cur_case.get("source_name") or "公开信息",
+                "url": cur_case.get("url") or "#",
+                "why_matter": cur_case.get("what", ""),
+            })
 
         category_summary: Dict[str, str] = {
             "今日金句": quote_of_the_day,
@@ -1812,7 +1940,7 @@ class NewsSummarizer:
             case_pain_point, case_model, case_tech_stack, case_revenue_and_traffic,
             case_beginner_guide, collected_data,
             case_startup=case_startup, case_barrier=case_barrier, case_what=case_what,
-            case_paid=case_paid, case_who=case_who,
+            case_paid=case_paid, case_who=case_who, case_kind=case_kind,
         )
 
         return title, lead_title, markdown_content, tts_script, all_sources[:60], category_summary
@@ -1822,7 +1950,7 @@ class NewsSummarizer:
         case_pain: str, case_model: str, case_stack: str, case_rev: str, case_guide: str,
         collected_data: Dict[str, List[Dict[str, Any]]],
         case_startup: str = "", case_barrier: str = "", case_what: str = "",
-        case_paid: str = "", case_who: str = "",
+        case_paid: str = "", case_who: str = "", case_kind: str = "",
     ) -> str:
         """
         构建「只听就够」的播报底稿。
@@ -1875,9 +2003,18 @@ class NewsSummarizer:
         # 有没有人付钱，决定这一节按什么口径讲。这是今天这条案例翻车的根源：
         # 一个免费开源插件被放在「搞钱案例」的位置上，听众听三分钟一直在等
         # 一个根本不存在的收入，自然觉得稀里糊涂。
-        case_kind = "money" if (case_paid or "").strip().startswith("有") else "sample"
-        has_case = bool(spoken_lead) and _case_has_substance(
-            clean_pain, clean_model, rev=clean_rev, kind=case_kind)
+        # 档位由调用方判好传进来（挑案例和写稿用同一套标准），没传就按有没有付费回落。
+        case_kind = case_kind or ("money" if (case_paid or "").strip().startswith("有") else "sample")
+        if case_kind == "howto":
+            # 做法档的成立条件是「有事可做」，不是「有钱可讲」：
+            # 说清了这东西是干什么的，再有难在哪或今天能动手的一步，就够撑一段。
+            has_case = bool(spoken_lead) and (
+                _case_has_substance(clean_pain, clean_model, kind=case_kind)
+                or _spoken_len(_scrub_unknown(clean_barrier)) >= 12
+                or _spoken_len(clean_guide) >= 12)
+        else:
+            has_case = bool(spoken_lead) and _case_has_substance(
+                clean_pain, clean_model, rev=clean_rev, kind=case_kind)
         # 块序号要跟着当天实际有几块走：今天有案例，AI 就是第二块。
         # 写死「第一块 AI」的话，有案例那天听众会听到两个「第一块」。
         sec = 1 if has_case else 0
@@ -1888,8 +2025,11 @@ class NewsSummarizer:
             # 开场就把这一节的性质说清楚。
             # 没人付钱的项目说成「赚钱案例」，听众会一直等那个不存在的收入；
             # 反过来，明说「这是个反面样本」，他反而知道该听什么。
-            plan_bits.append("一个能直接抄的赚钱案例" if case_kind == "money"
-                             else "一个值得看的反面样本")
+            plan_bits.append({
+                "money": "一个能直接抄的赚钱案例",
+                "sample": "一个值得看的反面样本",
+                "howto": "一条能照着走的路子",
+            }.get(case_kind, "一个真实的例子"))
         if ai_items:
             plan_bits.append(f"人工智能圈的 {len(ai_items)} 件事")
         if opc_items:
@@ -1909,6 +2049,16 @@ class NewsSummarizer:
                     "{d}，我们开始。今天最有意思的一条是{h}。{plan}",
                     "{d}。今天先讲一个人怎么把一件小事做成生意的：{h}。{plan}",
                     "早上好，{d}。{h}——这事今天值得花三分钟听听。{plan}",
+                ]
+            elif case_kind == "howto":
+                # 做法档：今天没人报收入，讲的是一条路怎么走。
+                # 开场必须先把这句说明白，否则听众会一直等「他赚了多少」。
+                open_pool = [
+                    "早上好，{d}。今天这条没人报收入，但这条路本身值得听：{h}。{plan}",
+                    "{d}。开头先讲一个做法，不是成功故事：{h}。{plan}",
+                    "早上好，{d}。今天没有谁晒收入，讲一条能照着走的路：{h}。{plan}",
+                    "{d}，我们开始。今天第一件事是别人怎么把活干成的：{h}。{plan}",
+                    "早上好，{d}。今天不讲赚了多少，讲怎么开始：{h}。{plan}",
                 ]
             else:
                 # 反面样本：开场就认下来，别让听众误会成赚钱故事。
@@ -1956,6 +2106,12 @@ class NewsSummarizer:
                     "第一块，先拆今天这个案例。{w}",
                     "第一块，先说这件事具体是怎么回事：{w}",
                     "第一块，回到开头那个例子。{w}",
+                ], date_str, 4).format(w=_end(what_sp))
+            elif case_kind == "howto":
+                case_open = _day_pick([
+                    "第一块，先说清这是个什么东西。{w}",
+                    "第一块，这条路具体长什么样：{w}",
+                    "第一块，把开头那个例子讲明白。{w}",
                 ], date_str, 4).format(w=_end(what_sp))
             else:
                 case_open = _day_pick([
@@ -2051,6 +2207,18 @@ class NewsSummarizer:
                     "他要是先找十个目标用户聊一轮，这个产品可能根本不用做。"
                     "东西做得再顺，也得先有人要。",
                 ], date_str, 16))
+            elif case_kind == "howto":
+                # 做法档的落点不是「他多惨」，也不是「他赚多少」，
+                # 是「这条路你能不能照着走」。这一段负责把话收住。
+                add("案例·这条路值不值得走", _day_pick([
+                    "这条路的好处是不用等别人给机会，坏处是没人管你走没走。"
+                    "一个人干，撑住的往往不是能力，是每天固定那几个小时。",
+                    "别一上来就把它想成一门生意，先想成一件能干完的小活。"
+                    "干完一件、收到一次反馈，比想清楚一百个模式都有用。",
+                    "这类活的门槛不在会不会做，在于你愿不愿意先干一次，换一个真实反馈回来。",
+                    "能走通的人靠的往往不是工具，是挑了一件别人懒得干的细活。"
+                    "工具谁都能装，细活不是谁都愿意接。",
+                ], date_str, 17))
 
             if clean_guide:
                 step_prefix = _day_pick([
@@ -2365,6 +2533,8 @@ class NewsSummarizer:
                 content = json.loads(res_data["choices"][0]["message"]["content"])
                 all_sources = []
                 for cat, items in collected_data.items():
+                    if cat == "案例候选":
+                        continue
                     for item in items:
                         all_sources.append({
                             "title": item["title"],

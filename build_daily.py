@@ -411,7 +411,10 @@ async def build_today_report():
 
     # 素材太少时宁可标成「降级」，也别标成「完成」：
     # 标 completed 会锁死当天的三趟 cron，等于用一期残缺节目占掉一整天的机会。
-    total_items = sum(len(v) for v in collected_data.values() if isinstance(v, list))
+    # 案例候选是给案例段备的英文原帖，不算「今天的素材条数」，
+    # 否则池子一大，degraded 判定就永远触发不了。
+    total_items = sum(len(items) for cat, items in collected_data.items()
+                      if isinstance(items, list) and cat != "案例候选")
     ai_n = len(collected_data.get("AI Agent") or [])
     opc_n = len(collected_data.get("一人公司") or [])
     MIN_ITEMS = 8

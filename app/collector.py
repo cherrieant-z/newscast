@@ -9,6 +9,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any
+from urllib.parse import quote as _urlquote
 import httpx
 from bs4 import BeautifulSoup
 import warnings
@@ -94,6 +95,51 @@ FRONTIER_SOURCES = [
         "url": "https://www.producthunt.com/feed",
     },
 ]
+
+# ============================================================
+# 案例专用源：不参与「今天有什么新闻」的选题，只喂「案例」那一段。
+#
+# 这里是「有时没案例」的真正瓶颈：案例候选原先只能从「前沿选题」里来，
+# 而前沿选题每期只留 2~4 条，标准是「值得讲给听众的新产品」。
+# 一条作者亲口报「月费从 99 涨到 500，付费用户剩 12 个」的帖子，
+# 常常在选题那一步被判成「不算今天的新东西」直接丢掉，案例段于是空着。
+#
+# 案例是故事，不是新闻。给它单开一条采集通道，按「作者自述」的写法捞。
+#
+# 关键词踩过的坑：一开始用 MRR / revenue / pricing 这些商业术语，命中的
+# 九成是大厂财报——「Anthropic Q3 revenue 17B」「Apple 拿走消费级收入一半」。
+# 搜「钱」搜不到一门小生意，得搜「人怎么讲自己的生意」：
+# 「paying customers 从 2 个到 6 个」「拿到第一个客户花了七个月」。
+#
+# 所以词组全部改成第一人称写法的短语，并限定只搜标题
+# （restrictSearchableAttributes=title）——正文顺带提一句 revenue 的帖子
+# 有几十万条，全放进来池子就废了。
+# ============================================================
+CASE_SOURCES = [
+    ("HN·付费用户", '"paying customers"'),
+    ("HN·第一个客户", '"first customer"'),
+    ("HN·我的产品", '"my SaaS"'),
+    ("HN·副业", '"side project"'),
+    ("HN·上线", '"i launched"'),
+    ("HN·自筹", "bootstrapped"),
+]
+CASE_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?query={q}"
+              "&tags=story&numericFilters=points%3E1"
+              "&restrictSearchableAttributes=title&hitsPerPage=50")
+
+# 「有人在为这个掏钱」的硬证据。只认钱和人数。
+# 「revenue」这个词不算——标题里有它的帖子九成是大厂财报。
+CASE_MONEY_FACT = re.compile(
+    r"\$\s?\d|\bmrr\b|\barr\b|paying customers?|paid customers?|"
+    r"\d[\d,]*\s*(?:paying|paid|subscribers?|customers?)", re.I)
+
+# 作者自述：说的是「我做的这门生意」。
+# 没有这一条的多半是新闻、围观、技术炫技，拆不出谁在付钱。
+CASE_SELF_TALK = re.compile(
+    r"^(?:i|my|we)\b|paying customers?|first customer|"
+    r"my (?:saas|app|product|business|startup|service|newsletter|extension|"
+    r"plugin|side project|project)", re.I)
+
 
 FRONTIER_SYSTEM = """你是一名中文科技播客的选题编辑，服务对象是想靠 AI 做一人公司的普通人。
 
@@ -1129,6 +1175,77 @@ class NewsCollector:
             for title, summary in picked
         ]
 
+    async def _fetch_case_candidates(self, client: httpx.AsyncClient,
+                                     all_history: "SeenHistory" = None) -> List[Dict[str, Any]]:
+        """
+        案例专用池：作者自己讲「我怎么做、谁在付钱、一个月多少」的帖子。
+
+        与前沿选题的区别有三点，每一点都是为了让案例不再靠运气：
+          1. 不过模型选题那道闸门，抓到就进池子——池子大小直接决定今天有没有案例
+          2. 时间窗放到 30 天：这是故事不是新闻，上个月的帖子照样能讲
+          3. 只在采集层挡两类：拿了融资的 Launch HN、纯讨论没数字的帖子
+
+        去重分两层：一期之内按链接，跨期按全量历史。这类帖子在 30 天窗口里
+        会反复出现，不按历史挡掉，同一门生意就会一周讲三次。
+        """
+        pool: List[Dict[str, Any]] = []
+        seen_urls = set()
+        seen_titles: List[str] = []
+        for name, q in CASE_SOURCES:
+            try:
+                resp = await client.get(CASE_QUERY.format(q=_urlquote(q)), timeout=12.0)
+                if resp.status_code != 200:
+                    print(f"[Collector] 案例源 {name} 返回 {resp.status_code}")
+                    continue
+                hits = resp.json().get("hits") or []
+            except Exception as e:
+                print(f"[Collector] 案例源 {name} 抓取异常: {e}")
+                continue
+            for h in hits:
+                title = (h.get("title") or "").strip()
+                low = title.lower()
+                if not title:
+                    continue
+                # Launch HN 是拿了融资的团队在发产品，不是「一个人怎么收钱」。
+                # Ask HN 是求建议，作者手里通常还没有自己的数字。
+                if low.startswith(("launch hn", "ask hn")):
+                    continue
+                url = h.get("url") or f"https://news.ycombinator.com/item?id={h.get('objectID')}"
+                key = url.split("?")[0].rstrip("/")
+                if key in seen_urls:
+                    continue
+                if _is_stale(h.get("created_at") or "", max_days=30):
+                    continue
+                body = _strip_html(h.get("story_text") or "")[:1500]
+                # 链接帖没有正文，信息全在标题里。标题既没数字也没钱字眼的，
+                # 拆出来只能是一句「他做了个产品」，不占名额。
+                if not body and not re.search(r"\d|\$|€|£", title):
+                    continue
+                # 两道闸门：得有人掏过钱的硬证据，得是作者在讲自己的生意。
+                # 只有一道会把大厂财报放进来（有 $17B，但没人自称在创业）。
+                blob = title + " " + body[:800]
+                if not CASE_MONEY_FACT.search(blob):
+                    continue
+                if not (low.startswith("show hn") or CASE_SELF_TALK.search(blob)):
+                    continue
+                if any(is_similar_title(title, t) for t in seen_titles):
+                    continue
+                if all_history and all_history.seen(title, url):
+                    continue
+                seen_urls.add(key)
+                seen_titles.append(title)
+                pool.append({
+                    "title": title,
+                    "raw_text": body,
+                    "summary": "",
+                    "url": url,
+                    "published": h.get("created_at") or "",
+                    "source_name": name,
+                    "is_real": True,
+                })
+        print(f"[Collector] 案例候选池：{len(pool)} 条（近一个月，已按历史去重）")
+        return pool
+
     async def _fetch_frontier_candidates(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
         """抓今天刚发布的英文产品（Show HN / Product Hunt），只抓不译。"""
         cands: List[Dict[str, Any]] = []
@@ -1315,6 +1432,14 @@ class NewsCollector:
         ai_items = ai_items + frontier["AI Agent"]
         opc_items = opc_items + frontier["一人公司"]
 
+        # 案例池单独抓，不合并进 opc_items：
+        # 它不该出现在前端「一人公司」列表里，也不该占用那 3 条新闻名额。
+        case_pool: List[Dict[str, Any]] = []
+        try:
+            case_pool = await self._fetch_case_candidates(client, all_history)
+        except Exception as e:
+            print(f"[Collector] 案例候选池跳过（不影响本期）：{e}")
+
         # 观点兜底要用「全部历史」判断，不是最近几期：
         # 只看最近 5 期的话，早就播过的观点过几天又会重新出现。
         if not ai_items:
@@ -1322,7 +1447,7 @@ class NewsCollector:
         if not opc_items:
             opc_items = self._fallback_pool(date_str, "一人公司", all_history)
 
-        return {"AI Agent": ai_items, "一人公司": opc_items}
+        return {"AI Agent": ai_items, "一人公司": opc_items, "案例候选": case_pool}
 
     async def collect_all(self, date_str: str = None, history: "SeenHistory" = None, all_history: "SeenHistory" = None) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -1371,6 +1496,8 @@ class NewsCollector:
             if isinstance(ai_res, dict):
                 results["AI Agent"] = ai_res.get("AI Agent", [])
                 results["一人公司"] = ai_res.get("一人公司", [])
+                # 只给案例段用的原始候选（英文、未翻译），不进任何前端列表。
+                results["案例候选"] = ai_res.get("案例候选", [])
 
         # 全局跨平台去重与纯英文长句过滤校验
         seen_titles = []
