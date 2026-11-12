@@ -15,6 +15,14 @@
     <link>https://cherrieant-z.github.io/newscast/</link>
   </image>
     <item>
+      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-13)</title>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-13) 发布日期：2026-11-13 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「价格翻五倍，客户反而多了四个。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：Hacker News·收入帖） 【本期课题】月费从99美元涨到500美元，付费客户从2个变成6个 0. 这是个什么 这是一个按月收费的服务，用它的人能按月付费获得某种持续提供的价值。 1. 谁在为什么掏钱 愿意为这个服务按月掏钱的客户，具体是哪些人、解决什么麻烦，他没公开。 2. 怎么收钱、有没有真的赚到 按月收，从每月99美元涨到每月500美元。 涨价前有2个付费客户，涨价后有6个付费客户。 3. 你要准备什么、难在哪 难的不是定价本身，是</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-13.mp3" length="2785680" type="audio/mpeg"/>
+      <guid isPermaLink="false">2026-11-13</guid>
+      <pubDate>Fri, 13 Nov 2026 03:42:46 -0000</pubDate>
+      <itunes:duration>464</itunes:duration>
+    </item>
+    <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-12)</title>
       <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-12) 发布日期：2026-11-12 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先找一首你唱不上去的歌，看看原版伴奏值不值得花钱。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：V2EX·分享创造） 【本期课题】做了个在线去人声的工具，从原曲里拆出伴奏和人声两轨 0. 这是个什么 一个叫不出名字的在线工具，打开网页就能把一首歌拆成伴奏和人声两轨，还能先试听再下载。 1. 谁在为什么掏钱 想唱原版伴奏的人，和做 remix 或剪 vlog 需要干净人声或纯说话声的人。 2. 怎么收钱、有没有真的赚到 免费每天一首，登录后两首；Pro 每月四块九九美元最多一百二十首，或一次性三块九九美元买十五首不过期。</description>
       <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-12.mp3" length="2738304" type="audio/mpeg"/>
@@ -117,14 +125,6 @@
       <guid isPermaLink="false">2026-10-31</guid>
       <pubDate>Sat, 31 Oct 2026 22:13:17 -0000</pubDate>
       <itunes:duration>557</itunes:duration>
-    </item>
-    <item>
-      <title>科技早咖啡 · AI Agent 与一人公司搞钱早报 (2026-10-30)</title>
-      <description>科技早咖啡 · AI Agent 与一人公司搞钱早报 (2026-10-30) 主播：云希 &amp;nbsp;&amp;nbsp; 日期：2026-10-30 &amp;nbsp;&amp;nbsp; 播客时长：约 8 分半钟 &amp;nbsp;&amp;nbsp; 核心聚焦：AI Agent · 一人公司 · 搞钱实战 --- 💬 今日晨间金句 (Quote of the Day) 🌟 「未来不是属于会写代码的人，而是属于懂得指挥 AI 军队、把真实问题解决到底的超级个体。」 --- 💰 今日主打：一人公司搞钱案例深度拆解 【案例深度拆解】做微型 AI 自动化客服，单月纯利 3 万美元的搞钱全流程 1. 他做了一件什么事？（业务模式） 坐标海外的一位前大厂打工人，利用业余时间做了一款极简的&apos;多平台自动化客服与私域转化学徒&apos;。整个公司从头到尾只有他一个人，没有办公室，没有招聘任何员工，目前累计付费客户超过 400 家小型网店，每月持</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-10-30.mp3" length="2180736" type="audio/mpeg"/>
-      <guid isPermaLink="false">2026-10-30</guid>
-      <pubDate>Fri, 30 Oct 2026 09:33:14 -0000</pubDate>
-      <itunes:duration>511</itunes:duration>
     </item>
 </channel>
 </rss>
