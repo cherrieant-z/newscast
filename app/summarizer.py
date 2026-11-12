@@ -150,18 +150,18 @@ CASE_SYSTEM = """你是一个中文播客作者，节目每天早上播给「想
 
 只输出 JSON：
 {
- "what": "这是个什么。具体到：名字、形态（App/网站/工具/服务）、以及用它的人能干什么。一句话，不要评价，不要夸",
+ "what": "这是个什么。一句话说清形态（App/网站/工具/服务）和用它的人能干什么。知道名字就把名字放进去；原文没有名字就直接描述它做什么，不要写「名字没写」「原文没说」这类交代——听众只需要知道这是个什么东西",
  "who_made": "做这个东西的人是谁：一个人还是小团队，原来干什么的，做了多久。只写原文有的，原文没写就填空字符串，不要猜",
  "paid": "有没有人真的付钱。只填三个值之一：有 / 没有 / 没写。「有」必须有原文证据（付费用户数、订阅收入、有人买了）。原文说免费、开源、只在送兑换码，一律填「没有」",
- "who_pays": "谁在为什么掏钱。要具体到人群和那个麻烦，不要写「用户」「企业」这种空话",
- "money": "怎么收钱：按次、按月还是买断，多少钱。原文没写价格就说他没写",
- "traction": "有没有人真的付了钱、有多少人在用。原文没写就说没公开",
- "startup": "他要启动这件事需要投入的钱和时间。只写原文提到的；原文没提就直说没提。不要写技术栈，听众不关心他用什么框架",
+ "who_pays": "谁在为什么掏钱。要具体到人群和那个麻烦，不要写「用户」「企业」这种空话。答不出来就填空字符串，不要写「原文没写」——那半句话会被念出来，听众听了一头雾水",
+ "money": "怎么收钱：按次、按月还是买断，多少钱。原文没提价格就填空字符串",
+ "traction": "有没有人真的付了钱、有多少人在用。答不出来就填空字符串",
+ "startup": "他要启动这件事需要投入的钱和时间。只写原文提到的；答不出来就填空字符串。不要写技术栈，听众不关心他用什么框架",
  "barrier": "这件事真正的难处在哪，一个外行最可能卡在哪一步",
  "first_step": "听众今天就能做的一个具体动作。必须动词开头、能落到手上：打开哪个页面、搜什么词、发一句什么话、算哪一个数。注意三点：① 不要叫听众去下载、试用、关注、支持这个产品本身，那不是他能抄的路子；② 默认听众手上还没有自己的产品，所以像「打开你的产品后台」这种前提要先写清楚，或者干脆换成不需要前提的动作；③ 不要「多学习」「多关注」这种",
  "quote": "一句跟这件事相关、能给听众一点行动力的话，不超过 28 字"
 }
-如果 who_pays 和 money 都写不出来，说明原文信息不够，两个都填空字符串。"""
+如果某一段原文确实没有，就留空字符串，不要用「原文没写」去填。"""
 
 
 QUOTE_SYSTEM = """你是一个中文播客的作者，节目每天早上陪听众听十几分钟。
@@ -486,11 +486,17 @@ def _case_ok(case: Dict[str, Any] | None) -> bool:
     if not case:
         return False
     what = (case.get("what") or "").strip()
-    if _spoken_len(what) < 12:
+    # 14 字是下限：「这是一个在线工具」正好卡在线上，「这是一个付费订阅服务，
+    # 用户按月付费」够。短于此的基本都是「一个 xxx 工具」的标题式复述。
+    if _spoken_len(what) < 14:
         return False
     if any(k in what for k in VAGUE_NAME):
         return False
-    if is_similar_title(what, case.get("title") or ""):
+    # 只拦「几乎就是标题」的情况。what 比标题长一倍以上，说明它在展开，
+    # 哪怕用词重合得多也算讲清楚了——「QR Right-Click 是一个 Chrome 插件，
+    # 装上之后在网页图片上点右键就能识别二维码」就是这种。
+    if _spoken_len(what) <= _spoken_len(case.get("title") or "") * 1.2 \
+            and is_similar_title(what, case.get("title") or ""):
         return False
     return True
 
@@ -687,6 +693,33 @@ def _summary_echoes_title(title: str, summary: str) -> bool:
     if names and any(n in (summary or "") for n in names) and len(summary or "") <= len(title or "") * 2:
         return True
     return False
+
+
+def _scrub_what(text: str) -> str:
+    """
+    删掉「具体名字和形态原文没写」这类交代。
+
+    模型很爱在开头补一句「名字没写」，它觉得这是诚实，但听众听到的是
+    「主播自己也不知道在讲什么」。答不出名字就直接描述它做什么，
+    剩下的半句反而更清楚：「这是一个独立开发者运营的按月收费服务」。
+    """
+    kept = []
+    for part in re.split(r"(?<=[，、；;])", text or ""):
+        if any(k in part for k in UNKNOWN_MARKS):
+            continue
+        # 「打开之后能干什么原文也没细说」「具体名字和形态原文没写」——
+        # 各种时态语态的变体，用正则一次盖住
+        if re.search(r"(原文|作者|他)[^，。]{0,6}(没|未|也没|没细)(说|写|提|公开|讲)", part):
+            continue
+        if re.search(r"(名字|形态|具体叫什么).{0,8}(没写|没提|不知道|不明)", part):
+            continue
+        kept.append(part)
+    out = "".join(kept).strip().rstrip("，、；; ")
+    # 删掉中间分句后，会留下「…付费订阅服务，但能让人按月付钱」这种断口。
+    # 句子还能听懂，但那个「但」在耳朵里是个坑。
+    out = re.sub(r"[，,]?\s*(但|但是|不过|而且|所以|因此|而且)[，,]?", "，", out)
+    out = re.sub(r"^[，,]\s*", "", out)
+    return out or (text or "").strip()
 
 
 def _scrub_unknown(text: str) -> str:
@@ -1317,7 +1350,12 @@ class NewsSummarizer:
         """
         payer = _payer_signal(item.get("raw_text") or "")
         if llm.enabled:
-            case = await self._case_with_llm(item)
+            # 模型偶尔会顺手编一个数字，被校验拦下就整条作废。
+            # 同一份原文再问一次多半就对了——为一次发挥失常放弃一条好料不值得。
+            for _ in range(2):
+                case = await self._case_with_llm(item)
+                if case:
+                    break
             if case:
                 # 模型说「有人付钱」但原文只有注册费 / 免费开源，以原文为准。
                 # 这一节按什么口径讲，不能交给模型即兴判断。
@@ -1335,7 +1373,10 @@ class NewsSummarizer:
         raw = re.sub(r"https?://\S+", " ", item.get("raw_text") or item.get("summary") or "")
         raw = re.sub(r"\s+", " ", raw).strip()
         title = _clean_case_title(item.get("title", ""))
-        if len(raw) < 60 or not title:
+        # 收入帖经常是「链接帖」：正文为空，全部信息在标题里——
+        # 「我把月费从 99 涨到 500，付费用户从 30 掉到 12」这一句就够拆了。
+        # 只卡正文长度会把这类最值钱的帖子整条拒掉。
+        if len(raw) + len(title) < 60 or not title:
             return None
 
         data = await llm.json(
@@ -1351,11 +1392,14 @@ class NewsSummarizer:
             k: llm_clean(data.get(k), 110)
             for k in ("what", "who_pays", "money", "traction", "startup", "barrier", "first_step")
         }
+        fields["what"] = _scrub_what(fields["what"])
         # 「有没有人付钱」单独取：这是决定这一节按「赚钱案例」还是「反面样本」讲的开关，
         # 不能含糊。模型只许填 有 / 没有 / 没写 三个值。
         paid_flag = llm_clean(data.get("paid"), 8)
-        who_made = llm_clean(data.get("who_made"), 60)        # 前三段是「钱」，缺一段就说明原文信息不够拆解，退回规则版反而更诚实。
-        if not fields["who_pays"] or not fields["money"]:
+        who_made = llm_clean(data.get("who_made"), 60)        # 只要「这是什么」站得住就能讲。其余的段落有没有，交给后面的
+        # `_case_has_substance` 判断：能答几段讲几段，答不出的不念，
+        # 总比逼着模型把「原文没写」说三遍强。
+        if not fields["what"]:
             return None
         for key, value in fields.items():
             if _has_invented_number(value, raw):
@@ -1380,7 +1424,9 @@ class NewsSummarizer:
             "pain_point": fields["who_pays"],
             "model": fields["money"],
             "tech_stack": "",
-            "revenue": fields["traction"] or "更具体的进账他没公开。",
+            # 空了就空着。以前这里会填「更具体的进账他没公开」，
+            # 那半句进了音频就是纯浪费听众时间。
+            "revenue": fields["traction"],
             "startup": fields["startup"],
             "barrier": fields["barrier"],
             "guide": fields["first_step"],
@@ -1918,11 +1964,15 @@ class NewsSummarizer:
 
             # 谁做的。一句话就够，但它决定听众脑子里有没有画面。
             # 之前整段只有产品名和后台数字，听完记不住任何人。
-            who_sp = _scrub_unknown(clean_who)
+            # 不用「做这个东西的是……」这个句式：who 本身常是「一个人做的」，
+            # 套上去会念成「做这个东西的是一个人做的」。
+            who_sp = re.sub(r"(，|。)?(做了多久|做了多长时间|叫什么名字|名字)[。，]?$", "",
+                            _scrub_unknown(clean_who)).strip()
             if _spoken_len(who_sp) >= 6:
                 add("案例·谁做的", _day_pick([
-                    f"做这个东西的是{_end(who_sp)}",
-                    f"先说说做它的人。{_end(who_sp)}",
+                    f"先说做它的人。{_end(who_sp)}",
+                    f"做它的人本身也值得说一句：{_end(who_sp)}",
+                    f"先认识一下做它的人。{_end(who_sp)}",
                 ], date_str, 15))
 
             # 先判断这个项目到底有没有「向用户收钱」这回事。

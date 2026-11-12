@@ -83,8 +83,10 @@ FRONTIER_SOURCES = [
         "name": "Hacker News·收入帖",
         "kind": "hn_json",
         "url": ("https://hn.algolia.com/api/v1/search_by_date"
-                "?query=paying%20customers&tags=story&numericFilters=points%3E3&hitsPerPage=30"),
+                "?query=paying%20customers&tags=story&numericFilters=points%3E2&hitsPerPage=40"),
         "require_show": False,
+        # 一个月内的都算：这类帖子稀缺，卡两天等于天天放弃
+        "max_days": 30,
     },
     {
         "name": "Product Hunt",
@@ -1144,6 +1146,10 @@ class NewsCollector:
                         # 例外是「收入帖」那一路：它按关键词捞，标题不带 Show HN。
                         if src.get("require_show", True) and not title.lower().startswith("show hn"):
                             continue
+                        # 收入帖那一路是关键词捞的，会混进 YC 公司的 Launch 公告：
+                        # 那是拿了融资的团队，不是「一个人怎么收钱」。
+                        if not src.get("require_show", True) and title.lower().startswith("launch hn"):
+                            continue
                         rows.append({
                             "orig_title": title,
                             # 收入帖的关键信息（原来多少钱、涨到多少、还剩几个付费用户）
@@ -1164,7 +1170,10 @@ class NewsCollector:
                             "published": fi.get("published") or "",
                         })
                 for r in rows:
-                    if _is_stale(r.get("published", ""), max_days=2):
+                    # 新闻类要新鲜（两天内）；收入帖不是新闻，是故事——
+                    # HN 上「paying customers」这类帖本来稀疏，卡两天几乎天天为空。
+                    # 一个月内的收入自述照样能拆成案例，只要节目里没讲过。
+                    if _is_stale(r.get("published", ""), max_days=src.get("max_days", 2)):
                         continue
                     r["source_name"] = src["name"]
                     cands.append(r)
@@ -1181,7 +1190,10 @@ class NewsCollector:
                 continue
             seen_keys.add(key)
             uniq.append(c)
-        return uniq[:28]
+        # 截断会把排在后面的源整个吃掉：Show HN 一天就三十条，
+        # 收入帖按源顺序在其后，卡 28 条等于这一路永远进不了候选。
+        # 收入帖是稀缺资源——几十条里才出一条能拆的——必须让它有位置。
+        return uniq[:45]
 
     async def fetch_frontier(self, client: httpx.AsyncClient, history: "SeenHistory" = None,
                              max_ai: int = 1, max_opc: int = 2) -> Dict[str, List[Dict[str, Any]]]:
@@ -1252,7 +1264,10 @@ class NewsCollector:
                 "summary": summary_zh,
                 # 原文留着：案例段要判断「这条能不能拆出谁付钱、收多少」，
                 # 只有译文摘要不够——数字和语气都在原文里。
-                "raw_text": (src.get("orig_text") or "")[:1200],
+                # 标题也拼进来：HN 的收入帖多数是链接帖，正文是空的，
+                # 「我把月费从 99 涨到 500」这句话只出现在标题上。
+                "raw_text": ((src.get("orig_title") or "") + " "
+                             + (src.get("orig_text") or ""))[:1200],
                 # 前沿条目列表里直接带上「这说明什么」，省得再走一遍规则解读
                 "why_matter": why_zh,
                 "source_name": src["source_name"],
