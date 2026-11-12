@@ -151,6 +151,8 @@ CASE_SYSTEM = """你是一个中文播客作者，节目每天早上播给「想
 只输出 JSON：
 {
  "what": "这是个什么。具体到：名字、形态（App/网站/工具/服务）、以及用它的人能干什么。一句话，不要评价，不要夸",
+ "who_made": "做这个东西的人是谁：一个人还是小团队，原来干什么的，做了多久。只写原文有的，原文没写就填空字符串，不要猜",
+ "paid": "有没有人真的付钱。只填三个值之一：有 / 没有 / 没写。「有」必须有原文证据（付费用户数、订阅收入、有人买了）。原文说免费、开源、只在送兑换码，一律填「没有」",
  "who_pays": "谁在为什么掏钱。要具体到人群和那个麻烦，不要写「用户」「企业」这种空话",
  "money": "怎么收钱：按次、按月还是买断，多少钱。原文没写价格就说他没写",
  "traction": "有没有人真的付了钱、有多少人在用。原文没写就说没公开",
@@ -462,6 +464,137 @@ def _describe_from_raw(item: Dict[str, Any]) -> str:
     return ""
 
 
+# 「一个叫不出名字的在线工具」——开场第一句就承认不知道在讲什么，
+# 后面讲得再清楚，听众也已经跟丢了。这类案例不如不拆。
+VAGUE_NAME = ("叫不出名字", "不知道叫什么", "没记住名字", "名字没提",
+              "一个叫不出", "某个叫", "叫什么名字不确定")
+
+
+def _case_ok(case: Dict[str, Any] | None) -> bool:
+    """
+    这条拆出来能不能让听众听懂。
+
+    判据只有一条但很硬：第一句必须说得出具体的东西。
+    「一个叫不出名字的在线工具」这种开头，后面补多少信息都救不回来——
+    听众脑子里连一个名词都没挂住，剩下的全是从耳朵流过去的水。
+    今天那条去人声工具就是这么翻车的。
+
+    第二种翻车方式更隐蔽：把标题当「这是什么」念一遍。
+    「照片不上传的免费压缩工具」不是一句介绍，是标题，听众听完还是不知道
+    它叫什么、是网页还是软件。
+    """
+    if not case:
+        return False
+    what = (case.get("what") or "").strip()
+    if _spoken_len(what) < 12:
+        return False
+    if any(k in what for k in VAGUE_NAME):
+        return False
+    if is_similar_title(what, case.get("title") or ""):
+        return False
+    return True
+
+
+def _strip_negated(text: str) -> str:
+    """
+    删掉「没有付费用户」「不收钱」这类否定分句。
+
+    判「有没有人付钱」时最容易被否定句骗：一句「完全免费，不收钱」里
+    同时出现「免费」和「收费」，按关键词匹配会得出「他在收钱」的结论。
+    """
+    kept = []
+    for sent in re.split(r"(?<=[。！？])", text or ""):
+        if not sent.strip():
+            continue
+        if re.search(r"(没有|没人|不曾|并不|不是|不收|不收费|未|无)", sent) and \
+                re.search(r"(付费|收费|订阅|价格|定价|收入|买单|revenue|paid|pricing)", sent, re.I):
+            continue
+        kept.append(sent)
+    return "".join(kept)
+
+
+def _payer_signal(raw: str) -> str:
+    """
+    原文能不能看出「有人真的掏了钱」。三个值：有 / 没有 / 没写。
+
+    这是案例分档的唯一依据。`_has_money_signal` 只能说明「提到了钱」，
+    提到钱不等于赚到钱——今天这条插件提到「5 美元注册费」「免费开源」，
+    旧判据把它当成了有钱的案例，结果整段没法讲。
+    """
+    t = _strip_negated(raw or "")
+    low = t.lower()
+    if any(k in t for k in PAID_PROOF_CN) or any(k in low for k in PAID_PROOF_EN):
+        return "有"
+    if re.search(r"(完全免费|免费使用|永久免费|开源|不收费|不收钱|open.?source|it'?s free)", low):
+        return "没有"
+    if re.search(r"(收费|定价|价格|订阅|月费|年费|price|pricing|subscription)", low):
+        return "没写"
+    return "没写"
+
+
+def _has_ops_number(raw: str) -> bool:
+    """有没有真实运营数字（安装量、用户数、下载量）。反面样本全靠这个立住。"""
+    return bool(re.search(
+        r"\d{2,7}\s*(?:次|个|位|名|人)?\s*(?:安装|下载|用户|访问|订阅|注册)"
+        r"|(?:安装|下载|用户|访问)\D{0,4}\d{2,7}"
+        r"|\d{2,7}\s*(?:installs?|users?|signups?|visits?)", raw or "", re.I))
+
+
+def _case_kind(case: Dict[str, Any]) -> str:
+    """
+    这一节该按「赚钱案例」讲，还是按「反面样本」讲。
+
+    今天这条 Chrome 插件是免费开源的，没人付过钱，周活 7 个，却被开场说成
+    「先给你一个可抄的例子」——听众听三分钟也不知道在抄什么。问题不在话术，
+    在于把一个没有商业模式的东西放进了「搞钱案例」的位置。
+
+    所以先分档：
+    - money：原文里有付费用户数、订阅收入、MRR 这类硬证据
+    - sample：做出来了，有真实运营数字，但没人付钱
+
+    分档之后开场、结构、用词全部跟着变，听众的预期才不会落空。
+    """
+    if (case.get("paid") or "").strip().startswith("有"):
+        return "money"
+    blob = " ".join(str(case.get(k) or "") for k in
+                    ("pain_point", "model", "revenue")).lower()
+    if any(k in blob for k in PAID_PROOF_CN) or any(k in blob for k in PAID_PROOF_EN):
+        return "money"
+    return "sample"
+
+
+def _ratio_line(text: str) -> str:
+    """
+    把后台那两个数字翻成人话。
+
+    「安装 188 次，周活 7 个」单独念，听众没有参照系——188 算多还是少？
+    算成「每一百个装过的人里，只有 4 个还在用」，耳朵立刻能判断这生意成没成。
+    这一步不做，案例就永远是一串听不懂的数字。
+    """
+    t = text or ""
+    inst = re.search(r"(?:安装请求|安装量|安装|下载量|下载)\D{0,4}(\d{2,7})\s*次", t) \
+        or re.search(r"(\d{2,7})\s*次(?:安装|下载)", t)
+    act = re.search(r"(?:周活|周活跃|月活|月活跃|日活)\D{0,4}(\d{1,6})\s*个?", t)
+    if not (inst and act):
+        return ""
+    i, a = int(inst.group(1)), int(act.group(1))
+    if i <= 0 or a <= 0 or a >= i * 0.5:
+        return ""
+    pct = a * 100 / i
+    if pct >= 1:
+        return f"换个说法，每一百个装过的人里，只有 {max(1, round(pct))} 个这一周还打开过。"
+    return "换个说法，装过的人里，一百个人中连一个都留不下来。"
+
+
+# 「有人真的掏过钱」的硬证据。
+# 只认「钱进来了」的说法：「注册费」「上架费」「服务器成本」是作者花出去的，
+# 不能算商业模式——今天这条插件就是靠「5 美元一次性注册费」被判成有钱的。
+PAID_PROOF_CN = ("付费用户", "付费客户", "付费订阅", "有人付了", "有人买单",
+                 "已经开始收钱", "月收入", "年收入", "订阅收入", "客单价", "营收")
+PAID_PROOF_EN = ("paying customer", "paying user", "mrr", "arr", "revenue",
+                 "subscribers", "paid plan", "conversion to paid")
+
+
 def _looks_like_revenue(model: str) -> bool:
     """
     这段讲的是「钱怎么进来」还是「钱怎么花出去」。
@@ -478,13 +611,46 @@ def _looks_like_revenue(model: str) -> bool:
                                 "会员费", "广告位", "佣金", "抽佣", "分成"))
 
 
-def _case_has_substance(pain: str, model: str) -> bool:
+# 规则版的兜底话术。它们读起来通顺、听着像人话，但不含任何信息——
+# 「作者没公开收入，这条目前是『做出来了』，还不是『赚到了』」。
+# 这些句子最大的危害不是占时间，是让判断「这段有没有料」的代码以为它有料。
+FILLER_MARKS = (
+    "帖子里没细讲", "帖子里没细说", "他没写自己花了多少", "这类东西的好处是不用先囤货",
+    "作者没公开收入", "还不是「赚到了」", "作者没提收费", "更具体的进账",
+    "现在更像是在验证", "先用现成的免费额度把第一版跑通",
+)
+
+
+def _strip_filler(text: str) -> str:
+    """剔掉兜底话术，只留原文里真有的东西。"""
+    kept = []
+    for sent in re.split(r"(?<=[。！？])", text or ""):
+        if not sent.strip():
+            continue
+        if any(k in sent for k in FILLER_MARKS):
+            continue
+        kept.append(sent)
+    return "".join(kept)
+
+
+def _case_has_substance(pain: str, model: str, rev: str = "", kind: str = "money") -> bool:
     """
     这个案例有没有拆的价值。
 
     「他没写谁在掏钱」+「他没写怎么收钱」两条一起出现，这段就只剩四句
     「没写」，等于占两分钟告诉听众没什么可说。这种情况宁可今天不做案例。
+
+    反面样本（没人付钱）的判断标准不同：钱那两段天然是空的，它靠的是
+    「做到什么程度」或者「客户是谁、麻烦在哪」。
+
+    关键一步是先剔掉规则版的兜底话术再数长度——
+    「作者没公开收入，这条目前是『做出来了』，还不是『赚到了』」有 30 个字，
+    但它一个字的信息都没有。按字数判，这些空话会一直冒充实料，
+    听众听到的就是一连串正确废话。
     """
+    pain, model, rev = _strip_filler(pain), _strip_filler(model), _strip_filler(rev)
+    if kind == "sample":
+        return _spoken_len(rev) >= 15 or _spoken_len(pain) >= 15
     return _spoken_len(pain) >= 12 or _spoken_len(model) >= 12
 
 
@@ -1056,51 +1222,89 @@ class NewsSummarizer:
         本质上就是把同一批故事换个日子重播一遍——这正是听众说「似曾相识」的来源。
         宁可这天没有案例段，也不拿旧故事凑数。
 
-        另一个门槛：帖子必须能看出「怎么收钱 / 有没有人付钱」。
-        纯功能分享（我做了个剪切板工具）放进动态列表就够了，
-        硬拆成案例只会念出三句「作者没细说」，听众一听就知道在凑时长。
+        另一个门槛：帖子得能撑起一段话。
+
+        「能不能撑起」分两档，这是今天这条案例翻车的根源：
+        - 有人掏过钱 → 按「赚钱案例」讲（谁付钱、怎么收）
+        - 做出来了、有真实运营数字、但没人付钱 → 按「反面样本」讲
+          （做到什么程度、卡在哪、这说明什么）
+        两样都没有的，不进案例——那只能念出三句「他没写」，听众一听就知道在凑时长。
+
+        旧判据 `_has_money_signal` 只看「提没提到钱」，被「5 美元注册费」
+        「免费开源」这种话骗过，把没有商业模式的产品放进了搞钱案例的位置。
         """
         recent = [t for t in (recent_leads or []) if t]
 
-        cands = [
-            it for it in (opc_items or [])
-            if not it.get("is_fallback") and it.get("title")
-            and not any(is_similar_title(it["title"], r) for r in recent)
-            and _has_money_signal(it.get("raw_text") or "")
-        ]
-        if cands:
-            def _score(it: Dict[str, Any]) -> int:
-                raw = it.get("raw_text") or ""
-                low = raw.lower()
-                s = 0
-                # 叙述型优先：有正常标点的帖子才拆得出「他为什么做、怎么收钱」。
-                # 纯功能罗列（整段没标点）抽出来全是碎片，念着像机器在念说明书。
-                # 英文帖子用的是 . ! ? 和空格，只数中文标点会把它们全判成碎片。
-                s += min(len(re.findall(r"[。！？，、；]|[.!?](?:\s|$)", raw)), 8)
-                if CASE_NUMBER_RE.search(raw):
-                    s += 3
-                if any(k in raw for k in CASE_PRICE_SIGNALS):
-                    s += 3
-                if any(w in low for w in CASE_TOOL_WORDS):
-                    s += 1
-                # 标题本身不完整（「我做了这个…」「这种 xx 有人有兴趣吗」）的，
-                # 念出来听众根本不知道在说什么，宁可让位给标题清楚的帖子
-                t = it.get("title") or ""
-                if "..." in t or "…" in t or re.search(r"(这个|它|这些)\s*$", t) or len(t) < 8:
-                    s -= 5
-                return s + min(len(raw) // 150, 4)
+        def _score(it: Dict[str, Any]) -> int:
+            raw = it.get("raw_text") or ""
+            low = raw.lower()
+            s = 0
+            # 叙述型优先：有正常标点的帖子才拆得出「他为什么做、怎么收钱」。
+            # 纯功能罗列（整段没标点）抽出来全是碎片，念着像机器在念说明书。
+            # 英文帖子用的是 . ! ? 和空格，只数中文标点会把它们全判成碎片。
+            s += min(len(re.findall(r"[。！？，、；]|[.!?](?:\s|$)", raw)), 8)
+            if CASE_NUMBER_RE.search(raw):
+                s += 3
+            if any(k in raw for k in CASE_PRICE_SIGNALS):
+                s += 3
+            if any(w in low for w in CASE_TOOL_WORDS):
+                s += 1
+            # 有具体名字的优先。听众需要一个名词才能挂住后面的话；
+            # 「我做了个工具」这种帖子，拆出来第一句就只能是「一个工具」。
+            name_blob = (it.get("title") or "") + " " + raw[:200]
+            if re.search(r"[「“\"][^」”\"]{2,14}[」”\"]", name_blob):
+                s += 4
+            elif re.search(r"(?<![A-Za-z])[A-Z][A-Za-z0-9]{2,}(?![A-Za-z])", name_blob):
+                s += 2
+            # 标题本身不完整（「我做了这个…」「这种 xx 有人有兴趣吗」）的，
+            # 念出来听众根本不知道在说什么，宁可让位给标题清楚的帖子
+            t = it.get("title") or ""
+            if "..." in t or "…" in t or re.search(r"(这个|它|这些)\s*$", t) or len(t) < 8:
+                s -= 5
+            return s + min(len(raw) // 150, 4)
 
-            cands.sort(key=_score, reverse=True)
-            picked = cands[0]
-            # 案例会详细讲一遍，动态列表里就不该再出现同一条，
-            # 否则听众会在同一期里把同一件事听两次。
-            try:
-                opc_items.remove(picked)
-            except ValueError:
-                pass
-            return await self._case_from_item(picked, date_str)
+        money_pool: List[Dict[str, Any]] = []
+        sample_pool: List[Dict[str, Any]] = []
+        for it in (opc_items or []):
+            if it.get("is_fallback") or not it.get("title"):
+                continue
+            if any(is_similar_title(it["title"], r) for r in recent):
+                continue
+            raw = it.get("raw_text") or ""
+            if _payer_signal(raw) == "有":
+                money_pool.append(it)
+            elif (_has_ops_number(raw) or len(raw) >= 200
+                  or len(it.get("summary") or "") >= 40):
+                # 没来得及有数字的项目也先当候选：客户是谁、麻烦在哪，
+                # 有时候比安装量更能说明一门生意。拆不出来再换下一条。
+                sample_pool.append(it)
 
-        # 今天没有能看出「怎么收钱」的真实项目，就不讲案例。
+        for pool in (money_pool, sample_pool):
+            if not pool:
+                continue
+            pool.sort(key=_score, reverse=True)
+            # 拆不出来就换下一条：排序第一的帖子经常是「标点多、有数字」，
+            # 但正文根本没写清这是个什么东西。宁可退到第二条，也不要拿
+            # 「一个叫不出名字的工具」开这一节——那是今天这期最难听的一句。
+            for picked in pool[:3]:
+                case = await self._case_from_item(picked, date_str)
+                if not _case_ok(case):
+                    print(f"[Summarizer] 拆不出清楚的东西，换下一条：{picked.get('title', '')[:28]}")
+                    continue
+                if not _case_has_substance(
+                        case.get("pain_point", ""), case.get("model", ""),
+                        rev=case.get("revenue", ""), kind=_case_kind(case)):
+                    print(f"[Summarizer] 拆出来没有实料，换下一条：{picked.get('title', '')[:28]}")
+                    continue
+                # 案例会详细讲一遍，动态列表里就不该再出现同一条，
+                # 否则听众会在同一期里把同一件事听两次。
+                try:
+                    opc_items.remove(picked)
+                except ValueError:
+                    pass
+                return case
+
+        # 今天既没有人在收钱、也没有像样的运营数字，就不讲案例。
         # 固定库留着做历史存档（旧链接还能打开），但不再拿来填今天的节目。
         return None
 
@@ -1111,11 +1315,21 @@ class NewsSummarizer:
         「不可信」有明确判据：出现原文没有的数字，直接作废。
         案例里一个编造的价格，比没有案例更伤——听众照着去试，会被现实打回来。
         """
+        payer = _payer_signal(item.get("raw_text") or "")
         if llm.enabled:
             case = await self._case_with_llm(item)
             if case:
+                # 模型说「有人付钱」但原文只有注册费 / 免费开源，以原文为准。
+                # 这一节按什么口径讲，不能交给模型即兴判断。
+                if (case.get("paid") or "").startswith("有") and payer != "有":
+                    print(f"[Summarizer] 模型判定「有人付钱」，但原文不支持，改按「{payer}」讲")
+                    case["paid"] = payer
+                elif not case.get("paid"):
+                    case["paid"] = payer
                 return case
-        return self._case_from_item_rules(item, date_str)
+        case = self._case_from_item_rules(item, date_str)
+        case["paid"] = payer
+        return case
 
     async def _case_with_llm(self, item: Dict[str, Any]) -> Dict[str, Any] | None:
         raw = re.sub(r"https?://\S+", " ", item.get("raw_text") or item.get("summary") or "")
@@ -1137,7 +1351,10 @@ class NewsSummarizer:
             k: llm_clean(data.get(k), 110)
             for k in ("what", "who_pays", "money", "traction", "startup", "barrier", "first_step")
         }
-        # 前三段是「钱」，缺一段就说明原文信息不够拆解，退回规则版反而更诚实。
+        # 「有没有人付钱」单独取：这是决定这一节按「赚钱案例」还是「反面样本」讲的开关，
+        # 不能含糊。模型只许填 有 / 没有 / 没写 三个值。
+        paid_flag = llm_clean(data.get("paid"), 8)
+        who_made = llm_clean(data.get("who_made"), 60)        # 前三段是「钱」，缺一段就说明原文信息不够拆解，退回规则版反而更诚实。
         if not fields["who_pays"] or not fields["money"]:
             return None
         for key, value in fields.items():
@@ -1157,6 +1374,8 @@ class NewsSummarizer:
         return {
             "title": title,
             "what": fields["what"],
+            "who_made": who_made,
+            "paid": paid_flag,
             "quote": llm_clean(data.get("quote"), 40),
             "pain_point": fields["who_pays"],
             "model": fields["money"],
@@ -1371,12 +1590,15 @@ class NewsSummarizer:
             case_beginner_guide = cur_case["guide"]
             case_startup = cur_case.get("startup", "")
             case_barrier = cur_case.get("barrier", "")
+            case_paid = cur_case.get("paid", "")
+            case_who = cur_case.get("who_made", "")
         else:
             lead_title = ""
             case_what = ""
             case_pain_point = case_model = case_tech_stack = ""
             case_revenue_and_traffic = case_beginner_guide = ""
             case_startup = case_barrier = ""
+            case_paid = case_who = ""
 
         # 整理来源列表（权威去重展示），并把解读带进卡片，让手机端也能直接读到
         all_sources: List[Dict[str, str]] = []
@@ -1541,6 +1763,7 @@ class NewsSummarizer:
             case_pain_point, case_model, case_tech_stack, case_revenue_and_traffic,
             case_beginner_guide, collected_data,
             case_startup=case_startup, case_barrier=case_barrier, case_what=case_what,
+            case_paid=case_paid, case_who=case_who,
         )
 
         return title, lead_title, markdown_content, tts_script, all_sources[:60], category_summary
@@ -1550,6 +1773,7 @@ class NewsSummarizer:
         case_pain: str, case_model: str, case_stack: str, case_rev: str, case_guide: str,
         collected_data: Dict[str, List[Dict[str, Any]]],
         case_startup: str = "", case_barrier: str = "", case_what: str = "",
+        case_paid: str = "", case_who: str = "",
     ) -> str:
         """
         构建「只听就够」的播报底稿。
@@ -1579,6 +1803,7 @@ class NewsSummarizer:
         clean_startup = clean(case_startup)
         clean_barrier = clean(case_barrier)
         clean_what = clean(case_what)
+        clean_who = clean(case_who)
 
         ai_items = [i for i in collected_data.get("AI Agent", []) if (i.get("title") or "").strip()]
         opc_items = [i for i in collected_data.get("一人公司", []) if (i.get("title") or "").strip()]
@@ -1598,7 +1823,12 @@ class NewsSummarizer:
         except Exception:
             date_cn = date_str
 
-        has_case = bool(spoken_lead) and _case_has_substance(clean_pain, clean_model)
+        # 有没有人付钱，决定这一节按什么口径讲。这是今天这条案例翻车的根源：
+        # 一个免费开源插件被放在「搞钱案例」的位置上，听众听三分钟一直在等
+        # 一个根本不存在的收入，自然觉得稀里糊涂。
+        case_kind = "money" if (case_paid or "").strip().startswith("有") else "sample"
+        has_case = bool(spoken_lead) and _case_has_substance(
+            clean_pain, clean_model, rev=clean_rev, kind=case_kind)
         # 块序号要跟着当天实际有几块走：今天有案例，AI 就是第二块。
         # 写死「第一块 AI」的话，有案例那天听众会听到两个「第一块」。
         sec = 1 if has_case else 0
@@ -1606,12 +1836,11 @@ class NewsSummarizer:
         # ---- 开场：先说今天有几块，听众才知道自己在第几块
         plan_bits = []
         if has_case:
-            # 免费 / 开源项目没有「赚钱」这回事，开场就别许这个诺。
-            # 说成「赚钱案例」然后讲四分钟「它是免费的」，听众会觉得被骗。
-            case_has_biz = (_spoken_len(clean_model) >= 10
-                            and _looks_like_revenue(clean_model))
-            plan_bits.append("一个能直接抄的赚钱案例" if case_has_biz
-                             else "一个值得看的真实案例")
+            # 开场就把这一节的性质说清楚。
+            # 没人付钱的项目说成「赚钱案例」，听众会一直等那个不存在的收入；
+            # 反过来，明说「这是个反面样本」，他反而知道该听什么。
+            plan_bits.append("一个能直接抄的赚钱案例" if case_kind == "money"
+                             else "一个值得看的反面样本")
         if ai_items:
             plan_bits.append(f"人工智能圈的 {len(ai_items)} 件事")
         if opc_items:
@@ -1624,13 +1853,24 @@ class NewsSummarizer:
         plan_line = f"今天一共 {len(plan_bits)} 块：{plan}。" if plan_bits else ""
 
         if has_case:
-            open_pool = [
-                "{d}。今天先说一件挺反常识的事：{h}。{plan}",
-                "早上好，{d}。开头先给你一个可抄的例子：{h}。{plan}",
-                "{d}，我们开始。今天最有意思的一条是{h}。{plan}",
-                "{d}。今天先讲一个人怎么把一件小事做成生意的：{h}。{plan}",
-                "早上好，{d}。{h}——这事今天值得花三分钟听听。{plan}",
-            ]
+            if case_kind == "money":
+                open_pool = [
+                    "{d}。今天先说一件挺反常识的事：{h}。{plan}",
+                    "早上好，{d}。开头先给你一个可抄的例子：{h}。{plan}",
+                    "{d}，我们开始。今天最有意思的一条是{h}。{plan}",
+                    "{d}。今天先讲一个人怎么把一件小事做成生意的：{h}。{plan}",
+                    "早上好，{d}。{h}——这事今天值得花三分钟听听。{plan}",
+                ]
+            else:
+                # 反面样本：开场就认下来，别让听众误会成赚钱故事。
+                open_pool = [
+                    "早上好，{d}。今天先看一个没做成的例子：{h}。它没赚到钱，"
+                    "但卡住它的地方，八成也会卡住你。{plan}",
+                    "早上好，{d}。开头这条有点扎心：{h}。东西做出来了，用的人却没几个。{plan}",
+                    "{d}，我们开始。今天第一件事不是成功故事，是个反面样本：{h}。{plan}",
+                    "{d}。先看一个真实的坑——{h}。听完至少能帮你省几个月。{plan}",
+                    "早上好，{d}。今天不从赚到钱的人讲起，从一个没赚到的讲起：{h}。{plan}",
+                ]
             opening = _day_pick(open_pool, date_str, 0).format(
                 d=date_cn, h=spoken_lead.rstrip("。"), plan=plan_line)
         else:
@@ -1662,34 +1902,51 @@ class NewsSummarizer:
         # 听不出在讲什么产品。
         if has_case:
             what_sp = clean_what or _fallback_what(spoken_lead, clean_pain)
-            case_open = _day_pick([
-                "第一块，先拆刚才那个案例。{w}",
-                "第一块，先说这件事具体是怎么回事：{w}",
-                "第一块，回到开头那个例子。{w}",
-            ], date_str, 4).format(w=_end(what_sp))
+            if case_kind == "money":
+                case_open = _day_pick([
+                    "第一块，先拆今天这个案例。{w}",
+                    "第一块，先说这件事具体是怎么回事：{w}",
+                    "第一块，回到开头那个例子。{w}",
+                ], date_str, 4).format(w=_end(what_sp))
+            else:
+                case_open = _day_pick([
+                    "第一块，把刚才那个例子说清楚。{w}",
+                    "第一块，回到开头那个例子，先说它是什么：{w}",
+                    "第一块，拆一下刚才那个样本。{w}",
+                ], date_str, 4).format(w=_end(what_sp))
             add("案例·这是什么生意", case_open)
+
+            # 谁做的。一句话就够，但它决定听众脑子里有没有画面。
+            # 之前整段只有产品名和后台数字，听完记不住任何人。
+            who_sp = _scrub_unknown(clean_who)
+            if _spoken_len(who_sp) >= 6:
+                add("案例·谁做的", _day_pick([
+                    f"做这个东西的是{_end(who_sp)}",
+                    f"先说说做它的人。{_end(who_sp)}",
+                ], date_str, 15))
 
             # 先判断这个项目到底有没有「向用户收钱」这回事。
             # 免费 / 开源 / 自用的项目，讲「谁在掏钱」只会讲出「它是免费的」——
             # 那不是答案，听众会觉得你答非所问。
             has_biz = _spoken_len(clean_model) >= 10 and _looks_like_revenue(clean_model)
             pain_known = _scrub_unknown(clean_pain)
-
-            # 「谁掏钱」这一段，只在真答得出来的时候念。
-            # 内容本身是「他没写谁在掏钱」时还硬套「他盯上的是这样一群人：」，
-            # 会念出「他盯上的是这样一群人：他没写谁在掏钱」——自己打自己。
-            if has_biz and _spoken_len(pain_known) >= 12:
-                add("案例·谁在掏钱", _day_pick([
-                    f"他盯上的是这样一群人：{_end(pain_known)}",
-                    f"愿意为这个掏钱的是这类人：{_end(pain_known)}",
-                    f"这事解决的是这么个麻烦：{_end(pain_known)}",
-                ], date_str, 13))
-
-            # 有些项目压根没有「收钱」这回事（免费 / 开源 / 自用）。这类案例的
-            # 价值不在商业模式，而在它暴露出来的真实数字。硬套「钱是这么收的」
-            # 只会得到「他没写怎么收钱」这种自相矛盾的句子。
             rev_sp = _scrub_unknown(clean_rev)
-            if has_biz:
+
+            if case_kind == "money":
+                # 「谁掏钱」这一段，只在真答得出来的时候念。
+                # 内容本身是「他没写谁在掏钱」时还硬套「他盯上的是这样一群人：」，
+                # 会念出「他盯上的是这样一群人：他没写谁在掏钱」——自己打自己。
+                if _spoken_len(pain_known) >= 12:
+                    # 「愿意为这个掏钱的是这类人：他服务的是那些小站长」——
+                    # 模型给的 who_pays 常以「他服务的是」开头，套上前缀会重复一遍
+                    pk = re.sub(r"^(他)?(服务|瞄准|盯上|面向)的(是|就是)[，,：:]?", "",
+                                pain_known).strip()
+                    add("案例·谁在掏钱", _day_pick([
+                        f"他盯上的是这样一群人：{_end(pk)}",
+                        f"愿意为这个掏钱的是这类人：{_end(pk)}",
+                        f"这事解决的是这么个麻烦：{_end(pk)}",
+                    ], date_str, 13))
+
                 money_line = _merge_money(clean_model, clean_rev)
                 money_prefix = _day_pick([
                     "钱是这么收的：",
@@ -1697,22 +1954,50 @@ class NewsSummarizer:
                     "这门生意的钱从这儿来：",
                 ], date_str, 5)
                 add("案例·怎么收钱", f"{money_prefix}{_end(money_line)}")
-            elif _spoken_len(rev_sp) >= 15:
-                add("案例·真实数字", _day_pick([
-                    f"这东西不靠它收钱，但有几个数字值得你记住：{_end(rev_sp)}",
-                    f"它本身是免费的，所以别指望从这儿看商业模式。倒是这几个数更有用：{_end(rev_sp)}",
-                ], date_str, 14))
+            else:
+                # 没人付钱的项目，这一节的价值不在商业模式，而在「做到什么程度」。
+                # 数字必须翻成人话：188 次安装、周活 7 个，听众没有参照系，
+                # 不知道这是好还是差。算成比例，耳朵立刻能判断。
+                ratio = _ratio_line(rev_sp)
+                if _spoken_len(rev_sp) >= 12:
+                    add("案例·做到什么程度", _day_pick([
+                        f"先说它做到了什么程度。{_end(rev_sp)}{ratio}",
+                        f"它现在的真实状态是这样：{_end(rev_sp)}{ratio}",
+                        f"这东西没打算收钱，但它留下的数字很有用：{_end(rev_sp)}{ratio}",
+                    ], date_str, 14))
+                elif ratio:
+                    add("案例·做到什么程度", ratio)
 
             # 启动成本只念一次；模型说「没提」就不念，别让听众连听两句「没写」
             startup_known = clean_startup and not any(k in clean_startup for k in UNKNOWN_MARKS)
             barrier_sp = _scrub_unknown(clean_barrier)
             if startup_known and barrier_sp:
-                add("案例·难在哪",
-                    f"你要真想干，得准备这些：{_end(clean_startup)}难的还在后头：{_end(barrier_sp)}")
+                # 「得准备这些：没有启动资金」——原文说的是不用花钱，
+                # 套上「要准备」就把意思说反了，这里换个说法
+                if re.match(r"(没有|不用|不需要|零|没什么)", clean_startup.strip()):
+                    lead_st = f"启动这块：{_end(clean_startup)}"
+                else:
+                    lead_st = f"你要真想干，得准备这些：{_end(clean_startup)}"
+                add("案例·难在哪", f"{lead_st}难的还在后头：{_end(barrier_sp)}")
             elif barrier_sp:
-                add("案例·难在哪", f"你要真想干，先想清楚这一关：{_end(barrier_sp)}")
+                # 句子本身常以「难在」开头，前面再套「这一关：」会念成
+                # 「先想清楚这一关：难在没人被带到你面前」，重复且拗口
+                b = re.sub(r"^(难在|难点在于|最难的是|最难的一点是)[，,：:、]?", "", barrier_sp)
+                add("案例·难在哪", f"你要真想干，先想清楚这一关：{_end(b or barrier_sp)}")
             elif startup_known:
                 add("案例·难在哪", f"你要真想干，得准备这些：{_end(clean_startup)}")
+
+            # 反面样本必须有一句「所以呢」，否则听众的结论会是「这人挺惨」。
+            # 这一句把「他没做成」翻译成「你该注意什么」，是整段的落点。
+            if case_kind == "sample":
+                add("案例·这说明什么", _day_pick([
+                    "把东西做出来只是第一关。真正决定生死的是另一件：你有没有办法"
+                    "把需要它的人带到你面前。",
+                    "装过不等于在用。谁花两个月都能做出一个能用的东西，难的是让人第二次打开它。",
+                    "这不是说别做，是说顺序反了。先确认有人愿意为它掏钱，再动手写第一行代码。",
+                    "他要是先找十个目标用户聊一轮，这个产品可能根本不用做。"
+                    "东西做得再顺，也得先有人要。",
+                ], date_str, 16))
 
             if clean_guide:
                 step_prefix = _day_pick([
@@ -1781,6 +2066,12 @@ class NewsSummarizer:
             if reading and not _has_money_signal(item.get("raw_text") or item.get("summary") or ""):
                 if any(k in reading for k in ("收钱", "付费", "闭环", "定价", "收费", "变现")):
                     reading = ""
+            # 摘要已经把话说完了，再念一句几乎一样的「要我说」等于同一件事听两遍。
+            # 今天那条 AI 新闻就念成了「把单点工具串成能自己跑完的流程。要我说，
+            # 它把一堆单点工具串成能自己跑完的流程」——听众第一反应是机器在复读。
+            if reading and s_sp and (
+                    _summary_echoes_title(reading, s_sp) or is_similar_title(reading, s_sp)):
+                reading = ""
             if not reading and category == "一人公司" and not item.get('is_fallback'):
                 spare = [x for x in alt_readings["一人公司"] if x not in used_readings]
                 reading = spare[0] if spare else ""

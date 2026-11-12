@@ -93,7 +93,9 @@ jobs:
             echo "本次无文件变化，跳过提交"
             exit 0
           fi
-          git commit -m "🤖 自动生成每日深度播客 [$(date '+%Y-%m-%d')]"
+          # runner 的时钟是 UTC：北京 03:25 生成的那期，日期会被写成前一天。
+          # 提交信息对不上内容，事后查「哪天出了什么」全靠猜。
+          git commit -m "🤖 自动生成每日深度播客 [$(TZ=Asia/Shanghai date '+%Y-%m-%d')]"
           for i in 1 2 3; do
             if git pull --rebase --autostash origin main && git push; then
               echo "推送成功（第 $i 次尝试）"

@@ -1,0 +1,33 @@
+name: Diagnose Case
+
+# 案例诊断：只跑采集 + 案例挑选，打印「今天会选中哪条、为什么」。
+# 不生成音频、不写 docs、不提交——它的唯一用途是回答
+# 「本地抓不到 V2EX，那生产侧明天挑出来的案例到底像不像样」。
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/diagnose_case.py'
+      - '.github/workflows/diagnose_case.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install edge-tts httpx beautifulsoup4 markdown pydantic pydantic-settings
+      - name: Diagnose
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: python tools/diagnose_case.py "$(TZ=Asia/Shanghai date '+%Y-%m-%d')"
