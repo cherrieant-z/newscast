@@ -226,7 +226,7 @@
           </div>
           <div class="truncate">
             <div id="playerTitle" class="text-[13.5px] font-semibold text-white truncate">每日语音早报</div>
-            <div id="playerSubtitle" class="text-[11.5px] text-slate-400 truncate">AI 动态 · 一人公司 · 宏观大势 · 开源项目</div>
+            <div id="playerSubtitle" class="text-[11.5px] text-slate-400 truncate">AI 动态 · 一人公司 · 宏观大势</div>
           </div>
         </div>
 
@@ -498,8 +498,6 @@
       if (counts['AI Agent']) hookParts.push('AI ' + counts['AI Agent']);
       if (counts['一人公司']) hookParts.push('一人公司 ' + counts['一人公司']);
       if (counts['宏观大势']) hookParts.push('大势 ' + counts['宏观大势']);
-      // 一天只有一个，写条数没意义，直接标出来「今天有个开源项目」
-      if (counts['GitHub 项目']) hookParts.push('开源项目');
       const hookEl = document.getElementById('heroHook');
       if (hookEl) hookEl.innerText = hookParts.length ? hookParts.join(' · ') : '不用看字，戴上耳机就能听完';
 
