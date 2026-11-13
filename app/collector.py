@@ -139,6 +139,47 @@ CASE_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?query={q}"
 CASE_SHOW_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?tags=show_hn"
                    "&numericFilters=points%3E2&hitsPerPage=60")
 
+# ============================================================
+# 第三路：Reddit。
+#
+# 前两路都是从 HN 捞，而 HN 的毛病是「字数不够」——
+# Show HN 大多是一句产品说明加一个链接，作者自述帖也常只写两百字。
+# 素材薄，案例就只能是「他做了个东西」，讲不到「他卡在哪」。
+#
+# Reddit 上的人写日记：为什么动手、第一个月怎么找客户、哪一步失败了、
+# 后来改成什么样。2026-11-13 探活实测：
+#   r/SideProject  .rss  200  25 条里 22 条正文超 300 字，中位数 978 字。
+# 是 HN story_text 的两三倍，且天然第一人称。
+#
+# 限流是唯一要伺候的东西：未认证请求连着拉第二个板块就 429。
+# 所以这里间隔 8 秒、429 不重试直接换下一个——
+# 案例池是「多一条多一份选择」，不值得为某个板块死等。
+# ============================================================
+REDDIT_CASE_SOURCES = [
+    # 主板块：展示自己作品的地方，正文最长。
+    # 实测四个板块里只有它每次都 200，所以固定拉它。
+    ("Reddit·个人项目", "https://www.reddit.com/r/SideProject/.rss"),
+]
+# 轮换板块：按日期取一个，一周轮一圈。
+#
+# 为什么不一起拉：Reddit 对未认证请求的限流是分钟级的，
+# 2026-11-13 实测连着拉四个板块，后三个全部 429——多拉不等于多拿，
+# 只是把流水线拖长 40 秒再空手回来。
+# 轮换的好处是每个板块都能覆盖到，而每天只付出一次请求的代价。
+REDDIT_CASE_ROTATION = [
+    # 讲「我这一路怎么走的」，最贴案例段要的时间线
+    ("Reddit·创业同行", "https://www.reddit.com/r/EntrepreneurRideAlong/.rss"),
+    # 小微 SaaS，最贴「一个人做一门按月收钱的生意」
+    ("Reddit·小微SaaS", "https://www.reddit.com/r/microsaas/.rss"),
+    # 从脏活累活起家（清洗、搬家、维修），最贴「不是技术人也能干」
+    ("Reddit·苦活起家", "https://www.reddit.com/r/sweatystartup/.rss"),
+]
+
+# Reddit 帖子正文的尾巴：RSS 里会带
+# "submitted by /u/xxx [link] [comments]"，不清掉会被念出来。
+_REDDIT_TAIL = re.compile(
+    r"submitted by\s*/u/\S+.*$|\[link\]\s*\[comments\]", re.I | re.S)
+
 # 有一点商业温度就加分：定价、订阅、客户、下载量。
 #
 # 注意这是「加分」不是「门票」。案例要的是「一个人在做一件具体的事，讲得清」，
@@ -1432,6 +1473,87 @@ class NewsCollector:
                 "lane": "product",
                 "is_real": True,
             })
+
+        print(f"[Collector] 案例候选池：前期 {len(pool)} 条（HN 两路）")
+
+        # ---- 第三路：Reddit 长正文（补「讲得清」的供给）----
+        #
+        # 前两路撑住「天天有」，但撑不住「讲得清」：HN 的帖子常常只有标题
+        # 加两百字说明，拆到「他卡在哪」就没词了。Reddit 那边是日记体，
+        # 中位 978 字，正好补这一段。
+        reddit_rows: List[Dict[str, Any]] = []
+        # 主板块固定 + 一个按天轮换的板块。轮换用「年内第几天」取模，
+        # 不引随机数：同一天重跑拿到的是同一个板块，日志可复现。
+        rotation = REDDIT_CASE_ROTATION[
+            datetime.date.today().timetuple().tm_yday % len(REDDIT_CASE_ROTATION)]
+        feeds = REDDIT_CASE_SOURCES + [rotation]
+
+        for idx, (name, feed_url) in enumerate(feeds):
+            if idx:
+                # 12 秒太短，实测第三个就开始 429。20 秒是本地和 Actions
+                # 两边都能过的一档，代价是一天多花二十秒。
+                await asyncio.sleep(20)
+            entries: List[Dict[str, str]] = []
+            for attempt in range(2):
+                try:
+                    resp = await client.get(feed_url, timeout=25.0,
+                                            follow_redirects=True)
+                except Exception as e:
+                    print(f"[Collector] 案例源 {name} 抓取异常: {e}")
+                    break
+                if resp.status_code == 429:
+                    # 429 等一轮再试一次。还不行就走人：
+                    # 案例池少一个板块不影响今天，卡住会拖垮整条流水线。
+                    print(f"[Collector] 案例源 {name} 限流，等 30 秒重试")
+                    await asyncio.sleep(30)
+                    continue
+                if resp.status_code != 200:
+                    print(f"[Collector] 案例源 {name} 返回 {resp.status_code}")
+                    break
+                try:
+                    entries = _parse_feed_items(resp.text)
+                except Exception as e:
+                    print(f"[Collector] 案例源 {name} 解析失败: {e}")
+                break
+
+            added = 0
+            for it in entries:
+                title = (it.get("title") or "").strip()
+                url = (it.get("link") or "").strip()
+                if not title or not url:
+                    continue
+                key = url.split("?")[0].rstrip("/")
+                if key in seen_urls:
+                    continue
+                # 标题是问句的，是「求建议」不是「交结果」。
+                # Reddit 上这类帖子正文也写得长，但它拆出来的是作者的困惑，
+                # 不是他验证过的路——案例段要的是后者。
+                if title.rstrip().endswith("?"):
+                    continue
+                body = _REDDIT_TAIL.sub("", it.get("summary") or "")
+                body = re.sub(r"\s+", " ", body).strip()[:4000]
+                # 三百字以下的多半是「求反馈」「求建议」——
+                # 不是没有故事，是没写出来，拆不出任何一栏。
+                if len(body) < 300:
+                    continue
+                if any(is_similar_title(title, t) for t in seen_titles):
+                    continue
+                if all_history and all_history.seen(title, url):
+                    continue
+                seen_urls.add(key)
+                seen_titles.append(title)
+                added += 1
+                reddit_rows.append({
+                    "title": title,
+                    "raw_text": body,
+                    "summary": "",
+                    "url": url,
+                    "published": it.get("published") or "",
+                    "source_name": name,
+                    "is_real": True,
+                })
+            print(f"[Collector] 案例源 {name}：{len(entries)} 条，可用 {added} 条")
+        pool.extend(reddit_rows)
 
         print(f"[Collector] 案例候选池：{len(pool)} 条（近一个月，已按历史去重）")
         return pool

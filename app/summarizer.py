@@ -1567,6 +1567,14 @@ class NewsSummarizer:
             # 案例段要讲的是一个人的选择和处境，纯技术文档里没有「他」——
             # 同样的字数，前者能拆出动机和转折，后者只能拆出功能列表。
             blob = (it.get("title") or "") + " " + raw
+            # 提问帖不是案例：Reddit 上一半的帖子是「我上线了，去哪里找用户」
+            # 「这样写文案行不行」，正文也不短，但作者没交出结果——
+            # 拆出来的「做法」是他自己的困惑，不是他验证过的路。
+            # 这不是替听众砍行业，是「有没有结果」的区别。
+            if re.search(r"\b(?:any advice|any tips|looking for (?:feedback|advice)|"
+                         r"how do i|where do i|what should i|anyone else|"
+                         r"thoughts\??|recommendations\??|help me)\b", blob, re.I):
+                s -= 6
             if re.search(r"(?<![A-Za-z])(?:I|my|we|our)(?![A-Za-z])", blob):
                 s += 3
             if re.search(r"(去年|当时|后来|最后|一开始|花了|用了|决定|放弃|试过|"

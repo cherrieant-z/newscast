@@ -31,27 +31,49 @@ CANDIDATES = [
     ("V2EX·分享创造", "https://www.v2ex.com/feed/create.xml"),
     ("Product Hunt", "https://www.producthunt.com/feed"),
     ("少数派", "https://sspai.com/feed"),
-    # --- 候选：独立开发者讲收入的社区 ---
+    # --- 在用：案例第三路（Reddit 长正文）---
+    # 2026-11-13 起接入。实测 r/SideProject 稳定 200，25 条里 22 条正文超
+    # 300 字，中位数 978 字——是 HN story_text 的两三倍，且天然第一人称。
     ("Reddit·SideProject", "https://www.reddit.com/r/SideProject/.rss"),
-    ("Reddit·microsaas", "https://www.reddit.com/r/microsaas/.rss"),
-    ("Reddit·indiehackers", "https://www.reddit.com/r/indiehackers/.rss"),
-    ("Reddit·SaaS", "https://www.reddit.com/r/SaaS/.rss"),
-    ("Indie Hackers", "https://www.indiehackers.com/feed"),
-    ("Indie Hackers·rss", "https://www.indiehackers.com/rss"),
-    ("Uneed", "https://www.uneed.best/rss"),
-    ("BetaList", "https://betalist.com/feed"),
-    # --- 候选：HN 按关键词捞「收入帖」，比 Show HN 更贴钱 ---
+    # 轮换板块：一周轮一圈，每天只多付一次请求。连着拉必 429。
+    ("Reddit·创业同行", "https://www.reddit.com/r/EntrepreneurRideAlong/.rss"),
+    ("Reddit·小微SaaS", "https://www.reddit.com/r/microsaas/.rss"),
+    ("Reddit·苦活起家", "https://www.reddit.com/r/sweatystartup/.rss"),
+    # --- 候选：还没接，先留着看 ---
     ("HN·MRR", "https://hn.algolia.com/api/v1/search_by_date?query=MRR&tags=story&hitsPerPage=25"),
     ("HN·paying customers",
      "https://hn.algolia.com/api/v1/search_by_date?query=paying%20customers&tags=story&hitsPerPage=25"),
-    # 真正要上线的那条：带热度过滤，剔掉没人理的碎帖
     ("HN·收入帖(已上线)",
      "https://hn.algolia.com/api/v1/search_by_date?query=paying%20customers"
      "&tags=story&numericFilters=points%3E3&hitsPerPage=30"),
     ("HN·pricing",
      "https://hn.algolia.com/api/v1/search_by_date?query=pricing%20experiment"
      "&tags=story&numericFilters=points%3E3&hitsPerPage=30"),
+    # YouTube 频道 RSS：不需要 API key，也不吃配额，返回最近 15 条
+    # 含标题 + 描述（实测 400~700 字）。链接放这里是为了留个活口：
+    # 接不接另说，能不能拿到得先看得见。
+    ("YT·IndieHackers", "https://www.youtube.com/feeds/videos.xml"
+                        "?channel_id=UCW5YeuERMmlnqo4oq8vwUpg"),
 ]
+
+# ============================================================
+# 已证伪，别再试（2026-11-13 实测）
+#
+# 小红书  https://www.xiaohongshu.com/explore  200 但整页是登录墙。
+#         它没有对外的数据接口，网页端要登录态 + 每次请求带签名，
+#         风控专门盯「不是手机 App 发来的请求」；服务器 IP 抓几次就要验证码，
+#         账号还有被封的风险。自动化抓小红书 = 三天两头挂 + 有封号风险。
+#         真要用，走人工投喂，不要走流水线。
+#
+# B站      api.bilibili.com/x/web-interface/search/type  412。
+#         要 wbi 签名（两个 key 按时间戳混淆），签名算法会变，
+#         维护成本高于它能提供的内容。
+#
+# Indie Hackers  /feed 和 /rss 都是 404。
+#
+# Reddit .json  403。.rss 能过，但连着拉第二个板块就 429，
+#               所以案例侧改成「固定一个 + 按天轮换一个」。
+# ============================================================
 
 
 async def probe(client: httpx.AsyncClient, name: str, url: str) -> None:
