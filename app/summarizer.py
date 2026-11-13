@@ -7,7 +7,7 @@ import hashlib
 from typing import Dict, List, Any, Tuple
 import httpx
 from app.config import settings
-from app.collector import is_similar_title
+from app.collector import is_similar_title, _gh_offtopic
 from app.llm import llm, clean as llm_clean, has_cjk
 
 # ============================================================
@@ -372,6 +372,30 @@ CN_NUM = "一二三四五六七八九十"
 
 def _cn_num(n: int) -> str:
     return CN_NUM[n - 1] if 1 <= n <= len(CN_NUM) else str(n)
+
+
+def _stars_spoken(n) -> str:
+    """
+    星数怎么念。
+
+    「十四万三千一百九十二星」这种精确到个位的说法，念的人费劲，听的人
+    也记不住——星数在这个语境里只用来回答一个问题：这东西是不是已经很成气候。
+    所以一万以上取整到万位。
+    """
+    try:
+        n = int(n or 0)
+    except Exception:
+        return ""
+    if n <= 0:
+        return ""
+    if n >= 100000:
+        # 十万以上再报小数就没用了，「十四点三万」念着绕，记住的也只是「十几万」
+        return f"{round(n / 10000)}万"
+    if n >= 10000:
+        # 一万到十万报一位小数：1.7 万说成「2万」是失真，
+        # 「1.8万」念起来也就多一个字。
+        return f"{n / 10000:.1f}".rstrip("0").rstrip(".") + "万"
+    return str(n)
 
 
 def _day_pick(pool: List[str], date_str: str, salt: int = 0) -> str:
@@ -2296,6 +2320,11 @@ class NewsSummarizer:
         opc_items = [i for i in collected_data.get("一人公司", []) if (i.get("title") or "").strip()]
         macro_items = [i for i in collected_data.get("宏观大势", []) if (i.get("title") or "").strip()]
         has_news = any(collected_data.get(c) for c in ("权威要闻", "参考消息", "新浪财经"))
+        # GitHub 这块一天只讲一个。取到几条只用第一条——
+        # 采集侧本来也只返回一条，这里再卡一道，防止哪天改回批量后
+        # 一期里连讲三个项目，把别的内容挤掉。
+        gh_items = [i for i in collected_data.get("GitHub 项目", [])
+                    if (i.get("gh_name_zh") or "").strip()][:1]
 
         # 宏观这块的筛选放在最前面算，不放在它自己的段落里。
         # 原因：开场要报「今天一共几块」。如果按「采到没有宏观条目」报块数，
@@ -2375,6 +2404,8 @@ class NewsSummarizer:
             plan_bits.append(f"一人公司的 {len(opc_items)} 条路子")
         if macro_matched:
             plan_bits.append("几个跟钱包有关的大环境信号")
+        if gh_items:
+            plan_bits.append("一个 GitHub 上的开源项目")
         if has_news:
             plan_bits.append("国内外和财经的要闻")
         plan = "、".join(plan_bits[:-1]) + "，最后是" + plan_bits[-1] if len(plan_bits) > 1 else "".join(plan_bits)
@@ -2839,7 +2870,72 @@ class NewsSummarizer:
         if macro_lines:
             add("宏观大势", "\n".join(macro_lines))
 
-        # 5. 要闻简报：剩下的国内 / 国际 / 财经要闻，分组带编号念出来。
+        # 5. 今天一个 GitHub 项目
+        #
+        # 放在要闻简报之前，不放在之后：要闻是「剩下的清单」，听感上属于扫尾。
+        # 把一个有内容的块放在扫尾后面，听众已经进入「快结束了」的状态，
+        # 讲什么都不会往脑子里去。
+        #
+        # 这块的难处不是找项目，是说人话。README 里那些「多阶段流水线」
+        # 「企业级」「高可用」的措辞一个都不能进来——听众要听的是
+        # 「它把一段文字变成带字幕的竖屏视频」，不是它内部有几个模块。
+        if gh_items:
+            sec += 1
+            g = gh_items[0]
+            name_zh = clean(g.get("gh_name_zh", ""))
+            stars = _stars_spoken(g.get("gh_stars"))
+            en_spoken = clean(g.get("gh_name_spoken", ""))
+            gh_what = clean(g.get("summary", ""))
+            gh_use = clean(g.get("detail", ""), api=True)
+            gh_you = clean(g.get("why_matter", ""))
+
+            # 中文意译名之外补一次英文原名，否则听众想去找也搜不到。
+            # 太长的不补：一长串英文念出来是噪音，不如只留中文名。
+            name_part = name_zh
+            if en_spoken and en_spoken.lower() != name_zh.lower() and len(en_spoken) <= 26:
+                name_part = f"{name_zh}，在 GitHub 上叫 {en_spoken}"
+            if stars:
+                name_part += f"，{stars}星"
+
+            gh_lines = [_day_pick([
+                f"第{_cn_num(sec)}块，说一个 GitHub 上的东西。{_end(name_part)}",
+                f"第{_cn_num(sec)}块，换换口味，看一个开源的。{_end(name_part)}",
+                f"第{_cn_num(sec)}块，今天给你介绍一个 GitHub 项目。{_end(name_part)}",
+                f"第{_cn_num(sec)}块，这个不是新闻，是个能直接拿来用的东西。{_end(name_part)}",
+            ], date_str, 22)]
+
+            if gh_what and not _hollow(gh_what):
+                gh_lines.append(_day_pick([
+                    f"它是干什么的？{_end(gh_what)}",
+                    f"一句话说清：{_end(gh_what)}",
+                    f"先说这东西是干嘛的。{_end(gh_what)}",
+                ], date_str, 24))
+            if gh_use and not _hollow(gh_use):
+                gh_lines.append(_day_pick([
+                    f"能拿来干什么？{_end(gh_use)}",
+                    f"实际操作里是这么用的：{_end(gh_use)}",
+                    f"落到手上能干的活是这些：{_end(gh_use)}",
+                ], date_str, 25))
+            if gh_you and not _hollow(gh_you):
+                # 模型有时会老实说「用不上，它做视频、你只做音频」。这时引子
+                # 不能是「跟你有什么关系」——下一句立刻自打嘴巴，听起来像
+                # 主播自己都没搞清楚要讲什么。改成先认下来，再往下说。
+                if _gh_offtopic(gh_you):
+                    you_lead = _day_pick([
+                        "实话实说，", "先说清楚，", "不绕弯子，", "这个得说明白，",
+                    ], date_str, 23)
+                else:
+                    you_lead = _day_pick([
+                        "这跟你有什么关系？",
+                        "说到你身上：",
+                        "跟你在做的事对不对得上？",
+                        "这东西对你有什么用？",
+                    ], date_str, 23)
+                gh_lines.append(f"{you_lead}{_end(gh_you)}")
+
+            add("GitHub 项目", "\n".join(gh_lines))
+
+        # 6. 要闻简报：剩下的国内 / 国际 / 财经要闻，分组带编号念出来。
         #
         # 之前这里的做法是「加起来 N 条，念了只会占你时间，我就不念了」——
         # 说一次叫体贴，天天说就是偷懒：听众要的是「今天外面发生了什么」。

@@ -76,6 +76,10 @@ jobs:
         if: github.event_name != 'push'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # 每日一个 GitHub 项目那块要搜仓库、读 README。
+          # 不带 token 的搜索接口一分钟只给十次，六条查询跑到一半就开始 403；
+          # 带上这个自动签发的 token，配额是三十次，够用。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python build_daily.py
 

@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import base64
 import datetime
 import email.utils
 import hashlib
 import html as _html
 import json
+import math
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -22,6 +24,7 @@ from app.llm import llm, clean as llm_clean, has_cjk
 CATEGORIES = [
     "AI Agent",
     "一人公司",
+    "GitHub 项目",
     "宏观大势",
     "新浪财经",
     "参考消息",
@@ -285,6 +288,127 @@ CASE_SELF_TALK = re.compile(
     r"^(?:i|my|we)\b|paying customers?|first customer|"
     r"my (?:saas|app|product|business|startup|service|newsletter|extension|"
     r"plugin|side project|project)", re.I)
+
+
+# ============================================================
+# 每日一个 GitHub 项目
+# ============================================================
+# 这一块不是「今日星标排行」。排行是按分数排的，分数只说明它受欢迎，
+# 不说明它跟听众有关系——一个十万星的浏览器内核和一个三千星的
+# 语音合成工具，在排行榜上差三十名，对「早上通勤听十分钟」的人
+# 差别却是「跟我有关」和「关我什么事」。
+#
+# 所以分两路取，相关度放在星数前面：
+#   1. 相关主题：这条流水线自己干活用的那几类（抓资讯、写稿、合成语音、自动化）
+#   2. 近期新起：近三个月涨起来的大热门，补位用——主题池子讲空了也不至于停更
+#
+# 元组第三个数是「相关度加分」。它只影响排序，不做准入：不相关的热门
+# 项目照样可能被选中（池子空的时候），只是排在后面。替听众判定
+# 「这个领域你不关心」这件事，之前已经错过一次了，不再做。
+GITHUB_TOPICS = [
+    ("播报与语音", "topic:text-to-speech", 45),
+    ("播客与音频", "topic:podcast", 45),
+    ("资讯抓取",   "topic:rss", 45),
+    ("自动化",     "topic:automation", 35),
+    ("模型应用",   "topic:llm", 25),
+]
+
+# 星数分档，按天轮换。
+#
+# 不分档会撞上「池子四个月就干」。接口按星数排序只给前三十名，
+# 天天查同一批，讲过的跳过、跳过就没了——到第三十一天这块就空了。
+# 分四档轮着查，同一批 topic 能看到四倍的项目，而且不会因为某天
+# 只看到千星级的就觉得「不够热」：档位本身在转。
+GITHUB_STAR_BANDS = [
+    ("stars:>20000",   "两万星以上"),
+    ("stars:5000..20000", "五千到两万"),
+    ("stars:1000..5000",  "一千到五千"),
+    ("stars:300..1000",   "三百到一千"),
+]
+# 近期新起那一路的窗口与门槛。三个月、一千五百星：
+# 低于这个数不叫「很受欢迎」，念出来像在给它做推广。
+GITHUB_FRESH_DAYS = 90
+GITHUB_FRESH_MIN_STARS = 1500
+
+GITHUB_SYSTEM = """你是一名中文科技播客的编辑，服务对象是想靠 AI 和写代码做一人公司的普通人。
+
+我会给你一个 GitHub 仓库的信息：名字、简介、主语言、星数、主题标签，以及 README 的前几千字。
+你的任务是把它讲成一段人话——不是复述 README，是让一个没听过这个名字的人，
+听三十秒就知道「这是个什么东西、能拿来干什么、跟我有没有关系」。
+
+【三条必须做到的】
+1. 大白话，能用类比的用类比。「向量数据库」要说成「专门给 AI 存放和查找资料的仓库」。
+2. 不许编造 README 里没有的功能。README 写得含糊，就只说清楚的那部分。
+   宁可少说一句，也不要为了好听多加一个功能——听众照着你说的去试，一试就露。
+3. 不堆术语。出现「框架」「生态」「赋能」「闭环」这类词就重写这句。
+
+【四个字段】
+- name_zh：这个名字在中文里怎么念。英文名就按单词拆开（MoneyPrinterTurbo →
+  Money Printer Turbo），**不要翻成中文词**——翻成「印钞机」，听众拿着它去搜
+  GitHub 是搜不到的。只有原名本身是中文时才照抄。不超过二十六个字符，
+  不带斜杠、下划线、点。
+- what：三十到五十字，说清它是什么东西。要具体到「输入什么、输出什么」。
+- use：六十到九十字，讲两三个它真能干的场景。要落到「谁来用、用来干什么」，
+  不要罗列功能菜单。
+- you：四十到七十字，讲它跟「一条每天早上自动生成的音频播报流水线」有没有交集。
+  那条流水线干的只有四步：抓资讯（RSS、社区帖子）→ 用模型筛选改写 →
+  合成语音 → 发布成播客订阅。它不做视频，也不做图。
+  分三种情况，按实际判断：
+  ① 能直接用在这四步里的某一步（说清是哪一步、省掉多少手工活）
+  ② 用不上，但它的做法有可借鉴的地方（说清借鉴什么）
+  ③ 确实帮不上——就直说帮不上，再讲它更适合谁。
+  把一个做视频的工具说成「丢给播报流水线就能出成片」，是明显的硬编关联。
+  硬编一个关系，比承认无关更伤信任。
+
+【输出 JSON】
+{"name_zh": "...", "what": "...", "use": "...", "you": "..."}
+"""
+
+
+def _readme_plain(text: str) -> str:
+    """
+    README 原文没法直接喂给模型：里面一半是徽章图片、HTML 和代码块。
+
+    清洗顺序有讲究——代码块要先去掉，因为代码块里的 `[...]` 会被后面的
+    链接正则当成链接吃掉；徽章（shields.io 那些）是纯图片，去掉图片就有大半
+    自己消失了，剩下的 `<img>` 标签再统一清。
+    """
+    t = text or ""
+    t = re.sub(r"```.*?```", " ", t, flags=re.S)           # 代码块
+    t = re.sub(r"<!--.*?-->", " ", t, flags=re.S)          # 注释
+    t = re.sub(r"<[^>]{1,200}>", " ", t)                   # HTML 标签
+    t = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", t)            # 图片
+    t = re.sub(r"\[([^\]]{0,80})\]\([^)]*\)", r"\1", t)    # 链接留文字
+    t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.M)    # 标题井号
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
+def _gh_name_speak(full_name: str) -> str:
+    """
+    兜底念法：模型没给出中文名时用。
+
+    MoneyPrinterTurbo 这样驼峰连写，中文音色会念成一串含混的音节；
+    拆成 Money Printer Turbo，至少每个词是分开的。
+    """
+    name = (full_name or "").split("/")[-1]
+    name = name.replace("_", " ").replace("-", " ").replace(".", " ")
+    name = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name)
+    return re.sub(r"\s+", " ", name).strip()
+
+
+# 模型判断「这个项目帮不上这条流水线」时常用的几种说法。
+# 用它做两件事：选品时优先挑帮得上的；播报时换个引子，
+# 免得念成「这跟你有什么关系？——用不上。」
+_GH_OFFTOPIC = re.compile(
+    r"^(?:确实|其实|基本|大体)?(?:用不上|帮不上|搭不上|使不上|用不到|对不上|不搭|"
+    r"没(?:直接)?关系|关系不大|"
+    r"(?:跟|和|对)[^，。]{0,14}(?:没关系|不搭|用不上|用不到|对不上|没(?:直接)?关系|关系不大))")
+
+
+def _gh_offtopic(text: str) -> bool:
+    return bool(_GH_OFFTOPIC.match((text or "").strip()))
 
 
 FRONTIER_SYSTEM = """你是一名中文科技播客的选题编辑，服务对象是想靠 AI 做一人公司的普通人。
@@ -1660,6 +1784,217 @@ class NewsCollector:
         print(f"[Collector] 案例候选池：{len(pool)} 条（近一个月，已按历史去重）")
         return pool
 
+    async def fetch_github_pick(self, client: httpx.AsyncClient,
+                                all_history: "SeenHistory" = None) -> List[Dict[str, Any]]:
+        """
+        每天讲一个 GitHub 项目。返回 0 条或 1 条。
+
+        为什么还要调一次模型：README 是给开发者看的，满篇「supports
+        multi-stage pipeline」「enterprise-grade」；照念等于把说明书念一遍。
+        听众要的是「这东西能把一段文字变成带字幕的竖屏视频」——同一件事的
+        两种说法，中间的翻译必须由模型做。
+
+        没有模型时整块不出（返回空），不做纯模板兜底：把英文 README 的
+        第一段截出来当介绍，念出来是灾难，比没有这块更糟。
+
+        选品打分里星数只占一小半权重，相关度占大头：十万星的浏览器内核
+        和一个三千星的语音工具，对每天早上听十分钟的人，价值不在一个量级。
+        """
+        token = os.environ.get("GITHUB_TOKEN", "").strip()
+        gh_headers = {"Accept": "application/vnd.github+json"}
+        if token:
+            gh_headers["Authorization"] = f"Bearer {token}"
+
+        hist = all_history or SeenHistory()
+
+        cands: Dict[str, Dict[str, Any]] = {}
+        today = datetime.date.today()
+        band_q, band_name = GITHUB_STAR_BANDS[
+            today.timetuple().tm_yday % len(GITHUB_STAR_BANDS)]
+        fresh_q = (f"created:>{ (today - datetime.timedelta(days=GITHUB_FRESH_DAYS)).isoformat() }"
+                   f" stars:>{GITHUB_FRESH_MIN_STARS}")
+        queries = [(tag, f"{topic} {band_q}", rel) for tag, topic, rel in GITHUB_TOPICS]
+        print(f"[Collector] GitHub 项目：今天查「{band_name}」这一档")
+        if token:
+            # 带 token 的搜索接口是每分钟三十次，全部跑完也就一秒多。
+            queries.append(("近期新起", fresh_q, 10))
+            gap = 0.6
+        else:
+            # 不带 token 是每分钟十次。六条加上重跑一次就会撞上 403，
+            # 所以砍到最相关的三条加一条新起——宁可少看两个领域，
+            # 也不要跑到一半全被限流、一条候选都没拿到。
+            queries = queries[:3] + [("近期新起", fresh_q, 10)]
+            gap = 3.0
+
+        for qi, (tag, q, rel) in enumerate(queries):
+            if qi:
+                await asyncio.sleep(gap)
+            url = ("https://api.github.com/search/repositories"
+                   f"?q={_urlquote(q, safe='')}&sort=stars&order=desc&per_page=30")
+            try:
+                resp = await client.get(url, headers=gh_headers, timeout=20.0)
+            except Exception as e:
+                print(f"[Collector] GitHub 搜索（{tag}）异常: {e}")
+                continue
+            if resp.status_code != 200:
+                # 403/429 是限速。不重试：这一块是锦上添花，
+                # 为它多等一分钟会拖累整期节目的出片时间。
+                print(f"[Collector] GitHub 搜索（{tag}）返回 {resp.status_code}")
+                continue
+            items = (resp.json() or {}).get("items") or []
+            kept = 0
+            for r in items:
+                full = (r.get("full_name") or "").strip()
+                html_url = (r.get("html_url") or "").strip()
+                if not full or not html_url:
+                    continue
+                # 讲过的就不再讲。这里按 url 记，因为同一个项目改名或
+                # 换个描述，标题去重会漏过去——url 不会。
+                if hist.seen(full, html_url):
+                    continue
+                desc = (r.get("description") or "").strip()
+                # 没写简介的项目直接跳过：README 也可能没有，
+                # 那就连「它是什么」都没得讲。
+                if not desc:
+                    continue
+                prev = cands.get(full)
+                if prev and prev["relevance"] >= rel:
+                    continue
+                cands[full] = {
+                    "full_name": full,
+                    "stars": int(r.get("stargazers_count") or 0),
+                    "language": r.get("language") or "",
+                    "desc": desc,
+                    "topics": (r.get("topics") or [])[:8],
+                    "pushed": r.get("pushed_at") or "",
+                    "url": html_url,
+                    "relevance": rel,
+                    "tag": tag,
+                }
+                kept += 1
+            print(f"[Collector] GitHub 搜索（{tag}）：{len(items)} 条，可用 {kept} 条")
+
+        if not cands:
+            print("[Collector] GitHub 项目：候选中没有没讲过的，今天这块跳过")
+            return []
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        def _score(c: Dict[str, Any]) -> float:
+            s = float(c["relevance"])
+            # 星数取对数：一千星和一万星的差距，不等于十万星和一百万星的差距，
+            # 直接比数量级会让超级项目把可用的小工具全压死。
+            s += min(math.log10(max(c["stars"], 10)) * 14, 84)
+            try:
+                pushed = datetime.datetime.fromisoformat(
+                    c["pushed"].replace("Z", "+00:00"))
+                idle = (now - pushed).days
+                if idle <= 7:
+                    s += 12
+                elif idle <= 30:
+                    s += 6
+            except Exception:
+                pass
+            return s
+
+        ranked = sorted(cands.values(), key=_score, reverse=True)
+        print(f"[Collector] GitHub 项目候选 {len(ranked)} 个，"
+              f"前三是：{'、'.join(c['full_name'] for c in ranked[:3])}")
+
+        # 一条一条往下试，最多四条。这里有两个不同的淘汰理由，别混在一起：
+        #   - 讲不明白（模型返回空、字段是英文、名字缺失）→ 直接换下一个
+        #   - 讲得明白，但跟这条流水线没关系 → 先记下，继续往下找一个更贴的；
+        #     实在找不到就回过头用它，今天这块照讲，只是实话实说「用不上」
+        #
+        # 后一条正是「最好跟本项目相关」的落法：相关是偏好，不是门槛。
+        # 因为一个项目跟自己无关就当它不存在，等于又替听众挑领域——
+        # 这件事之前已经错过一次了。
+        offtopic_item: Dict[str, Any] = {}
+        for c in ranked[:4]:
+            readme = ""
+            try:
+                rr = await client.get(
+                    f"https://api.github.com/repos/{c['full_name']}/readme",
+                    headers=gh_headers, timeout=20.0)
+                if rr.status_code == 200:
+                    enc = (rr.json() or {}).get("content") or ""
+                    readme = base64.b64decode(enc).decode("utf-8", "ignore")
+            except Exception as e:
+                print(f"[Collector] README 取不到（{c['full_name']}）: {e}")
+
+            body = _readme_plain(readme)[:4500] if readme else c["desc"]
+            data = await llm.json(
+                GITHUB_SYSTEM,
+                f"""仓库：{c['full_name']}
+简介：{c['desc']}
+主语言：{c['language'] or '未标注'}｜星数：{c['stars']}｜主题：{', '.join(c['topics']) or '无'}
+最近更新：{c['pushed'][:10]}
+
+README（截取）：
+{body}
+""",
+                temperature=0.4,
+                max_tokens=900,
+            )
+            if not data:
+                continue
+            name_zh = llm_clean(data.get("name_zh"), 26)
+            what = llm_clean(data.get("what"), 60)
+            use = llm_clean(data.get("use"), 110)
+            you = llm_clean(data.get("you"), 90)
+            # 名字可以是英文（英文项目翻成中文名，听众反而搜不到），
+            # 但「是什么」「能干什么」必须是中文——这两栏是念出来的主体，
+            # 混进英文句子就是噪音。
+            if not (name_zh and has_cjk(what) and has_cjk(use)):
+                print(f"[Collector] GitHub 项目描述不合格，换下一个：{c['full_name']}")
+                continue
+            if is_mostly_english(what) or is_mostly_english(use):
+                continue
+
+            item = {
+                # 标题给前端列表和跨期去重用：中文，能一眼看出是什么。
+                # 取第一分句，不硬截：截在半句上，「AI 自动写脚本、找素」这种
+                # 尾巴挂在列表里很难看。冒号也要切——模型爱写
+                # 「一个 XX 工具：输入……」，冒号前那半句才是「它是什么」。
+                "title": f"{name_zh}｜{re.split(r'[，。；：,;:]', what)[0][:26]}",
+                "category": "GitHub 项目",
+                "summary": what,
+                "detail": use,
+                "why_matter": you,
+                "raw_text": c["desc"],
+                "source_name": "GitHub",
+                "url": c["url"],
+                "published_at": c["pushed"][:19],
+                "is_fallback": False,
+                # 这一块要念的原始信息，不走「摘要推测」那套
+                "gh_name_zh": name_zh,
+                "gh_name_en": c["full_name"].split("/")[-1],
+                # 英文原名怎么念，在这里算好存下来：
+                # 播报侧不该为了一个驼峰拆词再复制一份逻辑。
+                "gh_name_spoken": _gh_name_speak(c["full_name"]),
+                "gh_stars": c["stars"],
+                "gh_language": c["language"],
+                "gh_tag": c["tag"],
+            }
+
+            if _gh_offtopic(you) and not offtopic_item:
+                print(f"[Collector] GitHub 项目（{c['full_name']}）跟流水线无关，"
+                      f"先记着，往下找个更贴的")
+                offtopic_item = item
+                continue
+
+            print(f"[Collector] GitHub 项目选中：{c['full_name']}"
+                  f"（{c['stars']} 星，{c['tag']}）")
+            return [item]
+
+        if offtopic_item:
+            print(f"[Collector] GitHub 项目：没有更贴的，用 {offtopic_item['gh_name_en']}"
+                  f"（跟流水线无关，会照实说）")
+            return [offtopic_item]
+
+        print("[Collector] GitHub 项目：候选都没讲明白，今天这块跳过")
+        return []
+
     async def _fetch_frontier_candidates(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
         """抓今天刚发布的英文产品（Show HN / Product Hunt），只抓不译。"""
         cands: List[Dict[str, Any]] = []
@@ -1926,8 +2261,10 @@ class NewsCollector:
                 self.fetch_authority_yaowen(client, history),
                 self.fetch_ximalaya_breakfast(client),
                 self.fetch_ai_agent_and_opc(client, date_str, history, all_history),
+                self.fetch_github_pick(client, all_history),
             ]
-            sina_res, cankao_res, xuexi_res, xm_res, ai_res = await asyncio.gather(*tasks, return_exceptions=True)
+            sina_res, cankao_res, xuexi_res, xm_res, ai_res, gh_res = await asyncio.gather(
+                *tasks, return_exceptions=True)
 
             # 源级隔离是好事，但静默吞掉异常会让「只剩两个源」看起来像「今天真没新闻」。
             # 每个失败的源都要在日志里留一行，否则出了问题根本无从查起。
@@ -1937,6 +2274,7 @@ class NewsCollector:
                 ("权威要闻", xuexi_res),
                 ("喜马拉雅新闻早餐", xm_res),
                 ("AI/一人公司聚合", ai_res),
+                ("GitHub 项目", gh_res),
             ):
                 if isinstance(src_res, BaseException):
                     print(f"  [采集失败] {src_name}: {type(src_res).__name__}: {src_res}")
@@ -1956,6 +2294,8 @@ class NewsCollector:
                 results["一人公司"] = ai_res.get("一人公司", [])
                 # 只给案例段用的原始候选（英文、未翻译），不进任何前端列表。
                 results["案例候选"] = ai_res.get("案例候选", [])
+            if isinstance(gh_res, list):
+                results["GitHub 项目"] = gh_res
 
         # 全局跨平台去重与纯英文长句过滤校验
         seen_titles = []
