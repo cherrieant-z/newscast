@@ -67,7 +67,7 @@ def _report(case) -> None:
         return
 
     kind = _case_kind(case)
-    label = {"money": "赚钱案例", "sample": "反面样本", "howto": "做法"}.get(kind, kind)
+    label = {"money": "有人付钱", "sample": "没做成", "howto": "讲做法"}.get(kind, kind)
     has_material = _case_has_substance(
         case.get("pain_point", ""), case.get("model", ""),
         rev=case.get("revenue", ""), kind=kind)
@@ -80,10 +80,16 @@ def _report(case) -> None:
     print(f"    口径: {label}")
     print(f"    第一句合格: {_case_ok(case)}")
     print(f"    有实料: {has_material}")
-    for key in ("what", "who_made", "pain_point", "model", "revenue",
-                "startup", "barrier", "guide"):
+    # 段数比字数更能说明「讲不讲得清」：一期案例段要撑四五分钟，
+    # 至少得有六段有内容，光看总字数会被一件事写得很长骗过去。
+    filled = 0
+    for key in ("what", "who_made", "origin", "how", "pain_point", "model",
+                "revenue", "turning", "today", "barrier", "guide"):
         value = case.get(key) or ""
+        if _spoken_len(value) >= 12:
+            filled += 1
         print(f"    {key}({_spoken_len(value)}): {value}")
+    print(f"    有内容的栏位: {filled}/11")
 
 
 if __name__ == "__main__":
