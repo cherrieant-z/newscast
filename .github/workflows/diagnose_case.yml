@@ -1,8 +1,14 @@
 name: Diagnose Case
 
 # 案例诊断：只跑采集 + 案例挑选，打印「今天会选中哪条、为什么」。
-# 不生成音频、不写 docs、不提交——它的唯一用途是回答
-# 「本地抓不到 V2EX，那生产侧明天挑出来的案例到底像不像样」。
+# 不生成音频、不写 docs 正文。
+#
+# 结果写成一份文件提交回来（tools/diagnose/日期.txt）。
+# 之前只打在 Actions 日志里，而日志下载要求仓库管理员权限，等于看不到——
+# 诊断跑成功了却没人知道它说了什么，这个 workflow 就跑得没意义。
+#
+# 刻意不写 docs/：daily_broadcast 的 push 触发是 paths: ['docs/**']，
+# 往 docs 里提交一份诊断报告会顺带触发一次生产构建。
 on:
   workflow_dispatch:
   push:
@@ -11,7 +17,7 @@ on:
       - '.github/workflows/diagnose_case.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnose:
@@ -30,4 +36,19 @@ jobs:
       - name: Diagnose
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: python tools/diagnose_case.py "$(TZ=Asia/Shanghai date '+%Y-%m-%d')"
+        run: |
+          set -o pipefail
+          D="$(TZ=Asia/Shanghai date '+%Y-%m-%d')"
+          mkdir -p tools/diagnose
+          python tools/diagnose_case.py "$D" 2>&1 | tee "tools/diagnose/$D.txt"
+      - name: Commit report
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "没有变化，跳过提交"
+            exit 0
+          fi
+          git config user.name "newscast-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add tools/diagnose
+          git commit -m "案例诊断 $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')"
+          git push
