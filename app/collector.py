@@ -127,6 +127,51 @@ CASE_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?query={q}"
               "&tags=story&numericFilters=points%3E1"
               "&restrictSearchableAttributes=title&hitsPerPage=50")
 
+# 第二路：Show HN 的作品帖。
+#
+# 「钱」那条路一条一天捞不到两条——30 天窗口里，敢报收入的人本来就少。
+# 光靠它，案例段只能是「有时有」。这一路放宽到「说清了做了什么、给谁用、
+# 怎么收钱」的作品帖，归到 C 档（做法）：不假装讲收入，只讲这条路怎么走。
+#
+# 这是「案例稀里糊涂」的解药。11-13 那期讲不下去，不是因为没人报钱，
+# 是因为素材只有一行标题——听众连「他卖的是什么」都不知道，
+# 后面讲难点、讲第一步全悬在半空。产品描述比收入数字更靠前。
+CASE_SHOW_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?tags=show_hn"
+                   "&numericFilters=points%3E2&hitsPerPage=60")
+
+# 有一点商业温度就算数：定价、订阅、客户、下载量。
+# 什么都没有的纯技术作品，讲出来是产品介绍，不是搞钱案例。
+CASE_TRACTION = re.compile(
+    r"pricing|price|subscription|paid|paying|customers?|users?|downloads?|"
+    r"installs?|\bmrr\b|\barr\b|revenue|\$\s?\d|"
+    r"\d[\d,]*\s*(?:users?|customers?|downloads?|installs?|subscribers?)", re.I)
+
+# 必须是「普通人能用、能给别人的活儿省一步」的东西。
+#
+# 这一条比它上面那条更要紧。放宽到 Show HN 之后，池子里混进来过机器人运行时、
+# 语音活动检测库、编程智能体——每一条都能讲清「这是什么」，但听众是技术小白，
+# 听完只会想「这跟我有什么关系」。讲得清但用不上，和讲不清一样是浪费早晨。
+# 一台石材商的库存系统、一个给老师排课的表格，才是这一节该有的东西。
+CASE_FOR_ORDINARY = re.compile(
+    r"small business|small-business|freelanc|creator|shop owner|store owner|"
+    r"restaurant|teacher|tutor|writer|marketer|seller|etsy|shopify|"
+    r"spreadsheet|invoice|bookkeep|inventory|scheduling|appointment|"
+    r"newsletter|course|clinic|salon|landlord|realtor|accountant|"
+    r"non-technical|no-code|without code|without an engineer", re.I)
+
+# 案例段讲不了的东西。硬件、游戏、币，跟「一个人靠 AI 多赚点钱」无关。
+CASE_OFF_TOPIC = re.compile(
+    r"\b(?:game|gaming|crypto|token|nft|blockchain|hardware|keyboard|"
+    r"headphone|smartwatch|robot vacuum)\b", re.I)
+
+# 开发者的基础设施。这类东西讲得清、也值得尊敬，但它不是一人公司案例：
+# 听众没法照着自己做，也用不上。案例段要的是「能抄的路」，不是「厉害的东西」。
+CASE_DEV_INFRA = re.compile(
+    r"\b(?:runtime|sdk|compiler|kernel|protocol|framework|library|"
+    r"kubernetes|container|database engine|ros ?2|robotics|"
+    r"coding agent|agent framework|llm gateway|vector store|"
+    r"inference server|model serving)\b", re.I)
+
 # 「有人在为这个掏钱」的硬证据。只认钱和人数。
 # 「revenue」这个词不算——标题里有它的帖子九成是大厂财报。
 CASE_MONEY_FACT = re.compile(
@@ -1243,6 +1288,59 @@ class NewsCollector:
                     "source_name": name,
                     "is_real": True,
                 })
+        # ---- 第二路：Show HN 作品帖（补 C 档的供给）----
+        try:
+            resp = await client.get(CASE_SHOW_QUERY, timeout=15.0)
+            show_hits = (resp.json().get("hits") or []) if resp.status_code == 200 else []
+        except Exception as e:
+            print(f"[Collector] Show HN 案例源抓取异常: {e}")
+            show_hits = []
+        added = 0
+        for h in show_hits:
+            if added >= 12:
+                break
+            title = (h.get("title") or "").strip()
+            if not title.lower().startswith("show hn"):
+                continue
+            url = h.get("url") or f"https://news.ycombinator.com/item?id={h.get('objectID')}"
+            key = url.split("?")[0].rstrip("/")
+            if key in seen_urls:
+                continue
+            if _is_stale(h.get("created_at") or "", max_days=30):
+                continue
+            body = _strip_html(h.get("story_text") or "")[:1500]
+            # 正文太短的没有描述可拆。一条只有标题的作品帖，
+            # 拆出来就是「他做了个工具」——听众听了等于没听。
+            if len(body) < 240:
+                continue
+            blob = title + " " + body
+            if CASE_OFF_TOPIC.search(blob) or CASE_DEV_INFRA.search(blob):
+                continue
+            if not CASE_TRACTION.search(blob):
+                continue
+            # 有商业温度还不够，得是「普通人那门活儿里的事」。
+            # 少了这一条，机器人运行时和编程智能体会排在小商家工具前面：
+            # 它们同样是「一个人做出来的东西」，但听众照抄不了，也用不上。
+            if not CASE_FOR_ORDINARY.search(blob):
+                continue
+            if any(is_similar_title(title, t) for t in seen_titles):
+                continue
+            if all_history and all_history.seen(title, url):
+                continue
+            seen_urls.add(key)
+            seen_titles.append(title)
+            pool.append({
+                "title": title,
+                "raw_text": body,
+                "summary": "",
+                "url": url,
+                "published": h.get("created_at") or "",
+                "source_name": "HN·独立开发作品",
+                "lane": "product",
+                "is_real": True,
+            })
+            added += 1
+
         print(f"[Collector] 案例候选池：{len(pool)} 条（近一个月，已按历史去重）")
         return pool
 
