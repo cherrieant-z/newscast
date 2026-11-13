@@ -1575,7 +1575,30 @@ class NewsSummarizer:
                          r"how do i|where do i|what should i|anyone else|"
                          r"thoughts\??|recommendations\??|help me)\b", blob, re.I):
                 s -= 6
-            if re.search(r"(?<![A-Za-z])(?:I|my|we|our)(?![A-Za-z])", blob):
+            # 「我」和「我们」不是一回事。
+            #
+            # Show HN 的产品帖也满篇 we/our——那是团队在介绍产品，听众听到的是
+            # 「有个东西存在」，代入不进去。Reddit 那边是「我受够了用 Excel 排
+            # 行程，所以自己写了一个」——同一个句式，前者是说明书，后者是处境。
+            # 所以第一人称单数算硬加分，复数只算一点。
+            if re.search(r"(?<![A-Za-z])(?:I|my)(?![A-Za-z])", blob):
+                s += 4
+            if re.search(r"(?<![A-Za-z])(?:we|our)(?![A-Za-z])", blob):
+                s += 1
+            # 动机句：案例的灵魂是「他为什么动手」。
+            #
+            # 这一栏拆不出来，整段就只剩「他做了个什么东西、怎么收费」——
+            # 听众听完不知道这跟自己有什么关系。而动机句在原文里往往就是
+            # 一句话，抓得到就说明作者真的在讲自己的处境。
+            if re.search(r"(?:i|we)\s+(?:got|was|were|kept|had|am)\s+"
+                         r"(?:tired|frustrated|annoyed|sick|fed up|stuck)|"
+                         r"i\s+(?:couldn'?t|could not|hated|couldn't find)|"
+                         r"every (?:time|week|month) (?:i|we)\s|"
+                         r"spent\s+\d+\s+(?:hours|days|weeks)|"
+                         r"(?:受够了|受不了|实在忍不了|每次都要|老是得|总是要|折腾了)", blob, re.I):
+                s += 5
+            # 标题以「我」开头：作者在讲自己的事，不是在给产品起名。
+            if re.match(r"\s*(?:i|my|we)\b", it.get("title") or "", re.I):
                 s += 3
             if re.search(r"(去年|当时|后来|最后|一开始|花了|用了|决定|放弃|试过|"
                          r"last year|at first|then I|decided|gave up|tried)", blob, re.I):
@@ -1611,79 +1634,82 @@ class NewsSummarizer:
         # 而且听众始终不知道在讲什么生意。先往后找能讲清的，实在没有再用它。
         hollow_backup: Tuple[Dict[str, Any], Dict[str, Any]] | None = None
 
-        for pool, forced_kind in ((money_pool, ""), (sample_pool, ""), (howto_pool, "howto")):
-            if not pool:
+        # 三档不再决定「谁先上」，只决定「怎么说」。
+        #
+        # 原来是按 有钱 → 没做成 → 做法 的顺序依次试，等于把「有没有报收入」
+        # 变成了准入门槛：只要池子里有哪怕一条报过钱的，后面的故事再好也轮不到。
+        # 2026-11-13 那期就是这么选出 Kapso 的——开源引擎、三千字正文、
+        # 提到过付费，但作者讲的是「我们在给企业做这套系统」。
+        # 同一批候选里还有一条「我受够了用 Excel 排行程，所以自己写了一个」，
+        # 两条的区别跟钱无关，跟「有没有一个具体的人」有关。
+        #
+        # 所以合成一个池按分排，kind 交给 _case_kind 事后判。
+        merged: List[Dict[str, Any]] = []
+        _seen_pick = set()
+        for _pool in (money_pool, sample_pool, howto_pool):
+            for _it in _pool:
+                if id(_it) in _seen_pick:
+                    continue
+                _seen_pick.add(id(_it))
+                merged.append(_it)
+        merged.sort(key=_score, reverse=True)
+
+        # 一次试八条：每条一次模型调用，八条是成本上限。
+        # 只有三条的时候经常出现「前三条都拆不出」，第八条往往就是能讲的那条。
+        for picked in merged[:8]:
+            case = await self._case_from_item(picked, date_str)
+            if not _case_ok(case):
+                print(f"[Summarizer] 拆不出清楚的东西，换下一条：{picked.get('title', '')[:28]}")
                 continue
-            pool.sort(key=_score, reverse=True)
-            # 拆不出来就换下一条：排序第一的帖子经常是「标点多、有数字」，
-            # 但正文根本没写清这是个什么东西。宁可退到第二条，也不要拿
-            # 「一个叫不出名字的工具」开这一节——那是今天这期最难听的一句。
-            for picked in pool[:3]:
-                case = await self._case_from_item(picked, date_str)
-                if forced_kind:
-                    case["kind"] = forced_kind
-                if not _case_ok(case):
-                    print(f"[Summarizer] 拆不出清楚的东西，换下一条：{picked.get('title', '')[:28]}")
-                    continue
-                if forced_kind == "howto":
-                    # 做法档要的不是「谁掏钱」，是「这事怎么干」：
-                    # 说清了是什么，再有「难在哪」或「今天能做什么」，就够一段。
-                    # 今天那条 Builderoom 没有客户画像、没有定价，但把双向冷启动
-                    # 和一个能上手的动作讲清楚了——那正是这一段该有的东西。
-                    ok = (_spoken_len(case.get("pain_point") or "") >= 12
-                          or _spoken_len(case.get("model") or "") >= 12
-                          or _spoken_len(case.get("barrier") or "") >= 12
-                          or _spoken_len(case.get("guide") or "") >= 12)
-                else:
-                    ok = _case_has_substance(
-                        case.get("pain_point", ""), case.get("model", ""),
-                        rev=case.get("revenue", ""), kind=_case_kind(case))
-                if not ok and not forced_kind:
-                    # 素材够不上「赚钱案例」也够不上「反面样本」，但不代表没得讲：
-                    # 只要说清了这是什么，再把难在哪或今天能做什么讲明白，
-                    # 就降一档按「做法」讲，而不是整段丢掉。
-                    # 今天那条 Builderoom 就是这样——没有客户画像、没有定价，
-                    # 但双向冷启动那个坎和能上手的动作都写在原文里。
-                    if (_spoken_len(case.get("barrier") or "") >= 12
-                            or _spoken_len(case.get("guide") or "") >= 12):
-                        case["kind"] = "howto"
-                        ok = True
-                if not ok:
-                    print(f"[Summarizer] 拆出来没有实料，换下一条：{picked.get('title', '')[:28]}")
-                    continue
-                # 案例会详细讲一遍，动态列表里就不该再出现同一条，
-                # 否则听众会在同一期里把同一件事听两次。
-                #
-                # 这里必须按链接判，不能只按对象身份：案例池和前沿译稿抓的
-                # 是同一篇帖子，一个是英文原文、一个是中文译稿，对象不同、
-                # 标题不同，只有 URL 一样。今天那条「月费 99 涨到 500」
-                # 就同时在两处，只在案例段讲一遍才对。
-                # 记下这条的来源，两个用途：
-                #   1. 前端案例卡片要能点回原帖
-                #   2. 跨期去重靠 sources 里的 url 做永久记忆——案例池里的帖子
-                #      不进 sources 列表，不记这一笔，这篇明天还会被抓到、被选中，
-                #      同一门生意一周能讲三次。
-                case["url"] = picked.get("url") or ""
-                case["source_name"] = picked.get("source_name") or ""
-                case["is_real"] = True
+            ok = _case_has_substance(
+                case.get("pain_point", ""), case.get("model", ""),
+                rev=case.get("revenue", ""), kind=_case_kind(case))
+            if not ok:
+                # 素材够不上「赚钱案例」也够不上「反面样本」，但不代表没得讲：
+                # 只要说清了这是什么，再把难在哪或今天能做什么讲明白，
+                # 就降一档按「做法」讲，而不是整段丢掉。
+                # 今天那条 Builderoom 就是这样——没有客户画像、没有定价，
+                # 但双向冷启动那个坎和能上手的动作都写在原文里。
+                if (_spoken_len(case.get("barrier") or "") >= 12
+                        or _spoken_len(case.get("guide") or "") >= 12):
+                    case["kind"] = "howto"
+                    ok = True
+            if not ok:
+                print(f"[Summarizer] 拆出来没有实料，换下一条：{picked.get('title', '')[:28]}")
+                continue
+            # 案例会详细讲一遍，动态列表里就不该再出现同一条，
+            # 否则听众会在同一期里把同一件事听两次。
+            #
+            # 这里必须按链接判，不能只按对象身份：案例池和前沿译稿抓的
+            # 是同一篇帖子，一个是英文原文、一个是中文译稿，对象不同、
+            # 标题不同，只有 URL 一样。今天那条「月费 99 涨到 500」
+            # 就同时在两处，只在案例段讲一遍才对。
+            # 记下这条的来源，两个用途：
+            #   1. 前端案例卡片要能点回原帖
+            #   2. 跨期去重靠 sources 里的 url 做永久记忆——案例池里的帖子
+            #      不进 sources 列表，不记这一笔，这篇明天还会被抓到、被选中，
+            #      同一门生意一周能讲三次。
+            case["url"] = picked.get("url") or ""
+            case["source_name"] = picked.get("source_name") or ""
+            case["is_real"] = True
 
-                # 说得出「这是什么」，这一段才立得住：听众脑子里得先有一个
-                # 具体东西，后面「谁掏钱、怎么收、难在哪」才有地方放。
-                # 说不出就先记下来，接着往后试——同一天往往还有一条能讲清的。
-                if _hollow(case.get("what")):
-                    if hollow_backup is None:
-                        hollow_backup = (case, picked)
-                    print(f"[Summarizer] 说不出是什么生意，先存着找下一条："
-                          f"{picked.get('title', '')[:26]}")
-                    continue
+            # 说得出「这是什么」，这一段才立得住：听众脑子里得先有一个
+            # 具体东西，后面「谁掏钱、怎么收、难在哪」才有地方放。
+            # 说不出就先记下来，接着往后试——同一天往往还有一条能讲清的。
+            if _hollow(case.get("what")):
+                if hollow_backup is None:
+                    hollow_backup = (case, picked)
+                print(f"[Summarizer] 说不出是什么生意，先存着找下一条："
+                      f"{picked.get('title', '')[:26]}")
+                continue
 
-                if opc_items:
-                    picked_url = (picked.get("url") or "").split("?")[0].rstrip("/")
-                    for it in list(opc_items):
-                        it_url = (it.get("url") or "").split("?")[0].rstrip("/")
-                        if it is picked or (picked_url and it_url == picked_url):
-                            opc_items.remove(it)
-                return case
+            if opc_items:
+                picked_url = (picked.get("url") or "").split("?")[0].rstrip("/")
+                for it in list(opc_items):
+                    it_url = (it.get("url") or "").split("?")[0].rstrip("/")
+                    if it is picked or (picked_url and it_url == picked_url):
+                        opc_items.remove(it)
+            return case
 
         # 全部候选都说不出「这是什么」。这时候退到那个只有数字的素材，
         # 演讲层会把空壳段整段跳过——留下的是「这组数字为什么反常 + 难在哪
