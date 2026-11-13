@@ -43,7 +43,10 @@ jobs:
           python tools/diagnose_case.py "$D" 2>&1 | tee "tools/diagnose/$D.txt"
       - name: Commit report
         run: |
-          if git diff --quiet && git diff --cached --quiet; then
+          # 用 status --porcelain 而不是 git diff：
+          # 首次生成的那份报告是「未跟踪文件」，git diff 看不见它，
+          # 第一版就因为这个判断直接跳过了提交。
+          if [ -z "$(git status --porcelain)" ]; then
             echo "没有变化，跳过提交"
             exit 0
           fi
