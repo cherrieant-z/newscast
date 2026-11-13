@@ -8,6 +8,7 @@ import json
 import os
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import List, Dict, Any
 from urllib.parse import quote as _urlquote
 import httpx
@@ -179,6 +180,81 @@ REDDIT_CASE_ROTATION = [
 # "submitted by /u/xxx [link] [comments]"，不清掉会被念出来。
 _REDDIT_TAIL = re.compile(
     r"submitted by\s*/u/\S+.*$|\[link\]\s*\[comments\]", re.I | re.S)
+
+# 人工投喂目录。格式见 cases/README.md，规则只有三条：
+# 第一行是标题、「链接：」那行可选、正文至少一百二十字。
+MANUAL_CASE_DIR = Path(__file__).resolve().parent.parent / "cases" / "inbox"
+
+
+def _load_manual_cases(dir_path: Path) -> List[Dict[str, Any]]:
+    """
+    把 cases/inbox/ 里的 .txt 读成案例候选。
+
+    为什么不留格式要求：投喂这件事本身已经够麻烦了，
+    再要求「用三个井号分隔标题和正文」只会让人不想投。
+    所以约定压到最小——第一行是标题，其余是正文，
+    「链接：」那一行认出来就拿来去重，认不出就按内容指纹。
+
+    标题过长（超过八十个字）说明这个人没写标题，直接粘了一大段：
+    这时不出标题，正文从第一行开始，标题取前六十字顶上。
+    """
+    out: List[Dict[str, Any]] = []
+    if not dir_path.exists():
+        return out
+    files = sorted(dir_path.glob("*.txt")) + sorted(dir_path.glob("*.md"))
+    for fp in files:
+        try:
+            raw = fp.read_text(encoding="utf-8", errors="ignore").strip()
+        except Exception as e:
+            print(f"[Collector] 投喂文件读不了 {fp.name}: {e}")
+            continue
+        if not raw:
+            continue
+
+        url = ""
+        body_lines: List[str] = []
+        for line in raw.splitlines():
+            m = re.match(r"^\s*(?:链接|原文|网址|url|source|link)\s*[:：]\s*(\S+)",
+                         line, re.I)
+            if m and not url:
+                url = m.group(1).strip()
+                continue
+            body_lines.append(line.rstrip())
+
+        while body_lines and not body_lines[0].strip():
+            body_lines.pop(0)
+        if not body_lines:
+            continue
+
+        head = body_lines[0].lstrip("#").strip()
+        if len(head) <= 80:
+            title = head or f"投喂案例 {fp.stem}"
+            body = re.sub(r"\s+", " ", "\n".join(body_lines[1:])).strip()
+        else:
+            title = head[:60]
+            body = re.sub(r"\s+", " ", "\n".join(body_lines)).strip()
+        if len(body) < 120:
+            # 一百二十字以下拆不出「这是什么 / 卡在哪 / 今天能干啥」，
+            # 播出来只会是三句空话。投喂是人工判断过的，但这一点省不掉。
+            print(f"[Collector] 投喂文件太短，跳过：{fp.name}（正文 {len(body)} 字）")
+            continue
+
+        if not url:
+            # 没有链接就按内容指纹当身份：同一份内容投两次只播一次。
+            url = "manual://" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+        out.append({
+            "title": title,
+            "raw_text": body[:6000],
+            "summary": "",
+            "url": url,
+            # 日期按「今天」算，不是作弊：投喂的意思是「我想在最近这期听到它」。
+            # 留空的话它在打分里拿不到新鲜度那几分，天天被自动抓的当天帖子压住，
+            # 投了等于没投。
+            "published": datetime.date.today().isoformat(),
+            "source_name": "人工投喂",
+            "is_real": True,
+        })
+    return out
 
 # 有一点商业温度就加分：定价、订阅、客户、下载量。
 #
@@ -1554,6 +1630,32 @@ class NewsCollector:
                 })
             print(f"[Collector] 案例源 {name}：{len(entries)} 条，可用 {added} 条")
         pool.extend(reddit_rows)
+
+        # ---- 第四路：人工投喂 ----
+        #
+        # 小红书接不了（登录墙 + 每请求签名 + 风控盯非 App 请求，账号还有
+        # 封号风险，实测结论记在 tools/probe_sources.py），但上面确实是一人
+        # 公司案例最密集的地方，放弃可惜。折中成「人肉搬一条」：
+        # 正文丢进 cases/inbox/，当成正常候选参与打分。
+        #
+        # 投喂的东西不设时间窗——用户挑的时候已经判断过值不值得讲，
+        # 代码不该再问「这是几号的」。
+        try:
+            manual = _load_manual_cases(MANUAL_CASE_DIR)
+        except Exception as e:
+            print(f"[Collector] 投喂目录读取失败（不影响本期）：{e}")
+            manual = []
+        manual_added = 0
+        for it in manual:
+            if all_history and all_history.seen(it["title"], it["url"]):
+                continue
+            if any(is_similar_title(it["title"], t) for t in seen_titles):
+                continue
+            seen_titles.append(it["title"])
+            pool.append(it)
+            manual_added += 1
+        if manual:
+            print(f"[Collector] 人工投喂：{len(manual)} 条，可用 {manual_added} 条")
 
         print(f"[Collector] 案例候选池：{len(pool)} 条（近一个月，已按历史去重）")
         return pool

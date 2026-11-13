@@ -1600,6 +1600,11 @@ class NewsSummarizer:
             # 标题以「我」开头：作者在讲自己的事，不是在给产品起名。
             if re.match(r"\s*(?:i|my|we)\b", it.get("title") or "", re.I):
                 s += 3
+            # 人工投喂的加一点分量：那是人翻过一遍、判断过值得讲才搬进来的。
+            # 只加一点不加满：投喂的多半是「这类案例我感兴趣」，
+            # 不一定是「今天就得播这条」，压过一切反而会把自动那几路废掉。
+            if it.get("source_name") == "人工投喂":
+                s += 8
             if re.search(r"(去年|当时|后来|最后|一开始|花了|用了|决定|放弃|试过|"
                          r"last year|at first|then I|decided|gave up|tried)", blob, re.I):
                 s += 2
