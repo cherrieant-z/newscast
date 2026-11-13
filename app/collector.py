@@ -139,44 +139,28 @@ CASE_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?query={q}"
 CASE_SHOW_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?tags=show_hn"
                    "&numericFilters=points%3E2&hitsPerPage=60")
 
-# 有一点商业温度就算数：定价、订阅、客户、下载量。
-# 什么都没有的纯技术作品，讲出来是产品介绍，不是搞钱案例。
+# 有一点商业温度就加分：定价、订阅、客户、下载量。
+#
+# 注意这是「加分」不是「门票」。案例要的是「一个人在做一件具体的事，讲得清」，
+# 不是「有人报过收入」——把收入当门票会把大量能讲透的素材挡在门外，
+# 逼着节目去追那几条只有数字、没有产品描述的帖子，反而是案例讲不清的根源。
 CASE_TRACTION = re.compile(
     r"pricing|price|subscription|paid|paying|customers?|users?|downloads?|"
     r"installs?|\bmrr\b|\barr\b|revenue|\$\s?\d|"
     r"\d[\d,]*\s*(?:users?|customers?|downloads?|installs?|subscribers?)", re.I)
 
-# 必须是「普通人能用、能给别人的活儿省一步」的东西。
+# 「这件事落在谁的活儿上」——也是加分项，用来排序，不做准入。
 #
-# 这一条比它上面那条更要紧。放宽到 Show HN 之后，池子里混进来过机器人运行时、
-# 语音活动检测库、编程智能体——每一条都能讲清「这是什么」，但听众是技术小白，
-# 听完只会想「这跟我有什么关系」。讲得清但用不上，和讲不清一样是浪费早晨。
-# 一台石材商的库存系统、一个给老师排课的表格，才是这一节该有的东西。
+# 之前这里是硬过滤（只留小商家、教师、自由职业者那几类），结果是石材商的
+# 库存系统能过、机器人运行时被砍。行业判断不该由代码替听众做：一门生意
+# 讲不讲得清、能不能拆出「他怎么干、卡在哪」，跟它属于哪个行业没关系。
+# 保留这个正则只做排序偏好——同样讲得清的两条，先讲落在具体活儿上的那条。
 CASE_FOR_ORDINARY = re.compile(
     r"small business|small-business|freelanc|creator|shop owner|store owner|"
     r"restaurant|teacher|tutor|writer|marketer|seller|etsy|shopify|"
     r"spreadsheet|invoice|bookkeep|inventory|scheduling|appointment|"
     r"newsletter|course|clinic|salon|landlord|realtor|accountant|"
     r"non-technical|no-code|without code|without an engineer", re.I)
-
-# 案例段讲不了的东西。硬件、游戏、币，跟「一个人靠 AI 多赚点钱」无关。
-CASE_OFF_TOPIC = re.compile(
-    r"\b(?:game|gaming|crypto|token|nft|blockchain|hardware|keyboard|"
-    r"headphone|smartwatch|robot vacuum)\b", re.I)
-
-# 开发者的基础设施。这类东西讲得清、也值得尊敬，但它不是一人公司案例：
-# 听众没法照着自己做，也用不上。案例段要的是「能抄的路」，不是「厉害的东西」。
-CASE_DEV_INFRA = re.compile(
-    r"\b(?:runtime|sdk|compiler|kernel|protocol|framework|library|"
-    r"kubernetes|container|database engine|ros ?2|robotics|"
-    r"coding agent|agent framework|llm gateway|vector store|"
-    r"inference server|model serving)\b", re.I)
-
-# 「有人在为这个掏钱」的硬证据。只认钱和人数。
-# 「revenue」这个词不算——标题里有它的帖子九成是大厂财报。
-CASE_MONEY_FACT = re.compile(
-    r"\$\s?\d|\bmrr\b|\barr\b|paying customers?|paid customers?|"
-    r"\d[\d,]*\s*(?:paying|paid|subscribers?|customers?)", re.I)
 
 # 作者自述：说的是「我做的这门生意」。
 # 没有这一条的多半是新闻、围观、技术炫技，拆不出谁在付钱。
@@ -199,7 +183,9 @@ FRONTIER_SYSTEM = """你是一名中文科技播客的选题编辑，服务对�
   一个客户付多少钱——这类内容听众能直接对照自己的营生，比新产品发布有用得多
 - 排除：纯硬件、游戏、加密货币、招聘工具、纯营销套壳、需要大团队才能做的事、
   政治宗教内容，以及纯讨论/求建议的帖子（没有具体产品或具体数字）
-- 目标 2~4 条。如果候选里既有偏技术的，也有偏「普通人拿它赚钱」的，两类都要有；
+- 目标 3~5 条。宁可多给一条讲得清的，也不要为了凑数把一句口号翻成中文；
+  但也不要只给两条就收工——每期这两块一共要撑十来分钟，条数少了撑不住。
+  如果候选里既有偏技术的，也有偏「普通人拿它赚钱」的，两类都要有；
   确实一个都不行才返回空数组，不要凑数
 
 【分类】
@@ -212,9 +198,20 @@ FRONTIER_SYSTEM = """你是一名中文科技播客的选题编辑，服务对�
 - 不要出现英文句子
 - 不许编造原文没有的信息：没有数字就不写数字
 
+【每条要写三层，不能只有一句概括】
+听众是早上用耳朵听，看不到链接、不会去搜。一句「它把流程串起来了」
+听完等于没听——他既不知道这东西长什么样，也不知道跟他有没有关系。
+所以每条都要写三层：
+1. summary_zh：它做了什么、给谁用（形态 + 用途，40~70 字）
+2. detail_zh：原文里最有信息量的一个具体细节（50~110 字）。可以是
+   用户具体怎么操作、支持什么不支持什么、一个真实数字、一个已有的坑。
+   要具体到听众能在脑子里过一遍，不要重复 summary 的说法，不要写评价。
+   原文里确实没有具体细节的，就退回讲清「它解决的那一步具体是什么」。
+3. why_zh：一句话说清这反映了什么趋势（不超过 34 字）
+
 只输出 JSON，格式：
-{"items":[{"i":3,"category":"AI","title_zh":"中文标题","summary_zh":"两句话说清它做了什么、给谁用","why_zh":"一句话说清这反映了什么趋势"}]}
-i 是候选编号；title_zh 不超过 26 字，summary_zh 40~70 字，why_zh 不超过 34 字。"""
+{"items":[{"i":3,"category":"AI","title_zh":"中文标题","summary_zh":"它做了什么、给谁用","detail_zh":"原文里最有信息量的一个具体细节","why_zh":"一句话说清这反映了什么趋势"}]}
+i 是候选编号；title_zh 不超过 26 字。"""
 
 
 # 「这条帖子讲到钱了吗」——决定谁拿到那 3 个名额。
@@ -250,6 +247,26 @@ def is_mostly_english(text: str) -> bool:
     chinese_chars = re.findall(r'[\u4e00-\u9fa5]', text)
     # 如果文本较长且中文字符极其稀少（低于 5 个汉字），判定为未翻译的纯英文长句
     return len(text) > 20 and len(chinese_chars) < 5
+
+
+def _detail_is_echo(detail: str, summary: str) -> bool:
+    """
+    「具体细节」这一层是不是只是把摘要重说了一遍。
+
+    `is_similar_title` 不能拿来判这个：它按字符集算 Jaccard，
+    而细节本来就是摘要的延伸，两段话用的字高度重叠——实测一条合格的
+    细节（摘要讲「不按坐席收费」，细节讲「创始人为什么这么改」）
+    被判成 0.78 相似直接丢掉，四条译稿的细节全被清空。
+    这里改成两条更窄的判据：整段被包含，或字符集几乎完全一样。
+    """
+    d = re.sub(r"[^\w\u4e00-\u9fa5]", "", detail or "")
+    s = re.sub(r"[^\w\u4e00-\u9fa5]", "", summary or "")
+    if not d or not s:
+        return False
+    if d in s or s in d:
+        return True
+    jaccard = len(set(d) & set(s)) / max(1, len(set(d) | set(s)))
+    return jaccard > 0.9
 
 
 def is_similar_title(t1: str, t2: str) -> bool:
@@ -1081,8 +1098,17 @@ class NewsCollector:
                     # 旧文不要：别让「过去 24 小时」里混进几年前的帖子
                     if _is_stale(fi.get("published", "")):
                         continue
-                    # 摘要先洗掉付费墙 / 推广模板句，再压到一两句
-                    summary = _clean_summary(fi.get("summary", "")[:400])
+                    # 摘要先洗掉付费墙 / 推广模板句，再压到一两句。
+                    # 注意顺序：先洗全文再截断，不能先硬截 400 字——
+                    # 硬截会把最后一句切成半截，念出来就是
+                    # 「似乎只要能把其中的Trick摸清楚」这种没头没尾的残片。
+                    summary = _clean_summary(fi.get("summary", ""))
+                    if len(summary) > 400:
+                        summary = summary[:400]
+                        cut = max(summary.rfind("。"), summary.rfind("！"),
+                                  summary.rfind("？"))
+                        if cut > 160:
+                            summary = summary[:cut + 1]
                     # 正文只有链接和样板词的条目，对听众等于什么都没说，
                     # 还会占掉「一人公司」那三个宝贵名额，直接丢。
                     if category == "一人公司" and _is_junk_summary(fi.get("summary", "")):
@@ -1114,9 +1140,14 @@ class NewsCollector:
                             "title": title,
                             "category": category,
                             "summary": summary,
-                            # 案例拆解需要「怎么收钱 / 有没有订阅」这类细节，
-                            # 60 字的播报摘要装不下，单独留一份更长的原文
-                            "raw_text": (_clean_summary(fi.get("summary", "")[:1500]) if category == "一人公司" else ""),
+                            # 正文全文都留着，不再只给「一人公司」。
+                            #
+                            # 原先 AI 条目的 raw_text 一律是空字符串，
+                            # 播报时手上就只有一行标题和一句摘要——
+                            # 「英伟达最大的雷，是没接班人」这条，摘要干脆是
+                            # 「CFO 接任临时 CEO」，念完听众不知道前因后果。
+                            # 稿子讲不清楚，一大半是因为素材到这里就被丢掉了。
+                            "raw_text": _clean_summary(fi.get("summary", "")[:2000]),
                             "why_matter": "",
                             "source_name": src["name"],
                             "url": fi.get("link", ""),
@@ -1149,7 +1180,61 @@ class NewsCollector:
                         continue
                     picked.append(cand)
             round_idx += 1
-        return picked[:max_items]
+        picked = picked[:max_items]
+
+        # ---- 补正文：RSS 只给标题的源，到这里手上只有一行标题 ----
+        #
+        # InfoQ 的 RSS 摘要就是「点击查看原文>」，量子位的是「「CAD拆解」」，
+        # 两条都是七个字。这类条目进稿子以后只能是「第1条，某某发布了什么」，
+        # 后面接一句万能判断——听众听了十分钟，一条具体的事都没记住。
+        # 稿子讲不清楚，一大半不是写的问题，是素材在采集这一步就只剩标题了。
+        #
+        # 只对最终入选的几条抓，每条一次请求，不会拖慢整期。
+        need = [p for p in picked
+                if len(p.get("raw_text") or "") < 200 and p.get("url")]
+        if need:
+            bodies = await asyncio.gather(
+                *[self._fetch_article_body(client, p["url"]) for p in need],
+                return_exceptions=True)
+            for p, body in zip(need, bodies):
+                if isinstance(body, str) and len(body) > len(p.get("raw_text") or ""):
+                    p["raw_text"] = body
+            got = sum(1 for p in need if len(p.get("raw_text") or "") >= 200)
+            if got:
+                print(f"[Collector] 为 {got} 条只有标题的稿件补抓了正文")
+        return picked
+
+    async def _fetch_article_body(self, client: httpx.AsyncClient, url: str) -> str:
+        """
+        抓一篇中文科技稿的正文段落。
+
+        只取 <p> 里长度够的段落，丢掉「点击查看原文」「版权声明」这类样板。
+        拿到的是原文句子，不做摘要——后面写稿时再决定念哪一句，
+        这一层只负责把「素材」补齐，不替写稿做判断。
+        """
+        if not url:
+            return ""
+        try:
+            resp = await client.get(url, timeout=12.0, follow_redirects=True)
+            if resp.status_code != 200:
+                return ""
+            html = resp.text
+        except Exception as e:
+            print(f"[Collector] 正文抓取失败 {url[:50]}: {e}")
+            return ""
+        texts: List[str] = []
+        for raw_p in re.findall(r"<p[^>]*>(.*?)</p>", html, re.S):
+            t = re.sub(r"<[^>]+>", "", raw_p)
+            t = _html.unescape(re.sub(r"\s+", " ", t)).strip()
+            if len(t) < 30:
+                continue
+            if any(k in t for k in ("点击查看原文", "版权", "免责声明",
+                                    "扫码", "关注我们", "转载", "本文来自")):
+                continue
+            texts.append(t)
+            if sum(len(x) for x in texts) > 2600:
+                break
+        return "".join(texts)[:2600]
 
 
     def _fallback_pool(self, date_str: str, category: str, history: "SeenHistory" = None) -> List[Dict[str, Any]]:
@@ -1261,16 +1346,19 @@ class NewsCollector:
                     continue
                 if _is_stale(h.get("created_at") or "", max_days=30):
                     continue
-                body = _strip_html(h.get("story_text") or "")[:1500]
-                # 链接帖没有正文，信息全在标题里。标题既没数字也没钱字眼的，
-                # 拆出来只能是一句「他做了个产品」，不占名额。
-                if not body and not re.search(r"\d|\$|€|£", title):
+                body = _strip_html(h.get("story_text") or "")[:3000]
+                # 链接帖没有正文，信息全在标题里。标题短短一个产品名，
+                # 拆出来只能是一句「他做了个东西」，不占名额；
+                # 但「月费从 99 涨到 500，付费用户从 30 掉到 12」这种标题
+                # 本身就是完整故事，正文为空也照样能讲三段。
+                if len(body) < 80 and len(title) < 40:
                     continue
-                # 两道闸门：得有人掏过钱的硬证据，得是作者在讲自己的生意。
-                # 只有一道会把大厂财报放进来（有 $17B，但没人自称在创业）。
+                # 唯一的准入闸门：得是作者在讲自己的事。
+                # 这一道不能去——去掉之后，大厂财报和行业分析会整片涌进来。
+                # 但「有没有人付钱」不再是门票：多数好案例根本没写过收入，
+                # 讲的是他为什么做、怎么运转、卡在哪。把收入当门票，
+                # 等于把能讲透的素材换成了只有数字的素材。
                 blob = title + " " + body[:800]
-                if not CASE_MONEY_FACT.search(blob):
-                    continue
                 if not (low.startswith("show hn") or CASE_SELF_TALK.search(blob)):
                     continue
                 if any(is_similar_title(title, t) for t in seen_titles):
@@ -1295,10 +1383,8 @@ class NewsCollector:
         except Exception as e:
             print(f"[Collector] Show HN 案例源抓取异常: {e}")
             show_hits = []
-        added = 0
+        show_rows: List[Dict[str, Any]] = []
         for h in show_hits:
-            if added >= 12:
-                break
             title = (h.get("title") or "").strip()
             if not title.lower().startswith("show hn"):
                 continue
@@ -1308,38 +1394,44 @@ class NewsCollector:
                 continue
             if _is_stale(h.get("created_at") or "", max_days=30):
                 continue
-            body = _strip_html(h.get("story_text") or "")[:1500]
+            body = _strip_html(h.get("story_text") or "")[:3000]
             # 正文太短的没有描述可拆。一条只有标题的作品帖，
-            # 拆出来就是「他做了个工具」——听众听了等于没听。
+            # 拆出来就是「他做了个东西」——听众听了等于没听。
+            # 这是「讲得清」的门槛，不是「有没有钱」的门槛。
             if len(body) < 240:
-                continue
-            blob = title + " " + body
-            if CASE_OFF_TOPIC.search(blob) or CASE_DEV_INFRA.search(blob):
-                continue
-            if not CASE_TRACTION.search(blob):
-                continue
-            # 有商业温度还不够，得是「普通人那门活儿里的事」。
-            # 少了这一条，机器人运行时和编程智能体会排在小商家工具前面：
-            # 它们同样是「一个人做出来的东西」，但听众照抄不了，也用不上。
-            if not CASE_FOR_ORDINARY.search(blob):
                 continue
             if any(is_similar_title(title, t) for t in seen_titles):
                 continue
             if all_history and all_history.seen(title, url):
                 continue
-            seen_urls.add(key)
-            seen_titles.append(title)
+            blob = title + " " + body
+            # 排序偏好，不做准入：有商业温度、落在具体活儿上的先讲。
+            # 行业本身不设限——一门生意讲不讲得清、能不能拆出他卡在哪，
+            # 跟它属于哪个行业没关系，砍行业等于替听众做判断。
+            score = 0
+            if CASE_TRACTION.search(blob):
+                score += 2
+            if CASE_FOR_ORDINARY.search(blob):
+                score += 1
+            score += min(len(body) // 300, 3)
+            show_rows.append({"h": h, "title": title, "url": url, "key": key,
+                              "body": body, "score": score})
+        show_rows.sort(key=lambda r: r["score"], reverse=True)
+        for r in show_rows[:30]:
+            if any(is_similar_title(r["title"], t) for t in seen_titles):
+                continue
+            seen_urls.add(r["key"])
+            seen_titles.append(r["title"])
             pool.append({
-                "title": title,
-                "raw_text": body,
+                "title": r["title"],
+                "raw_text": r["body"],
                 "summary": "",
-                "url": url,
-                "published": h.get("created_at") or "",
+                "url": r["url"],
+                "published": r["h"].get("created_at") or "",
                 "source_name": "HN·独立开发作品",
                 "lane": "product",
                 "is_real": True,
             })
-            added += 1
 
         print(f"[Collector] 案例候选池：{len(pool)} 条（近一个月，已按历史去重）")
         return pool
@@ -1411,13 +1503,23 @@ class NewsCollector:
         return uniq[:45]
 
     async def fetch_frontier(self, client: httpx.AsyncClient, history: "SeenHistory" = None,
-                             max_ai: int = 1, max_opc: int = 2) -> Dict[str, List[Dict[str, Any]]]:
+                             max_ai: int = 3, max_opc: int = 4,
+                             extra: List[Dict[str, Any]] = None) -> Dict[str, List[Dict[str, Any]]]:
         """
         英文前沿 → 中文播报条目。
 
         没有模型就整段返回空：英文标题念出来是灾难，宁可这块没有。
         有模型时一次调用批量处理，成本约一两分钱，失败也只是少了这两条，
         不影响整期生成——这是「模型是加法」的具体体现。
+
+        每块条数从 1/2 放宽到 2/3：一期的长度不是靠把一条讲长撑出来的，
+        是靠多讲几条撑出来的。每条都写清「是什么、具体怎么用、跟你什么关系」，
+        四五条就是十分钟；只讲两条还想讲满，只能把一句概括翻来覆去说。
+
+        extra 是案例池里的作品帖。它们本来就是「一个人做出了一个东西」，
+        和「一人公司动态」要的是同一批素材；只喂给案例段的话，
+        一人公司这块每天只有两条，而案例池里躺着十几条没人用的。
+        一并送进候选，让模型统一挑，避免两处各找一遍。
         """
         empty = {"AI Agent": [], "一人公司": []}
         if not llm.enabled:
@@ -1425,6 +1527,23 @@ class NewsCollector:
         history = history or SeenHistory()
 
         cands = await self._fetch_frontier_candidates(client)
+        if extra:
+            seen = {_norm_title(c.get("orig_title") or c.get("title") or "")
+                    for c in cands}
+            for it in extra:
+                title = it.get("title") or ""
+                if not title:
+                    continue
+                if _norm_title(title) in seen:
+                    continue
+                seen.add(_norm_title(title))
+                cands.append({
+                    "orig_title": title,
+                    "orig_text": (it.get("raw_text") or "")[:600],
+                    "url": it.get("url") or "",
+                    "published": it.get("published") or "",
+                    "source_name": it.get("source_name") or "HN·独立开发作品",
+                })
         if not cands:
             return empty
 
@@ -1435,14 +1554,17 @@ class NewsCollector:
 
         lines = []
         for idx, c in enumerate(cands):
-            snippet = re.sub(r"\s+", " ", c.get("orig_text") or "")[:220]
+            # 简介给到 600 字：要让模型写出「具体细节」那一层，
+            # 它得先看到原文里的实际操作、数字、限制条件。
+            # 只给 220 字，它能写的只有一句重新组织过的标题。
+            snippet = re.sub(r"\s+", " ", c.get("orig_text") or "")[:600]
             lines.append(f'{idx}. [{c["source_name"]}] {c["orig_title"]} || {snippet}')
 
         data = await llm.json(
             FRONTIER_SYSTEM,
             "今天的候选如下，编号 + 来源 + 标题 || 简介：\n\n" + "\n".join(lines),
             temperature=0.3,
-            max_tokens=1200,
+            max_tokens=2200,
         )
         picked = (data or {}).get("items") or []
         if not isinstance(picked, list):
@@ -1458,12 +1580,21 @@ class NewsCollector:
                 continue
             title_zh = llm_clean(p.get("title_zh"), 40)
             summary_zh = llm_clean(p.get("summary_zh"), 90)
+            # 「具体细节」这一层是这期能不能讲满十分钟的关键。
+            # 只有标题和一句概括，四条 AI 新闻加起来不到三百字，
+            # 听众听到的全是「有个东西发布了」，没有一个能记住的细节。
+            detail_zh = llm_clean(p.get("detail_zh"), 170)
             why_zh = llm_clean(p.get("why_zh"), 60)
             # 翻译没落地（还是英文、或者空的）就不要，绝不把英文塞进播报
             if not title_zh or not summary_zh or not has_cjk(title_zh):
                 continue
             if is_mostly_english(title_zh) or is_mostly_english(summary_zh):
                 continue
+            if detail_zh and (is_mostly_english(detail_zh)
+                              or _detail_is_echo(detail_zh, summary_zh)):
+                # 细节写成摘要的复述，或者干脆没译出来，就不留——
+                # 留着只会让同一条内容念两遍。
+                detail_zh = ""
             if history.seen(title_zh, src.get("url", "")):
                 continue
 
@@ -1477,6 +1608,7 @@ class NewsCollector:
                 "title": title_zh,
                 "category": cat,
                 "summary": summary_zh,
+                "detail": detail_zh,
                 # 原文留着：案例段要判断「这条能不能拆出谁付钱、收多少」，
                 # 只有译文摘要不够——数字和语气都在原文里。
                 # 标题也拼进来：HN 的收入帖多数是链接帖，正文是空的，
@@ -1508,35 +1640,39 @@ class NewsCollector:
         except Exception:
             day_offset = 0
 
+        # 条数从 3 提到 4。一期的长度靠条数撑，不靠把一条反复说——
+        # 每块多一条，就是多一件具体的事，而不是多一段过渡话。
         ai_items = await self._fetch_from_sources(
-            client, AI_RSS_SOURCES, "AI Agent", max_items=3,
+            client, AI_RSS_SOURCES, "AI Agent", max_items=4,
             gate_keywords=AI_GATE_KEYWORDS, block_keywords=AI_BLOCK_KEYWORDS,
             history=history, day_offset=day_offset
         )
         opc_items = await self._fetch_from_sources(
-            client, OPC_RSS_SOURCES, "一人公司", max_items=3,
+            client, OPC_RSS_SOURCES, "一人公司", max_items=4,
             gate_keywords=OPC_GATE_KEYWORDS, block_keywords=OPC_BLOCK_KEYWORDS,
             history=history, day_offset=day_offset
         )
 
-        # 全球前沿：当天刚发布的英文产品，由模型挑并译成中文。
-        # 放在中文源之后，播报顺序就是「国内发生了什么 → 全球此刻在做什么」。
-        frontier: Dict[str, List[Dict[str, Any]]] = {"AI Agent": [], "一人公司": []}
-        try:
-            frontier = await self.fetch_frontier(client, history)
-        except Exception as e:
-            print(f"[Collector] 前沿板块跳过（不影响本期）：{e}")
-
-        ai_items = ai_items + frontier["AI Agent"]
-        opc_items = opc_items + frontier["一人公司"]
-
-        # 案例池单独抓，不合并进 opc_items：
-        # 它不该出现在前端「一人公司」列表里，也不该占用那 3 条新闻名额。
+        # 案例池提前抓：它的作品帖要一起送进译稿候选，
+        # 否则「一人公司动态」这块每天只有两条，而这十几条素材躺着没人用。
         case_pool: List[Dict[str, Any]] = []
         try:
             case_pool = await self._fetch_case_candidates(client, all_history)
         except Exception as e:
             print(f"[Collector] 案例候选池跳过（不影响本期）：{e}")
+
+        # 全球前沿：当天刚发布的英文产品，由模型挑并译成中文。
+        # 放在中文源之后，播报顺序就是「国内发生了什么 → 全球此刻在做什么」。
+        frontier: Dict[str, List[Dict[str, Any]]] = {"AI Agent": [], "一人公司": []}
+        try:
+            frontier = await self.fetch_frontier(
+                client, history,
+                extra=[x for x in case_pool if x.get("lane") == "product"])
+        except Exception as e:
+            print(f"[Collector] 前沿板块跳过（不影响本期）：{e}")
+
+        ai_items = ai_items + frontier["AI Agent"]
+        opc_items = opc_items + frontier["一人公司"]
 
         # 观点兜底要用「全部历史」判断，不是最近几期：
         # 只看最近 5 期的话，早就播过的观点过几天又会重新出现。

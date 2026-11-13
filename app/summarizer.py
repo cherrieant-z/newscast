@@ -140,38 +140,47 @@ REVENUE_CUES = ("收入", "赚", "营收", "月入", "年入", "付费", "订阅
 
 # ------------------------------------------------------------ 模型：案例拆解
 CASE_SYSTEM = """你是一个中文播客作者，节目每天早上播给「想靠 AI 多赚点钱」的普通人听。
-现在给你一个独立开发者今天发的帖子。请把它整理成四段能直接念出来的口播稿。
+现在给你一个独立开发者发的帖子。请把它整理成能直接念出来的口播稿。
 
 听众要的不是「这个产品很酷」，而是「这件事我能不能干、要花多少、第一步点哪里」。
-所以每一段都必须落在钱或者动作上，不许写成产品介绍。
+所以每一段都必须落在具体的事或者动作上，不许写成产品介绍。
 
 【铁律，违反就整段作废】
-1. 只用原文里的信息。价格、收入、用户数、时间，原文没写就明说「他没公开」，绝对不许编。
+1. 只用原文里的信息。价格、收入、用户数、时间，原文没写就留空，绝对不许编。
 2. 不许出现原文里没有的阿拉伯数字。想表达「不花钱」就写「不花钱」，不要写「0 元」。
 3. 判断可以给，但要和事实分开：先说原文写了什么，再说你的判断。
 4. 口语，像跟朋友聊天。不要书面腔，不要「赋能」「闭环」「赛道」「生态」「护城河」「抓手」。
-5. 每段一到两句，40~80 字。不要括号，不要顿号堆叠，不要英文句子。
+5. 每段五十到一百一十字。不要括号，不要顿号堆叠，不要英文句子。
 6. 产品名、技术名可以保留英文原词（比如 Claude、Next.js）。
+7. 不许用「某种」「这类」「各种各样的」这类词。说不出具体的，就留空。
 
 【最重要的一段】
 听众没看过这个帖子，也不知道你说的是什么东西。所以第一句必须先把「这是个啥」交代清楚：
 叫什么名字、是个 App 还是一个网站还是一个服务、打开之后能干什么，一句话说完。
 不许用「这东西」「它」「这个项目」开头——上一句没有名词，听众接不上。
 
+【怎么算讲得清楚】
+听众听完要能自己复述一句「哦，就是有这么个人，做了这么个东西，给谁用，怎么转起来的」。
+所以下面这几栏，原文里有多少就填多少，一栏一句话，别怕长，也别硬凑：
+他为什么动手、这东西具体怎么用起来、最初谁在用、中间变过一次什么、现在什么样。
+
 只输出 JSON：
 {
  "what": "这是个什么。一句话说清形态（App/网站/工具/服务）和用它的人能干什么。知道名字就把名字放进去；原文没有名字就直接描述它做什么，不要写「名字没写」「原文没说」这类交代——听众只需要知道这是个什么东西",
  "who_made": "做这个东西的人是谁：一个人还是小团队，原来干什么的，做了多久。只写原文有的，原文没写就填空字符串，不要猜",
+ "origin": "他为什么动手做这个：原来遇到什么麻烦、看到什么机会、哪天决定开始。只写原文有的，没有就留空",
+ "how": "这东西具体怎么跑起来的：用户打开之后做哪几步、背后靠什么撑着。要具体到动作，不要写「用 AI 处理」这种话",
+ "who_uses": "谁在用、谁在付钱。要具体到人群和那个麻烦，不要写「用户」「企业」这种空话。答不出来就留空",
  "paid": "有没有人真的付钱。只填三个值之一：有 / 没有 / 没写。「有」必须有原文证据（付费用户数、订阅收入、有人买了）。原文说免费、开源、只在送兑换码，一律填「没有」",
- "who_pays": "谁在为什么掏钱。要具体到人群和那个麻烦，不要写「用户」「企业」这种空话。答不出来就填空字符串，不要写「原文没写」——那半句话会被念出来，听众听了一头雾水",
- "money": "怎么收钱：按次、按月还是买断，多少钱。原文没提价格就填空字符串",
- "traction": "有没有人真的付了钱、有多少人在用。答不出来就填空字符串",
- "startup": "他要启动这件事需要投入的钱和时间。只写原文提到的；答不出来就填空字符串。不要写技术栈，听众不关心他用什么框架",
+ "money": "怎么收钱：按次、按月还是买断，多少钱。原文没提价格就留空",
+ "traction": "有多少人在用、有没有人真的付了钱、装了多少、周活多少。只写原文有的，留空可以",
+ "turning": "中间发生过的一次变化：涨价、换方向、砍功能、换客户、被某件事逼着改。只写原文有的，没有就留空",
+ "today": "现在是什么状态：还在跑、停了、转到别处、等着被收购。只写原文有的，没有就留空",
  "barrier": "这件事真正的难处在哪，一个外行最可能卡在哪一步",
  "first_step": "听众今天就能做的一个具体动作。必须动词开头、能落到手上：打开哪个页面、搜什么词、发一句什么话、算哪一个数。注意三点：① 不要叫听众去下载、试用、关注、支持这个产品本身，那不是他能抄的路子；② 默认听众手上还没有自己的产品，所以像「打开你的产品后台」这种前提要先写清楚，或者干脆换成不需要前提的动作；③ 不要「多学习」「多关注」这种",
  "quote": "一句跟这件事相关、能给听众一点行动力的话，不超过 28 字"
 }
-如果某一段原文确实没有，就留空字符串，不要用「原文没写」去填。"""
+如果某一栏原文确实没有，就留空字符串，不要用「原文没写」去填。"""
 
 
 QUOTE_SYSTEM = """你是一个中文播客的作者，节目每天早上陪听众听十几分钟。
@@ -254,6 +263,22 @@ def _is_self_promo(text: str) -> bool:
     """
     t = text or ""
     return any(w in t for w in ("兑换码", "激活码", "回帖", "留言领", "支持下作者", "帮忙测试"))
+
+
+def _is_product_tour(text: str) -> bool:
+    """
+    这一步是「去了解这个产品」，而不是「你能照着自己做的事」。
+
+    「打开 GitHub，搜 Kapso，把 README 里的视频演示看一遍」——
+    动作很具体，动词开头，格式全对，但听众做完之后手里还是空的：
+    他知道有个东西存在，也知道它怎么用，可那不是他能抄的路子。
+    对着技术类素材，模型十次里有八次会写出这种动作。
+
+    真正该给的，是把它对应到听众自己手上那件事：你今天烦的是哪一步。
+    """
+    t = (text or "").lower()
+    return any(w in t for w in ("readme", "quickstart", "视频演示", "看演示",
+                                "官方文档", "文档里", "仓库里", "拉下来看"))
 
 
 def _fallback_what(title: str, summary: str) -> str:
@@ -397,6 +422,12 @@ def _speakable(text: str) -> str:
     t = t.replace("~", "").replace(">", "")
     t = t.replace("丨", "，").replace("｜", "，").replace("|", "，")
     t = _SOURCE_TAIL_RE.sub("", t)
+    # 括号里的署名、图源、网络用语，在页面上是脚注，在耳朵里是拦路的石头：
+    # 「OWASP 把工具滥用列为威胁（InfoQ 于 2025 年 9 月报道）」——
+    # 听众正跟着主线走，突然被塞一个媒体名和半年前的日期。
+    t = re.sub(r"[（(][^）)]{0,28}(?:报道|编辑|记者|来源|图源|配图|下同|"
+               r"bushi|狗头|手动|笑|注：)[^）)]{0,18}[）)]", "", t)
+    t = re.sub(r"[（(]\s*[）)]", "", t)
     t = re.sub(r"[\u200b-\u200f]", "", t)
     # 帖子里的客套话和送码细节：「大家好」「祝大家天天赚钱」「前 100 位领兑换码」。
     # 这些是论坛发帖的礼节，念出来像在读广告，跟听众没有关系。
@@ -455,6 +486,74 @@ def _same_event(a: str, b: str) -> bool:
     return bool(qa & qb)
 
 
+# 中文源条目没有 detail 字段（英文译稿才有）。它们的摘要往往只有
+# 二三十个字——「英伟达最大的雷，是没接班人」，听完这一句，听众什么也没多知道。
+# 正文里其实有一堆具体的事实，只是没人去捞。
+FACT_MARKS = ("首次", "第一", "增长", "下降", "上涨", "下跌", "收购", "发布",
+              "宣布", "推出", "裁员", "融资", "占比", "同比", "环比", "预计",
+              "计划", "签署", "达成", "超过", "不足", "翻倍", "腰斩")
+NEWS_BOILER = ("记者", "报道", "据", "编辑", "来源", "责任编辑", "原标题",
+               "本文", "文章", "观点", "不代表", "免责声明", "更多", "点击")
+# 过渡句。这类句子单独念出来没有主语、没有事实，只是替下一句做铺垫：
+# 「似乎只要能把其中的 Trick 摸清楚」——听众不知道是谁、在摸清什么。
+# 它们夹在原文里没问题，被抽出来当一条新闻的「具体细节」就是灾难。
+LEAD_JUNK = ("似乎", "最重要的", "除此之外", "值得一提的是", "换句话说",
+             "也就是说", "事实上", "总之", "综上", "而这", "那么", "目前来看",
+             "据悉", "值得注意的是", "让人", "不得不说", "讲真", "坦白说")
+
+
+def _facts_from_raw(item: Dict[str, Any]) -> str:
+    """
+    从中文源正文里捞一句「具体到什么程度」的话。
+
+    这一层的目标不是再加一句概括，是给听众一个能记住的东西：
+    一个数字、一个时间、一个具体动作。四条新闻各补一句，
+    整块的听感就从「播报标题」变成「有人在跟你讲事」。
+
+    判据从严：必须有数字或明确的事实动词，必须是完整的一句话，
+    不许是「记者报道」这类新闻套话，也不许是标题的复述。
+    """
+    raw = item.get("raw_text") or ""
+    title = item.get("title") or ""
+    summary = item.get("summary") or ""
+    if len(raw) < 60:
+        return ""
+    # 只从中文正文里抽。英文帖子的 raw_text 是原文，抽出来就是一句英文——
+    # 早上的播报里冒出一句英文，听众直接关掉。
+    if len(re.findall(r"[\u4e00-\u9fa5]", raw)) < 30:
+        return ""
+    best = ""
+    for s in _split_sentences(raw):
+        s = s.strip()
+        if not (26 <= len(s) <= 120):
+            continue
+        if any(b in s[:12] for b in NEWS_BOILER):
+            continue
+        if s.startswith(LEAD_JUNK):
+            continue
+        if s.startswith(("所以", "因此", "但是", "但", "而且", "然后", "另外",
+                         "不过", "同时", "此外")):
+            continue
+        # 必须有硬事实：数字，或者一个明确发生过的动作
+        has_number = bool(re.search(r"\d", s))
+        has_fact = any(k in s for k in FACT_MARKS)
+        if not (has_number or has_fact):
+            continue
+        if is_similar_title(s, title) or (summary and _summary_echoes_title(s, summary)):
+            continue
+        # 挑信息密度最高的那句：数字越多越靠前，同分取靠前的
+        score = len(re.findall(r"\d", s)) * 2 + sum(1 for k in FACT_MARKS if k in s)
+        if score >= 2 and score > (len(re.findall(r"\d", best)) * 2
+                                   + sum(1 for k in FACT_MARKS if k in best)):
+            best = s
+    if not best:
+        return ""
+    spoken = _speakable(best)
+    if _hollow(spoken):
+        return ""
+    return _cut(spoken, 120)
+
+
 def _describe_from_raw(item: Dict[str, Any]) -> str:
     """
     摘要不能用时，从正文里找一句「它到底能干什么」。
@@ -467,8 +566,12 @@ def _describe_from_raw(item: Dict[str, Any]) -> str:
         return ""
     for s in _split_sentences(raw):
         s = s.strip()
-        # 以「所以」「但是」开头的句子，是接着上一句说的，单拎出来听很突兀
+        # 以「所以」「但是」开头的句子，是接着上一句说的，单拎出来听很突兀。
+        # 「似乎只要能把其中的 Trick 摸清楚」这类过渡句更糟：它有主语缺失、
+        # 没有一个事实，却因为含「能把」被选进来，成了这一条的正文。
         if s.startswith(("所以", "因此", "但是", "但", "而且", "然后", "另外", "不过")):
+            continue
+        if s.startswith(LEAD_JUNK):
             continue
         if any(k in s for k in ("用来", "帮你", "适合", "支持", "能把", "就能", "可以")):
             t = _speakable(s)
@@ -1274,9 +1377,9 @@ MACRO_READING = {
 # 于是「A 股破产重整门槛抬高」会被配上「股市在放量波动」——每句话单看都对，
 # 连起来就是错的。加一道形状判断，宁可少讲两条。
 MACRO_NOT_SIGNAL = (
-    "掘金", "推荐", "评级", "目标价", "个股", "龙头股", "涨停", "翻倍", "布局良机",
-    "评论员", "观察", "侧记", "综述", "专访", "理论", "讲好", "蕴藏", "那些事",
-    "面临哪些", "如何看", "怎么看", "怎么办", "意味着什么", "有何深意",
+    "掘金", "推荐", "评级", "目标价", "龙头股", "涨停", "翻倍", "布局良机",
+    "荐股", "评论员", "观察", "侧记", "综述", "专访", "理论", "讲好", "蕴藏",
+    "那些事", "面临哪些", "如何看", "怎么看", "怎么办", "意味着什么", "有何深意",
     "采购", "中标", "招标", "招聘启事", "拍卖",
 )
 
@@ -1284,7 +1387,8 @@ MACRO_NOT_SIGNAL = (
 MACRO_ACTION_WORDS = (
     "加息", "降息", "降准", "上调", "下调", "提高", "降低", "扩大", "收紧", "放开", "取消",
     "印发", "出台", "发布", "实施", "修订", "开征", "减免", "补贴", "关税", "配额",
-    "同比", "环比", "增长", "下降", "下跌", "上涨", "突破", "创新高", "新低", "倍增",
+    "同比", "环比", "增长", "下降", "下跌", "上涨", "涨超", "跌超", "突破",
+    "创新高", "新低", "倍增", "推出", "启动", "签署",
     "破产", "重整", "退市", "上市", "裁员", "扩产", "减产", "出口", "进口", "投产",
 )
 
@@ -1459,7 +1563,18 @@ class NewsSummarizer:
             age = _case_age_days(it.get("published", ""))
             if age is not None:
                 s += max(0, 6 - age)
-            return s + min(len(raw) // 150, 4)
+            # 作者在讲「我这件事」，比一篇技术说明更像案例。
+            # 案例段要讲的是一个人的选择和处境，纯技术文档里没有「他」——
+            # 同样的字数，前者能拆出动机和转折，后者只能拆出功能列表。
+            blob = (it.get("title") or "") + " " + raw
+            if re.search(r"(?<![A-Za-z])(?:I|my|we|our)(?![A-Za-z])", blob):
+                s += 3
+            if re.search(r"(去年|当时|后来|最后|一开始|花了|用了|决定|放弃|试过|"
+                         r"last year|at first|then I|decided|gave up|tried)", blob, re.I):
+                s += 2
+            # 正文长度的加分封顶压到 2：原先最多 +4，结果「最长的那篇」
+            # 天然排第一——技术说明书往往最长，故事往往写得很短。
+            return s + min(len(raw) // 300, 2)
 
         money_pool: List[Dict[str, Any]] = []
         sample_pool: List[Dict[str, Any]] = []
@@ -1620,22 +1735,26 @@ class NewsSummarizer:
 
         data = await llm.json(
             CASE_SYSTEM,
-            f"标题：{title}\n\n正文：{raw[:1800]}",
+            f"标题：{title}\n\n正文：{raw[:2600]}",
             temperature=0.4,
-            max_tokens=900,
+            max_tokens=1600,
         )
         if not data:
             return None
 
+        # 每栏上限放到 130 字。原来卡 110，模型为了不超字数会把
+        # 「用户怎么用、背后靠什么」压成一句「用 AI 处理」——长度合规，
+        # 信息为零。这一节要撑起整期三分之一的时长，得让它把话说完整。
         fields = {
-            k: llm_clean(data.get(k), 110)
-            for k in ("what", "who_pays", "money", "traction", "startup", "barrier", "first_step")
+            k: llm_clean(data.get(k), 130)
+            for k in ("what", "origin", "how", "who_uses", "money", "traction",
+                      "turning", "today", "barrier", "first_step")
         }
         fields["what"] = _scrub_what(fields["what"])
-        # 「有没有人付钱」单独取：这是决定这一节按「赚钱案例」还是「反面样本」讲的开关，
-        # 不能含糊。模型只许填 有 / 没有 / 没写 三个值。
+        # 「有没有人付钱」单独取：它只影响「钱怎么进来」这一段念不念，
+        # 不再决定整节的口径。案例是不是值得听，跟有没有人付钱无关。
         paid_flag = llm_clean(data.get("paid"), 8)
-        who_made = llm_clean(data.get("who_made"), 60)        # 只要「这是什么」站得住就能讲。其余的段落有没有，交给后面的
+        who_made = llm_clean(data.get("who_made"), 70)        # 只要「这是什么」站得住就能讲。其余的段落有没有，交给后面的
         # `_case_has_substance` 判断：能答几段讲几段，答不出的不念，
         # 总比逼着模型把「原文没写」说三遍强。
         if not fields["what"]:
@@ -1649,6 +1768,7 @@ class NewsSummarizer:
         # 这段就退化成了「别人很厉害」，不如不给。
         if (not _looks_like_action(fields["first_step"])
                 or _is_self_promo(fields["first_step"])
+                or _is_product_tour(fields["first_step"])
                 or _needs_product_premise(fields["first_step"])):
             print(f"[Summarizer] 案例的「first_step」不像听众能自用的动作，用规则版兜底："
                   f"{fields['first_step'][:40]}")
@@ -1658,15 +1778,19 @@ class NewsSummarizer:
             "title": title,
             "what": fields["what"],
             "who_made": who_made,
+            "origin": fields["origin"],
+            "how": fields["how"],
+            "turning": fields["turning"],
+            "today": fields["today"],
             "paid": paid_flag,
             "quote": llm_clean(data.get("quote"), 40),
-            "pain_point": fields["who_pays"],
+            "pain_point": fields["who_uses"],
             "model": fields["money"],
             "tech_stack": "",
             # 空了就空着。以前这里会填「更具体的进账他没公开」，
             # 那半句进了音频就是纯浪费听众时间。
             "revenue": fields["traction"],
-            "startup": fields["startup"],
+            "startup": "",
             "barrier": fields["barrier"],
             "guide": fields["first_step"],
             "is_real": True,
@@ -1882,6 +2006,10 @@ class NewsSummarizer:
             case_barrier = cur_case.get("barrier", "")
             case_paid = cur_case.get("paid", "")
             case_who = cur_case.get("who_made", "")
+            case_origin = cur_case.get("origin", "")
+            case_how = cur_case.get("how", "")
+            case_turning = cur_case.get("turning", "")
+            case_today = cur_case.get("today", "")
         else:
             lead_title = ""
             case_what = ""
@@ -1889,6 +2017,7 @@ class NewsSummarizer:
             case_revenue_and_traffic = case_beginner_guide = ""
             case_startup = case_barrier = ""
             case_paid = case_who = ""
+            case_origin = case_how = case_turning = case_today = ""
 
         # 整理来源列表（权威去重展示），并把解读带进卡片，让手机端也能直接读到
         all_sources: List[Dict[str, str]] = []
@@ -2070,6 +2199,8 @@ class NewsSummarizer:
             case_beginner_guide, collected_data,
             case_startup=case_startup, case_barrier=case_barrier, case_what=case_what,
             case_paid=case_paid, case_who=case_who, case_kind=case_kind,
+            case_origin=case_origin, case_how=case_how,
+            case_turning=case_turning, case_today=case_today,
         )
 
         return title, lead_title, markdown_content, tts_script, all_sources[:60], category_summary
@@ -2080,6 +2211,8 @@ class NewsSummarizer:
         collected_data: Dict[str, List[Dict[str, Any]]],
         case_startup: str = "", case_barrier: str = "", case_what: str = "",
         case_paid: str = "", case_who: str = "", case_kind: str = "",
+        case_origin: str = "", case_how: str = "",
+        case_turning: str = "", case_today: str = "",
     ) -> str:
         """
         构建「只听就够」的播报底稿。
@@ -2115,6 +2248,10 @@ class NewsSummarizer:
         clean_barrier = clean(case_barrier)
         clean_what = clean(case_what)
         clean_who = clean(case_who)
+        clean_origin = clean(case_origin)
+        clean_how = clean(case_how, api=True)
+        clean_turning = clean(case_turning)
+        clean_today = clean(case_today)
 
         ai_items = [i for i in collected_data.get("AI Agent", []) if (i.get("title") or "").strip()]
         opc_items = [i for i in collected_data.get("一人公司", []) if (i.get("title") or "").strip()]
@@ -2126,13 +2263,27 @@ class NewsSummarizer:
         # 而条目后来在筛选里被全部淘汰，就会念出「今天一共 5 块」，
         # 实际只讲了 4 块——听众一直在等那个不存在的大环境段落。
         macro_matched: List[Tuple[Dict[str, Any], str, str]] = []
+        macro_default: List[Tuple[Dict[str, Any], str, str]] = []
         for _it in macro_items:
             _m, _a, _pos, _is_default = macro_reading_ex(_it.get("domain", ""), _it["title"])
-            if _is_default or not _m or not _a:
+            if not _m or not _a:
                 continue
             if not _macro_worthy(_it["title"], _pos):
                 continue
+            if _is_default:
+                # 用的是「这个领域通用」的解读，不是这条新闻自己的因果。
+                # 单独放到一边：只在前面的严格命中不够时，才拿一条来兜底。
+                macro_default.append((_it, _m, _a))
+                continue
             macro_matched.append((_it, _m, _a))
+        # 严格命中不到两条时，补一条通用解读。
+        #
+        # 原先只要命中默认句就整条淘汰，结果 5 条候选里常常只剩 1 条，
+        # 这块只有一百来字就说完了。听众听到的是「今天大环境就一条」——
+        # 不是那天真没消息，是判据把能讲的都判掉了。补一条兜底，
+        # 措辞上仍按「大方向」讲，不假装它是精确因果。
+        if len(macro_matched) < 2 and macro_default:
+            macro_matched += macro_default[:2 - len(macro_matched)]
         # 这块是「说了就得管用」的高浓度段落，超过四条听众记不住，
         # 也会把后面的要闻挤没
         macro_matched = macro_matched[:4]
@@ -2172,14 +2323,13 @@ class NewsSummarizer:
         # ---- 开场：先说今天有几块，听众才知道自己在第几块
         plan_bits = []
         if has_case:
-            # 开场就把这一节的性质说清楚。
-            # 没人付钱的项目说成「赚钱案例」，听众会一直等那个不存在的收入；
-            # 反过来，明说「这是个反面样本」，他反而知道该听什么。
-            plan_bits.append({
-                "money": "一个能直接抄的赚钱案例",
-                "sample": "一个值得看的反面样本",
-                "howto": "一条能照着走的路子",
-            }.get(case_kind, "一个真实的例子"))
+            # 开场只承诺「有个人在做一件具体的事」，不承诺「赚钱案例」。
+            # 原先开场说「一个能直接抄的赚钱案例」，等于给听众立了一个
+            # 「等会儿有人报收入」的预期——素材里没写收入那天，他就会一路
+            # 觉得少了点什么。收入是这条故事里的一个信息点，不是入场券。
+            plan_bits.append(
+                "一个没做成的例子" if case_kind == "sample"
+                else "一个具体的人在做的具体一件事")
         if ai_items:
             plan_bits.append(f"人工智能圈的 {len(ai_items)} 件事")
         if opc_items:
@@ -2194,21 +2344,20 @@ class NewsSummarizer:
         if has_case:
             if case_kind == "money":
                 open_pool = [
-                    "{d}。今天先说一件挺反常识的事：{h}。{plan}",
-                    "早上好，{d}。开头先给你一个可抄的例子：{h}。{plan}",
+                    "{d}。今天先说一个人在做的事：{h}。{plan}",
+                    "早上好，{d}。开头先看一个真实的人和他的活：{h}。{plan}",
                     "{d}，我们开始。今天最有意思的一条是{h}。{plan}",
-                    "{d}。今天先讲一个人怎么把一件小事做成生意的：{h}。{plan}",
-                    "早上好，{d}。{h}——这事今天值得花三分钟听听。{plan}",
+                    "{d}。今天先看一个人在做的活：{h}。{plan}",
+                    "早上好，{d}。{h}——这事今天值得花几分钟听完。{plan}",
                 ]
             elif case_kind == "howto":
-                # 做法档：今天没人报收入，讲的是一条路怎么走。
-                # 开场必须先把这句说明白，否则听众会一直等「他赚了多少」。
+                # 做法档：讲一条路怎么走，不假装在讲收入。
                 open_pool = [
-                    "早上好，{d}。今天这条没人报收入，但这条路本身值得听：{h}。{plan}",
-                    "{d}。开头先讲一个做法，不是成功故事：{h}。{plan}",
-                    "早上好，{d}。今天没有谁晒收入，讲一条能照着走的路：{h}。{plan}",
-                    "{d}，我们开始。今天第一件事是别人怎么把活干成的：{h}。{plan}",
-                    "早上好，{d}。今天不讲赚了多少，讲怎么开始：{h}。{plan}",
+                    "早上好，{d}。今天讲一个具体做法：{h}。{plan}",
+                    "{d}。开头先讲一个人怎么干活，不是成功故事：{h}。{plan}",
+                    "早上好，{d}。今天第一件是别人怎么把活干成的：{h}。{plan}",
+                    "{d}，我们开始。先看一个人手上的事：{h}。{plan}",
+                    "早上好，{d}。今天从一个正在做的东西讲起：{h}。{plan}",
                 ]
             else:
                 # 反面样本：开场就认下来，别让听众误会成赚钱故事。
@@ -2303,6 +2452,29 @@ class NewsSummarizer:
                     f"先认识一下做它的人。{_end(who_sp)}",
                 ], date_str, 15))
 
+            # ---- 故事线：他为什么动手、这东西怎么跑起来 ----
+            # 这两段是「讲清楚」和「念空气」的分水岭。原先案例只有
+            # 「是什么 + 谁做的 + 怎么收钱 + 难在哪 + 第一步」五段，
+            # 素材里最有人味的部分——他遇到过什么麻烦、用户打开之后做哪几步
+            # ——一个字都没进稿子。听众听到的是产品规格，不是一个人的事。
+            origin_sp = _scrub_unknown(clean_origin)
+            if _spoken_len(origin_sp) >= 12 and not _hollow(origin_sp):
+                add("案例·他为什么做这个", _day_pick([
+                    f"他为什么动手做这个？{_end(origin_sp)}",
+                    f"这事最早是这么来的：{_end(origin_sp)}",
+                    f"先说它怎么来的。{_end(origin_sp)}",
+                    f"他会做这个东西，起因很具体：{_end(origin_sp)}",
+                ], date_str, 18))
+
+            how_sp = _scrub_unknown(clean_how)
+            if _spoken_len(how_sp) >= 12 and not _hollow(how_sp):
+                add("案例·具体怎么用", _day_pick([
+                    f"具体怎么用？{_end(how_sp)}",
+                    f"它跑起来是这个样子：{_end(how_sp)}",
+                    f"用户那边看到的流程是这样：{_end(how_sp)}",
+                    f"这东西落到手上是这么用的：{_end(how_sp)}",
+                ], date_str, 19))
+
             # 先判断这个项目到底有没有「向用户收钱」这回事。
             # 免费 / 开源 / 自用的项目，讲「谁在掏钱」只会讲出「它是免费的」——
             # 那不是答案，听众会觉得你答非所问。
@@ -2310,26 +2482,40 @@ class NewsSummarizer:
             pain_known = _scrub_unknown(clean_pain)
             rev_sp = _scrub_unknown(clean_rev)
 
-            if case_kind == "money":
-                # 「谁掏钱」这一段，只在真答得出来的时候念。
-                # 内容本身是「他没写谁在掏钱」时还硬套「他盯上的是这样一群人：」，
-                # 会念出「他盯上的是这样一群人：他没写谁在掏钱」——自己打自己。
-                if _spoken_len(pain_known) >= 14 and not _hollow(pain_known):
-                    # 「愿意为这个掏钱的是这类人：他服务的是那些小站长」——
-                    # 模型给的 who_pays 常以「他服务的是」开头，套上前缀会重复一遍
-                    pk = re.sub(r"^(他)?(服务|瞄准|盯上|面向)的(是|就是)[，,：:]?", "",
-                                pain_known).strip()
+            # 「这东西给谁用」不分档位都要讲。
+            # 原先它被关在 money 分支里：只有确认「有人付钱」才念。
+            # 结果一条讲得很清楚、也说了「给做机器人的人用」的素材，
+            # 因为没人付钱，这一整段被跳过了——听众知道它怎么运转，
+            # 却始终不知道谁会用，自然觉得「跟我没关系」。
+            # 有没有人付钱，只影响措辞，不影响讲不讲。
+            if _spoken_len(pain_known) >= 14 and not _hollow(pain_known):
+                pk = re.sub(r"^(他)?(服务|瞄准|盯上|面向)的(是|就是)[，,：:]?", "",
+                            pain_known).strip()
+                if case_kind == "money":
                     add("案例·谁在掏钱", _day_pick([
                         f"他盯上的是这样一群人：{_end(pk)}",
                         f"愿意为这个掏钱的是这类人：{_end(pk)}",
                         f"这事解决的是这么个麻烦：{_end(pk)}",
                     ], date_str, 13))
+                else:
+                    add("案例·给谁用的", _day_pick([
+                        f"这东西是给谁用的？{_end(pk)}",
+                        f"它落在这样一群人手上：{_end(pk)}",
+                        f"它对着的是这么个麻烦：{_end(pk)}",
+                        f"会用它的，是这种人：{_end(pk)}",
+                    ], date_str, 13))
 
+            if case_kind == "money":
                 money_line = _merge_money(clean_model, clean_rev)
                 if not what_sp:
                     # 开场那句钩子已经把这组数字报过了（它本来就是标题）。
                     # 这一段再复述一遍，就是原地踏步——听众会觉得两分钟
                     # 过去了，还在同一句话上打转。跳过它，把位置让给「为什么」。
+                    pass
+                elif not money_line.strip():
+                    # 判成「有人付钱」，但原文一句都没说怎么收——
+                    # 这时候硬念一个「钱是这么收的：」后面接空白，
+                    # 听众会以为音频卡了。
                     pass
                 else:
                     money_prefix = _day_pick([
@@ -2351,6 +2537,26 @@ class NewsSummarizer:
                     ], date_str, 14))
                 elif ratio:
                     add("案例·做到什么程度", ratio)
+
+            # 中间变过的那一次，往往是整段里最有信息量的地方：
+            # 涨价、砍功能、换客户——都是「他踩过一脚才知道」的东西，
+            # 比任何总结都像经验。
+            turning_sp = _scrub_unknown(clean_turning)
+            if _spoken_len(turning_sp) >= 12 and not _hollow(turning_sp):
+                add("案例·中间变过什么", _day_pick([
+                    f"中间出过一次变化：{_end(turning_sp)}",
+                    f"它中间改过一次：{_end(turning_sp)}",
+                    f"值得说的是中间这一步。{_end(turning_sp)}",
+                    f"后来他动过一次手：{_end(turning_sp)}",
+                ], date_str, 20))
+
+            today_sp = _scrub_unknown(clean_today)
+            if _spoken_len(today_sp) >= 12 and not _hollow(today_sp):
+                add("案例·现在什么样", _day_pick([
+                    f"现在是什么状态？{_end(today_sp)}",
+                    f"到今天为止，它是这样：{_end(today_sp)}",
+                    f"他现在的处境是：{_end(today_sp)}",
+                ], date_str, 21))
 
             # 启动成本只念一次；模型说「没提」就不念，别让听众连听两句「没写」
             startup_known = clean_startup and not any(k in clean_startup for k in UNKNOWN_MARKS)
@@ -2442,11 +2648,37 @@ class NewsSummarizer:
                     and not _summary_offtopic(item['title'], s_raw):
                 s_sp = _speakable(safe_ai_replace(s_raw)
                                   .replace("Agent", "智能体").replace("OPC", "一人公司"))
-                s_sp = _cut(s_sp, 60)
+                # 摘要放到 90 字。原先卡 60，模型或源站给的一句完整交代
+                # 常被切在半截，听众听到的是「……统一收件箱和帮助中心」这种
+                # 没有下文的句子。这条内容本身就短，多留 30 个字不会显得啰嗦。
+                s_sp = _cut(s_sp, 90)
             if not s_sp and not item.get('is_fallback'):
                 # 摘要被判定为「只是重复标题」时，正文里往往还有一句更具体的，
                 # 补上它，听众才知道这东西到底能干什么
                 s_sp = _describe_from_raw(item)
+
+            # 具体细节：一周里最有用的那一层。
+            # 只念标题加一句概括，四条 AI 新闻加起来两百多字，听完什么也留不下。
+            # 这一层讲的是「用户具体怎么操作、支持什么、一个真实数字」——
+            # 听众早上出门，能记住的往往是这种一句具体的东西，不是趋势判断。
+            d_sp = ""
+            d_raw = (item.get('detail') or '').strip()
+            if not d_raw and not item.get('is_fallback'):
+                # 中文源没有 detail 字段，从正文里捞一句具体事实。
+                # 「英伟达最大的雷，是没接班人」这种标题配一句概括，
+                # 听众连「谁说的、几天内发生什么」都不知道。
+                d_raw = _facts_from_raw(item)
+            if d_raw and not _summary_echoes_title(item['title'], d_raw) \
+                    and not _summary_offtopic(item['title'], d_raw):
+                d_sp = _speakable(safe_ai_replace(d_raw)
+                                  .replace("Agent", "智能体").replace("OPC", "一人公司"))
+                d_sp = _cut(d_sp, 130)
+                # 和摘要说的是同一件事就只留一层：同一句话听两遍，
+                # 比少听一句更让人觉得在凑时长。
+                if s_sp and (d_sp in s_sp or s_sp.rstrip("。") in d_sp):
+                    d_sp = ""
+                elif d_sp and _hollow(d_sp):
+                    d_sp = ""
 
             # 判断句限量：AI 这块一天四条，每条都来一句「这意味着什么」，
             # 听众听到的就不是新闻而是评论，而且那些评论换条新闻照样成立。
@@ -2483,6 +2715,8 @@ class NewsSummarizer:
             body = f"第{idx}条，{_end(t_sp)}"
             if s_sp:
                 body += _end(s_sp)
+            if d_sp:
+                body += _end(d_sp)
             if not reading:
                 return body
             cue = READING_CUES[(idx - 1) % len(READING_CUES)]
@@ -2500,7 +2734,11 @@ class NewsSummarizer:
                     "先说第{c}块，AI 圈今天发生的事，{n} 条。",
                     "第{c}块是 AI。过去一天有 {n} 条值得知道的。",
                 ], date_str, 7).format(c=_cn_num(sec), n=len(ai_items))]
-            budget = [2]
+            # 判断句上限从 2 提到 4：每条都给一句「这跟你有什么关系」。
+            # 原先只给两条，是为了防止「一天四条新闻配四条万能点评」——
+            # 但现在每条前面已经讲了具体的用法和细节，判断句不再承担
+            # 撑时长的作用，它只需要回答「所以我该在意什么」。
+            budget = [4]
             for i, item in enumerate(ai_items, 1):
                 ai_lines.append(speak_item("AI Agent", item, i, budget))
             add("AI 动态", "\n".join(ai_lines))
