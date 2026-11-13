@@ -1,0 +1,143 @@
+=== 案例诊断 2026-11-13 ===
+模型可用: True
+[Collector] 为 2 条只有标题的稿件补抓了正文
+    V2EX·分享创造: 丢弃 2 条「只有链接/样板词」的空帖
+    V2EX·创意: 丢弃 1 条「只有链接/样板词」的空帖
+[Collector] 案例候选池：前期 20 条（HN 两路）
+[Collector] 案例源 Reddit·个人项目：25 条，可用 11 条
+[Collector] 案例源 Reddit·苦活起家：25 条，可用 8 条
+[Collector] 案例候选池：39 条（近一个月，已按历史去重）
+[Collector] 前沿源命中：AI 2 条、一人公司 3 条（已译成中文）
+
+案例专用池 39 条：
+- [2026-10-15] I raised my price from $99 to $500 a month. Paying customers went from
+    payer=没写  raw=0字
+- [2026-10-29] You can now make money with my SaaS: 30% of every payment, for 12 mont
+    payer=没写  raw=0字
+- [2026-10-27] Here's How I Plan on Protecting My SaaS from AI
+    payer=没写  raw=0字
+- [2026-10-16] My Favorite Side Project Was Broken in Safari for Years and Nobody Not
+    payer=没写  raw=0字
+- [2026-11-13] Show HN: Wonderchat – A Zendesk alternative that doesn't charge per se
+    payer=没写  raw=2129字
+- [2026-11-13] Show HN: KittyBrowser, I built a web browser in your terminal
+    payer=没写  raw=1172字
+- [2026-11-12] Show HN: RealtimeVAD – trading false positives for 110ms earlier end-o
+    payer=没写  raw=950字
+- [2026-11-12] Show HN: Cerulion – ROS 2-compatible robotics runtime with multi-proce
+    payer=没写  raw=3000字
+- [2026-11-12] Show HN: Kapso – Iterative learning from enterprise data
+    payer=有  raw=3000字
+- [2026-11-12] Show HN: Turri – a coding agent with the power of regenerative softwar
+    payer=没写  raw=1669字
+- [2026-11-13] Show HN: Real-time inventory of natural stone slabs in US
+    payer=没写  raw=599字
+- [2026-11-13] Show HN: I built a Rick and Morty explainer video generator
+    payer=没写  raw=303字
+- [2026-11-12] Show HN: Duck – Making DuckDB feel like Swift
+    payer=没写  raw=2390字
+- [2026-11-12] Show HN: Apron Chat Protocol
+    payer=没写  raw=1832字
+- [2026-11-12] Show HN: I analyzed all 191 prompts I used to "vibe-code" an app
+    payer=没写  raw=824字
+- [2026-11-13] Show HN: PharmA2A, an open protocol for pharmacy-to-supplier orders on
+    payer=没有  raw=396字
+- [2026-11-12] Show HN: DRS-VPT. Localize a photo in a 3D point cloud without an init
+    payer=没写  raw=545字
+- [2026-11-12] Show HN: Captain's Log, a Mac app for thinking out loud
+    payer=没有  raw=311字
+- [2026-11-13] Show HN: Grow any hobby (skills for humans not AI)
+    payer=没写  raw=263字
+- [2026-11-12] Show HN: Exporting LLVM IR from XDSL
+    payer=没写  raw=294字
+- [2026-11-13] Users for new app
+    payer=没写  raw=400字
+- [2026-11-13] Built a tool that turns one sentence into a week of social posts.
+    payer=没写  raw=776字
+- [2026-11-12] My side project: a fusion between CAD and Paint
+    payer=没写  raw=469字
+- [2026-11-13] Tired of guessing Chinese characters, so I built my own keyboard
+    payer=没写  raw=1200字
+- [2026-11-13] I built a private Android expense tracker that works without an accoun
+    payer=没写  raw=1052字
+- [2026-11-13] [DEV] Money Management - Offline Budget App
+    payer=没写  raw=1560字
+- [2026-11-13] I got tired of planning group trips in a spreadsheet, so I built a sha
+    payer=没有  raw=1233字
+- [2026-11-13] Black Horse Stories - Personalised bedtime stories and a public Fairy 
+    payer=有  raw=1446字
+- [2026-11-12] I'm building technology that could help save millions of stray animals
+    payer=没写  raw=1974字
+- [2026-11-13] Hit 100 users on my devotional app this week. Building it with AI was 
+    payer=没写  raw=1175字
+- [2026-11-13] I made an app that makes snow, leaves and petals fall over your Mac de
+    payer=没写  raw=1861字
+- [2026-11-08] How to buy a boring passive business. With some math
+    payer=有  raw=2211字
+- [2026-11-07] Holiday lighting
+    payer=没写  raw=893字
+- [2026-11-02] Beach Chair/Cabana Rentals Business
+    payer=有  raw=500字
+- [2026-11-01] Powder coating & rim repair shop
+    payer=没写  raw=480字
+- [2026-10-29] Customer side of the deposit debate: my detailer of several years just
+    payer=没写  raw=1360字
+- [2026-10-29] Mobile undercoating business
+    payer=没写  raw=656字
+- [2026-10-24] renting 10' x 10' pop up canopy tents
+    payer=没写  raw=372字
+- [2026-10-21] ideas
+    payer=没写  raw=304字
+
+一人公司候选 7 条：
+- [分享创造] Caruno：电车充电成本记账，拍小票成账单 [送码]
+    payer=没写  有运营数字=False  raw=638字  summary=29字
+- [踩坑复盘] 带着 32 个产品和 26 个粉丝，为了推广开源小红书下载插件，账号被小红
+    payer=没有  有运营数字=False  raw=660字  summary=58字
+- 做了个 AI Rap 歌词生成工具，支持押韵结构、不同 Rap 风格，求大家拍砖
+    payer=没写  有运营数字=False  raw=614字  summary=55字
+- 做了个好看的 Mac 系统监控软件 Ebb，送 15 个激活码，求 v 友拍砖
+    payer=没写  有运营数字=False  raw=1090字  summary=34字
+- 月费从99涨到500，付费用户反而从2个变6个
+    payer=有  有运营数字=False  raw=78字  summary=66字
+- Wonderchat：不按人头收费的客服系统
+    payer=没写  有运营数字=False  raw=1200字  summary=70字
+- Captain's Log：对着Mac说，自动整理成笔记
+    payer=没有  有运营数字=False  raw=367字  summary=66字
+
+--- 挑选过程（正常：案例池 + 资讯条目）---
+>>> 选中: Kapso – Iterative learning from enterprise data
+    口径: 讲做法
+    第一句合格: True
+    有实料: True
+    what(46): Kapso 是一个开源引擎，用来在企业的数据环境里跑实验、部署最佳方案，并且从每次运行里学习。
+    who_made(53): Alireza 和 Majid 两个人做的，他们以前在 LinkedIn 和 Meta 给几百万用户的产品搭过 AI 系统。
+    origin(58): 他们发现企业数据工作本质是反复迭代的，但靠顾问开会或者团队先定业务本体根本落不了地，所以想让 AI 系统自动跑这个过程。
+    how(76): 你给 Kapso 一个目标和成功标准，它有一个经验库，每条经验带可信度分数和适用条件，每次实验前先提想法，再按预期回报和预算重新排序，然后去跑实验、学结果。
+    pain_point(0): 
+    model(0): 
+    revenue(0): 
+    turning(0): 
+    today(0): 
+    barrier(60): 最难的是把企业里几十个数据源、几千张表、几百份报表之间的连接关系搞清楚，这需要反复调查和实验，不是读一遍文档就能解决的。
+    guide(58): 打开 GitHub 搜 Kapso，把仓库拉下来，看一眼它怎么定义目标和成功标准，再拿你手头一个具体的数据问题照着跑一遍。
+    有内容的栏位: 6/11
+
+--- 假如案例池为空、且没有收入类条目（断供的那天）---
+    剩余候选 7 条
+>>> 选中: 月费从99涨到500，付费用户反而从2个变6个
+    口径: 有人付钱
+    第一句合格: True
+    有实料: True
+    what(33): 一个独立开发者做的按月收费的服务，用户付月费就能用上它提供的东西
+    who_made(13): 一个独立开发者，一个人做，原来干什么的原文没写。
+    origin(0): 
+    how(0): 
+    pain_point(0): 
+    model(22): 按月收费，从每月九十九美元涨到每月五百美元。
+    revenue(22): 涨价前有两位付费用户，涨价后有六位付费用户。
+    turning(34): 把月费从九十九美元提到五百美元，付费用户数没掉，反而从两个变成六个。
+    today(0): 
+    barrier(49): 难的不是定价本身，是敢不敢把价格提上去还不慌。多数人卡在怕涨价把仅有的客户吓跑，于是宁可低价多卖。
+    guide(44): 打开你现在的收费页面，把月费数字改成一个你一直不敢报的价，然后只发给最近问过价的三个人。
+    有内容的栏位: 7/11
