@@ -15,6 +15,14 @@
     <link>https://cherrieant-z.github.io/newscast/</link>
   </image>
     <item>
+      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-18)</title>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-18) 发布日期：2026-11-18 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先让代理有台自己的电脑，再想怎么用它赚钱。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：HN·独立开发作品） 【本期课题】One cloud computer for all your agents 0. 这是个什么 box 是 Simular 团队推出的云端电脑服务，给 AI 代理一个远程 Ubuntu 桌面，里面装了 Chrome 和命令行，AI 能通过 MCP 直接操作，你自己的电脑不用被占用。 1. 谁在为什么掏钱 想让 ChatGPT 基础版变成个人代理的人，或者让 Claude Code 接着 Codex </description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-18.mp3" length="4491504" type="audio/mpeg"/>
+      <guid isPermaLink="false">2026-11-18</guid>
+      <pubDate>Wed, 18 Nov 2026 02:09:05 -0000</pubDate>
+      <itunes:duration>748</itunes:duration>
+    </item>
+    <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-17)</title>
       <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-17) 发布日期：2026-11-17 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先动手做个能跑的东西，比想清楚更重要。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：HN·独立开发作品） 【本期课题】Fakemetrics.com – &quot;build in public&quot; like a superstar 0. 这是个什么 Fakemetrics.com 是一个网站，能生成看起来像真的 Stripe 用户增长截图，给那些想假装自己产品有收入的人用。 1. 谁在为什么掏钱 想在网上装成 build in public 明星、但没有真实收入的人，他们需要一张完美的 Stripe 用户增长截图。 2. 怎么</description>
       <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-17.mp3" length="4226112" type="audio/mpeg"/>
@@ -117,14 +125,6 @@
       <guid isPermaLink="false">2026-11-05</guid>
       <pubDate>Thu, 05 Nov 2026 17:57:34 -0000</pubDate>
       <itunes:duration>714</itunes:duration>
-    </item>
-    <item>
-      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-04)</title>
-      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-04) 发布日期：2026-11-04 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「很多看似需要高门槛专业牌照的行业，其底层80%的工作其实是繁琐的合规比对，这正是个人超级个体的绝佳切入点。」 --- 💰 一人公司搞钱案例深度拆解 【本期课题】做微型&apos;企业合同风险与合规AI初审工具&apos;，单兵年入 160 万的交付 SOP 1. 业务切入场景与核心痛点 中小微企业每年面临采购、劳务、租赁等海量合同审查，但请专职法务每月固定支出上万元负担不起，找外部律师单份合同审核收费300到800元成本过高且响应周期长（通常需24至48小时），老板经常不得不硬着头皮裸签合同，暗藏巨大违约陷阱。 2. 商业模式与产品极简设计 打造一款</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-04.mp3" length="4427280" type="audio/mpeg"/>
-      <guid isPermaLink="false">2026-11-04</guid>
-      <pubDate>Wed, 04 Nov 2026 10:44:47 -0000</pubDate>
-      <itunes:duration>737</itunes:duration>
     </item>
 </channel>
 </rss>
