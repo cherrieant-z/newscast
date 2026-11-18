@@ -15,6 +15,14 @@
     <link>https://cherrieant-z.github.io/newscast/</link>
   </image>
     <item>
+      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-19)</title>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-19) 发布日期：2026-11-19 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先把自己的数据拿回来，再谈赚钱。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：HN·独立开发作品） 【本期课题】Natel, a Self-Hosted Google Contacts Alternative for CardDAV, 20MB RAM 0. 这是个什么 Natel 是一个可以自己架设的通讯录编辑器，打开网页就能编辑存在 CardDAV 服务器上的联系人。 1. 谁在为什么掏钱 目前主要是开发者自己在用，还没有多少用户。 2. 怎么收钱、有没有真的赚到 开发者自己用，和服务器以及 DAVx5 双向同步，</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-19.mp3" length="4498704" type="audio/mpeg"/>
+      <guid isPermaLink="false">2026-11-19</guid>
+      <pubDate>Thu, 19 Nov 2026 01:46:42 -0000</pubDate>
+      <itunes:duration>749</itunes:duration>
+    </item>
+    <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-18)</title>
       <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-18) 发布日期：2026-11-18 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先让代理替你动手，你才能腾出手想下一步。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：HN·独立开发作品） 【本期课题】One cloud computer for all your agents 0. 这是个什么 box 是 Simular 团队发布的一个云端电脑服务，给 AI 代理用。它提供一个远程 Ubuntu 桌面，里面装了 Chrome 和 shell，你的 AI 可以通过 MCP 驱动它，而你自己的电脑可以空出来干别的。 1. 谁在为什么掏钱 想把自己的 ChatGPT 基础版变成个人代理的人，或者想让 C</description>
       <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-18.mp3" length="3986640" type="audio/mpeg"/>
@@ -117,14 +125,6 @@
       <guid isPermaLink="false">2026-11-06</guid>
       <pubDate>Fri, 06 Nov 2026 10:23:00 -0000</pubDate>
       <itunes:duration>393</itunes:duration>
-    </item>
-    <item>
-      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-05)</title>
-      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-05) 发布日期：2026-11-05 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「内容创业的核心不是成为台前的明星演员，而是成为幕后掌控算法与内容重组流水线的无人工厂厂长。」 --- 💰 一人公司搞钱案例深度拆解 【本期课题】搭建&apos;全自动AI长视频切片与多平台分发矩阵&apos;，独立创作者月入 8 万实操路径 1. 业务切入场景与核心痛点 知识博主、播客主播与商业访谈节目每周产出大量1至2小时的优质长视频，但将其手工剪辑成几十条适合抖音、快手、小红书和视频号的爆款短视频需要繁琐的听写、切片、加字幕和打特效，一个全职剪辑师每月成本至少 7000 元且产能有限。 2. 商业模式与产品极简设计 打造一套针对访谈与口播长视频的</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-05.mp3" length="4287024" type="audio/mpeg"/>
-      <guid isPermaLink="false">2026-11-05</guid>
-      <pubDate>Thu, 05 Nov 2026 17:57:34 -0000</pubDate>
-      <itunes:duration>714</itunes:duration>
     </item>
 </channel>
 </rss>
