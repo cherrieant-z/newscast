@@ -15,6 +15,14 @@
     <link>https://cherrieant-z.github.io/newscast/</link>
   </image>
     <item>
+      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-23)</title>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-23) 发布日期：2026-11-23 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「想法变成现实，现在只需要过去的一小部分力气。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：HN·独立开发作品） 【本期课题】Trichroma, a Platformer of Light 0. 这是个什么 Trichroma 是一个平台跳跃游戏，打开后玩家控制角色在关卡里跳跃闯关，核心是光色机制，死了会重来。 1. 谁在为什么掏钱 2. 怎么收钱、有没有真的赚到 3. 你要准备什么、难在哪 难在试玩和调手感，他自己说花了很多时间在 play testing 上，还找朋友来试。光有 AI 写代码不够，关卡好不好玩得靠人</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-23.mp3" length="4739472" type="audio/mpeg"/>
+      <guid isPermaLink="false">2026-11-23</guid>
+      <pubDate>Mon, 23 Nov 2026 03:15:33 -0000</pubDate>
+      <itunes:duration>789</itunes:duration>
+    </item>
+    <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-22)</title>
       <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-22) 发布日期：2026-11-22 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先有策略，再谈工具。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：HN·独立开发作品） 【本期课题】Build a trading bot in 10 seconds 0. 这是个什么 Board 是一个网站，你可以在上面用 AI 对话创建交易机器人，然后部署并投入资金，整个过程十秒完成。 1. 谁在为什么掏钱 2. 怎么收钱、有没有真的赚到 3. 你要准备什么、难在哪 外行最可能卡在第一步：你得先有一个能说清楚的交易策略，AI 才能帮你搭出来。没策略，工具再好也白搭。 4. 今天就能做的第一步 打开你平时看盘的软件，</description>
       <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-22.mp3" length="4107888" type="audio/mpeg"/>
@@ -117,14 +125,6 @@
       <guid isPermaLink="false">2026-11-10</guid>
       <pubDate>Tue, 10 Nov 2026 09:20:16 -0000</pubDate>
       <itunes:duration>332</itunes:duration>
-    </item>
-    <item>
-      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-09)</title>
-      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-09) 发布日期：2026-11-09 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「你不需要比机器更聪明，你只需要比机器更清楚哪件事值得做。」 --- 🤖 全球 AI 与 Agent 前沿要点 (3-5条精选) 📌 【AI Agent】GitHub不堪重负！OpenAI收购替代品，A社原地自研，马斯克也要搞 - ① 一句话内容摘要：AI写代码太快，基础设施跟不上了 - ② 人话解读：格局在往头部收，小玩家的出路是做它看不上的极细分，或者早点找出口 📌 【AI Agent】马斯克：特斯拉可能将出租而非出售Optimus机器人 - ① 一句话内容摘要：马斯克最新表示，特斯拉很可能会向客户出租其人形机器人，而不是出售。</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-09.mp3" length="1635264" type="audio/mpeg"/>
-      <guid isPermaLink="false">2026-11-09</guid>
-      <pubDate>Mon, 09 Nov 2026 14:26:31 -0000</pubDate>
-      <itunes:duration>272</itunes:duration>
     </item>
 </channel>
 </rss>
