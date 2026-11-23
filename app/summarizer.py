@@ -627,6 +627,63 @@ LEAD_JUNK = ("似乎", "最重要的", "除此之外", "值得一提的是", "�
              "据悉", "值得注意的是", "让人", "不得不说", "讲真", "坦白说")
 
 
+# 句尾是时间状语或虚词，说明这句没说完：
+# 「中国结算明确自2027年1月1日起至2028年12月31日。」——念到这儿，
+# 听众还在等「到底怎么了」，下一句「对上述费用实施减免」被 <p> 切走了。
+# 抽句子的时候必须把这种半句排掉，否则补进来的「事实」比不补更糊涂。
+_INCOMPLETE_TAIL = set("日年月起止至到从为的和与及或在时后前中内里将把被")
+
+
+def _tail_complete(s: str) -> bool:
+    core = (s or "").rstrip("。！？；，、,.;:：）)")
+    return bool(core) and core[-1] not in _INCOMPLETE_TAIL
+
+
+# 列表页 / 聚合页残留。新浪财经这类源的正文页旁边挂着一整栏滚动快讯，
+# 抓 <p> 的时候会一起带进来，抽出来就是：
+# 「司机只收到27.22元 2026年11月20日 17，54，06 工信部，中国已建成工业5G专网2.7万个」
+# 这种句子念出去，听众会以为主播念串行了。
+_INDEX_STAMP = re.compile(r"\d{4}年\d{1,2}月\d{1,2}日")
+_INDEX_CLOCK = re.compile(r"\d{4}年\d{1,2}月\d{1,2}日\s*\d{1,2}[，,:：]\d{1,2}")
+
+
+def _looks_index_soup(s: str) -> bool:
+    """这句是不是从聚合页/栏目标题里掉下来的碎片"""
+    if not s:
+        return False
+    return bool(_INDEX_CLOCK.search(s)) or len(_INDEX_STAMP.findall(s)) >= 2
+
+
+# 页面里的脚本、埋点参数、内联 JSON。抓正文时如果正则撞上 <script> 或
+# 前端模板，抽出来就是「conf, 'prod_5d616dd38211ebb5d6ec52986674b6e4' }」，
+# 念出去等于当着听众念代码。
+_CODE_HINTS = ("function", "var ", "=>", "null", "true", "false", "prod_",
+               "conf,", "window.", "document.")
+
+
+def _looks_code(s: str) -> bool:
+    if not s:
+        return False
+    if sum(1 for c in s if c in "{}[]<>=|\\") >= 2:
+        return True
+    if any(k in s for k in _CODE_HINTS):
+        return True
+    if re.search(r"[A-Za-z_]{3,}\s*[,:=]\s*['\"]", s):
+        return True
+    cjk = len(re.findall(r"[\u4e00-\u9fa5]", s))
+    return cjk / max(1, len(s)) < 0.35
+
+
+def _title_has_hard_number(t: str) -> bool:
+    """
+    标题里已经有一个能听懂的硬数字，就别再补事实了。
+
+    《前10个月全国一般公共预算收入同比增长4.9%》——4.9% 就是这条新闻的信息量，
+    再补一句正文，多半是重复，还容易补进列表页的碎片。
+    """
+    return bool(re.search(r"\d+(?:\.\d+)?\s*(?:%|％|亿|万亿|万|元|美元|点|个)", t or ""))
+
+
 def _facts_from_raw(item: Dict[str, Any]) -> str:
     """
     从中文源正文里捞一句「具体到什么程度」的话。
@@ -650,7 +707,11 @@ def _facts_from_raw(item: Dict[str, Any]) -> str:
     best = ""
     for s in _split_sentences(raw):
         s = s.strip()
-        if not (26 <= len(s) <= 120):
+        if not (18 <= len(s) <= 120):
+            continue
+        if not _tail_complete(s):
+            continue
+        if _looks_index_soup(s) or _looks_code(s):
             continue
         if any(b in s[:12] for b in NEWS_BOILER):
             continue
@@ -666,10 +727,18 @@ def _facts_from_raw(item: Dict[str, Any]) -> str:
             continue
         if is_similar_title(s, title) or (summary and _summary_echoes_title(s, summary)):
             continue
-        # 挑信息密度最高的那句：数字越多越靠前，同分取靠前的
+        # 入选门槛从「数字×2 + 事实词 ≥ 2」放宽到「有一条就够」。
+        #
+        # 原先那句话等于要求「必须有数字」——命中一个事实词只算 1 分，
+        # 永远过不了线。于是「公司宣布裁员三百人」「平台开始对商家收费」
+        # 这类明明有具体动作的句子全被扔掉，条目最后只剩一个标题。
+        # 分数现在只用来排序，不再当门槛：有数字的排前面，
+        # 只有动作词、但句子够长（30 字以上，说明它有交代）的也能进来。
         score = len(re.findall(r"\d", s)) * 2 + sum(1 for k in FACT_MARKS if k in s)
-        if score >= 2 and score > (len(re.findall(r"\d", best)) * 2
-                                   + sum(1 for k in FACT_MARKS if k in best)):
+        if not has_number and len(s) < 30:
+            continue
+        if score > (len(re.findall(r"\d", best)) * 2
+                    + sum(1 for k in FACT_MARKS if k in best)):
             best = s
     if not best:
         return ""
@@ -677,6 +746,24 @@ def _facts_from_raw(item: Dict[str, Any]) -> str:
     if _hollow(spoken):
         return ""
     return _cut(spoken, 120)
+
+
+def _looks_truncated(s: str) -> bool:
+    """
+    这句是不是被网页结构切断了。
+
+    原文「适合用来创作风格化较强的照片——好消息是」，后面跟着一个链接卡片，
+    <p> 到这儿就结束了。抽出来念，听众听到的是半句。判据：句尾落在
+    「是 / 有 / 在 / 说 / 为」这类需要宾语的词上，或者破折号后面只剩几个字。
+    """
+    core = (s or "").rstrip("。！？；，、,.;:：）) ”\"'")
+    if not core:
+        return True
+    if core[-1] in "是有在说为":
+        return True
+    if "——" in core and len(core.rsplit("——", 1)[-1]) < 6:
+        return True
+    return False
 
 
 def _describe_from_raw(item: Dict[str, Any]) -> str:
@@ -698,11 +785,171 @@ def _describe_from_raw(item: Dict[str, Any]) -> str:
             continue
         if s.startswith(LEAD_JUNK):
             continue
+        if _looks_truncated(s) or _bad_summary(s) \
+                or any(k in s for k in UI_STEP_MARKS):
+            continue
         if any(k in s for k in ("用来", "帮你", "适合", "支持", "能把", "就能", "可以")):
             t = _speakable(s)
-            if 14 <= len(t) <= 56:
+            # 单拎出来没有主语的句子不要：「可以手动选择是否启用的「1.5 级界面」」
+            # 原文里它前面有主语「这台手机」，抽出来念，听众不知道是谁可以。
+            if t.startswith(("可以", "支持", "能让", "能够", "用来", "还能")):
+                continue
+            if 14 <= len(t) <= 56 and not _hollow(t):
                 return t
     return ""
+
+
+# 发布会口号。这类句子出现在正文第一段，抓出来念是这样：
+# 「面向人工智能，面向世界，面向未来。」——七个字一个信息，但它是完整句、
+# 有动词、长度也够，所有格式判据都会放行。只能按词表挡。
+PROMO_MARKS = ("面向世界", "面向未来", "引领未来", "赋能", "新篇章", "新高度",
+               "里程碑", "划时代", "颠覆性", "革命性", "重新定义", "全方位",
+               "一站式解决方案", "生态闭环")
+
+
+def _is_promo_line(s: str) -> bool:
+    """发布会口号，不是新闻事实"""
+    return bool(s) and (any(k in s for k in PROMO_MARKS) or s.count("面向") >= 2)
+
+
+# 图文教程里的操作步骤。评测稿的正文大段是「此时我们可以再次上滑」，
+# 它是正文、是完整句、也有主语，但听众要的不是怎么点手机。
+UI_STEP_MARKS = ("此时我们", "我们可以", "你会发现", "你会看到", "点击",
+                 "上滑", "下滑", "滑动", "扫码", "输入框", "弹窗")
+
+
+def _trim_ui_step(s: str) -> str:
+    """
+    摘要里混进图文教程的操作描述时，切到那一步之前。
+
+    「是这个名为「小艺 AI 屏」的全新桌面，此时我们可以再次上滑」——
+    前半句还有信息，后半句是「怎么滑手机」。整句丢掉会损失前半句，
+    整句念又离谱，所以按标记切一刀；切完太短就整句不要。
+    """
+    if not s:
+        return s
+    cut = len(s)
+    for k in UI_STEP_MARKS:
+        i = s.find(k)
+        if i >= 0:
+            cut = min(cut, i)
+    if cut >= len(s):
+        return s
+    head = s[:cut].rstrip("，,、；; ")
+    return head if len(head) >= 20 else ""
+
+
+def _bad_summary(t: str) -> bool:
+    """
+    摘要不能直接念的几种情况。合成一个判据，避免写稿层和预判层各判一套。
+
+    - 发布会口号：「面向人工智能，面向世界，面向未来」
+    - 页面脚本残留：「conf, 'prod_5d616dd38211ebb5d6ec52986674b6e4' }」
+    - 聚合页碎片：一串带日期的时间戳
+    - 第一人称体验：「我可以解锁后直接说……」——播报里的「我」指代不清
+    """
+    if not t:
+        return False
+    if _is_promo_line(t) or _looks_code(t) or _looks_index_soup(t):
+        return True
+    return t.startswith("我") and not t.startswith(("我们", "我国", "我省", "我市", "我县"))
+
+
+def _loose_fact(item: Dict[str, Any]) -> str:
+    """
+    最后一层兜底：从正文里拿一句「有交代」的话，不要求数字和动作词。
+
+    为什么需要这一层：`_facts_from_raw` 的判据是「必须有数字或明确动作」，
+    这是为了让补进来的话值得听。但有一批稿子天然没有数字——
+    「这个工具支持把字幕烧进视频」「作者原来在银行做风控」——
+    这类句子对听众是有用的，只是没数字。它们全被扔掉以后，
+    条目就只剩一个标题，播出去是「第1条，财务团队的人工智能蓝图。」
+
+    这一层的判据换成排除法：排除套话、过渡句、标题复述、空壳句，
+    剩下的第一句就是原文在讲事。宁可平淡，也不能是空的。
+    """
+    raw = (item.get("raw_text") or "").strip()
+    title = item.get("title") or ""
+    if len(raw) < 40:
+        return ""
+    # 英文原文不抽：早间播报里冒出一句英文，听众直接关掉
+    if len(re.findall(r"[\u4e00-\u9fa5]", raw)) < 20:
+        return ""
+    for s in _split_sentences(raw):
+        s = s.strip()
+        if not (14 <= len(s) <= 75):
+            continue
+        if not _tail_complete(s):
+            continue
+        if _looks_index_soup(s) or _looks_code(s):
+            continue
+        if s.endswith(("？", "?")):
+            continue
+        if any(b in s[:12] for b in NEWS_BOILER):
+            continue
+        if s.startswith(LEAD_JUNK) or s.startswith(("所以", "因此", "但是", "但",
+                                                    "而且", "然后", "另外", "不过",
+                                                    "同时", "此外", "其中")):
+            continue
+        # 第一人称体验句（评测稿里满篇都是）：「我可以解锁后直接说帮我去 b 站看看」
+        # 播报里出现「我」，听众不知道这个「我」是谁——是主播还是作者。
+        if s.startswith("我") and not s.startswith(("我们", "我国", "我省", "我市", "我县")):
+            continue
+        if any(k in s for k in HOLLOW_MARKS):
+            continue
+        if any(k in s for k in PROMO_MARKS) or s.count("面向") >= 2:
+            continue
+        if any(k in s for k in UI_STEP_MARKS):
+            continue
+        if is_similar_title(s, title):
+            continue
+        if _summary_echoes_title(title, s) or _summary_offtopic(title, s):
+            continue
+        spoken = _speakable(s)
+        if len(spoken) < 12 or _hollow(spoken):
+            continue
+        return _cut(spoken, 70)
+    return ""
+
+
+def _item_has_fact(item: Dict[str, Any]) -> bool:
+    """
+    这条手上到底有没有「事」，还是只有一行标题。
+
+    开场要报「AI 圈几件事」，这个数字必须跟正文念的条数一致。
+    所以先按这条判一遍，把只有标题的排除掉，再报数、再编号——
+    否则会出现「今天一共 7 条」然后只念 5 条的落差。
+    """
+    if item.get("is_fallback"):
+        return True
+    t = item.get("title") or ""
+    if not t.strip():
+        return False
+    s = _trim_ui_step((item.get("summary") or "").strip())
+    if s and not _summary_echoes_title(t, s) and not _summary_offtopic(t, s) \
+            and not _bad_summary(s):
+        return True
+    if (item.get("detail") or "").strip():
+        return True
+    return bool(_describe_from_raw(item) or _facts_from_raw(item) or _loose_fact(item))
+
+
+def _bare_note(n: int, date_str: str, salt: int) -> List[str]:
+    """
+    块尾交代「还有几条只拿到标题」。
+
+    这不是偷懒的托词，是唯一诚实的处理：这类稿子源站只给了标题
+    （InfoQ 的 RSS 摘要就是「点击查看原文」，量子位的是「CAD拆解」 七个字），
+    硬念一遍等于占听众十秒什么也没给；补一句万能点评更糟，
+    等于假装修了稿。说清楚「只有标题、没正文」，比两种都强。
+    """
+    if n <= 0:
+        return []
+    return [_day_pick([
+        f"另外还有 {n} 条只拿到标题、没抓到正文，我就不占你时间了，列在页面清单里。",
+        f"还有 {n} 条只有标题没有正文，我不硬凑，放在清单里你自己翻。",
+        f"剩下 {n} 条源站只给了标题，念出来也是空的，我没往里编，列在清单里。",
+    ], date_str, salt)]
 
 
 # 「一个叫不出名字的在线工具」——开场第一句就承认不知道在讲什么，
@@ -1044,7 +1291,14 @@ def _summary_offtopic(title: str, summary: str) -> bool:
 
     源站偶尔把正文开头抓串——今天那条「千问办公押注 Team 智能体」后面
     跟的是一段北欧神话。这种摘要念出来，听众只会觉得节目在胡言乱语。
-    判据用最长公共子串：同一件事的摘要至少有 3 个字连续重合。
+    判据用最长公共子串：同一件事的摘要至少有 2 个字连续重合。
+
+    这个门槛原来是 3。放到 3 的时候误杀太多——
+    《把论文一键变成讲解视频》配的摘要是「你列出视频要讲的每个知识点……」，
+    只共享「视频」两个字，就被判成跑题，整条只剩标题；
+    《自建轻量网站监控》和「做了个极简的自托管监控」也一样。
+    而它真正要挡的东西（正文抓串成北欧神话）连 2 个字都撞不上，
+    所以降到 2 既救回了真摘要，也没放过跑题稿。
     """
     if not summary or len(summary) < 16:
         return False
@@ -1052,7 +1306,7 @@ def _summary_offtopic(title: str, summary: str) -> bool:
     b = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", summary)
     if len(a) < 4 or len(b) < 8:
         return False
-    return _lcs_len(a, b) < 3
+    return _lcs_len(a, b) < 2
 
 
 def _summary_echoes_title(title: str, summary: str) -> bool:
@@ -1426,6 +1680,9 @@ MACRO_READING = {
              "买房先看成交量和挂牌价，别只看单价；做家居建材的，需求会滞后反应"),
             (("就业", "失业率", "招聘"), "找工作的人多不多，直接决定你招人的成本和自己的议价空间",
              "招人变容易说明供给充足，可以挑更合适的人；想跳槽的，先看这个数再谈薪"),
+            (("一般公共预算", "财政收入", "预算收入", "税收", "个税", "财政支出"),
+             "财政的收入和支出在变，它决定后面还有多少钱能花到民生和补贴上",
+             "看钱往哪一块花——教育、医疗、社保、基建，那里的订单和岗位会先动"),
             (("工资", "收入"), "居民的收入预期在变，这是所有消费的底座",
              "收入预期变差时，高客单生意会先受影响，低客单刚需反而更稳"),
             (("养老", "社保", "医保"), "社保和医保的规则在调整，直接关系你的长期现金流",
@@ -1446,8 +1703,12 @@ MACRO_READING = {
              "做出口的，先算一遍加税后的毛利，再看要不要换市场或者换品类"),
             (("出口", "外贸", "进口"), "外部需求的冷热，直接决定很多工厂和贸易商的订单",
              "有外贸客户的盯紧账期；想接外贸单的，靠响应速度和服务取胜"),
-            (("补贴", "降费"), "这是真金白银在减负",
+            (("补贴", "奖补", "专项资金"), "这是真金白银在减负",
              "符合条件就去申请，很多补贴没人领只是因为不知道"),
+            # 「降费」原先和「补贴」放在一条 cue 里，结果交易所给市场降手续费
+            # 被讲成「符合条件就去申请补贴」——降费和领补贴是两件完全不同的事。
+            (("降费", "降成本", "降保证金", "降手续费", "减负"), "交易和经营的成本在降，省下来的都是净利",
+             "翻一下手上那些固定支出——手续费、通道费、服务费，看有没有跟着降"),
             (("减税", "退税", "增值税", "所得税"), "税负在调整，省下来的就是纯利润",
              "查一下自己行业今年有没有新的抵扣项，一年能省不少"),
             (("监管", "不正当竞争", "反内卷", "价格战"), "规则在收紧，靠低价硬拼的空间会被压缩",
@@ -1506,15 +1767,32 @@ MACRO_NOT_SIGNAL = (
     "荐股", "评论员", "观察", "侧记", "综述", "专访", "理论", "讲好", "蕴藏",
     "那些事", "面临哪些", "如何看", "怎么看", "怎么办", "意味着什么", "有何深意",
     "采购", "中标", "招标", "招聘启事", "拍卖",
+    # 媒体体裁：问答、盘点、征文、演讲。这类标题里往往挂着「人工智能」「消费」
+    # 这种大词，配任何解读都成立——「AI时代 我们需要什么样的科研人才」
+    # 被讲成「这是门槛最低的技术红利」，就是这么来的。它们不是今天发生的事。
+    "我们需要", "什么样的", "有何", "几何", "亮点", "看点", "盘点", "十大",
+    "必读", "速览", "图解", "一图", "问答", "对话", "演讲", "致辞", "寄语",
+    "观察家", "圆桌", "访谈", "手记", "背后", "真相", "是否", "能否",
 )
 
 # 宏观板块只接「有动作或数字」的标题。没有动作的标题，讲不出影响。
+#
+# 这批词是判「这条有没有发生一件具体的事」。原先只有货币政策和高频数据，
+# 结果「约谈平台」「试点放开」「批复设立」这类真动作全被判掉，
+# 十期里有七期整块空着——不是那天没消息，是词表没覆盖到。
 MACRO_ACTION_WORDS = (
     "加息", "降息", "降准", "上调", "下调", "提高", "降低", "扩大", "收紧", "放开", "取消",
     "印发", "出台", "发布", "实施", "修订", "开征", "减免", "补贴", "关税", "配额",
     "同比", "环比", "增长", "下降", "下跌", "上涨", "涨超", "跌超", "突破",
     "创新高", "新低", "倍增", "推出", "启动", "签署",
     "破产", "重整", "退市", "上市", "裁员", "扩产", "减产", "出口", "进口", "投产",
+    # 监管与准入
+    "约谈", "处罚", "罚款", "立案", "查处", "下架", "禁售", "许可", "备案", "核准",
+    "批复", "试点", "松绑", "放宽", "从严", "加码", "落地", "扩容", "限购", "限价",
+    # 财政与钱
+    "加征", "停征", "免征", "退税", "降费", "专项债", "国债", "降杠杆", "贴息",
+    # 产业与供需
+    "涨价", "提价", "降价", "扩能", "检修", "限产", "开工", "竣工", "并网",
 )
 
 
@@ -1528,23 +1806,63 @@ NEWS_NOISE = (
 )
 
 
-def _macro_worthy(title: str, cue_hit_at: int) -> bool:
-    """
-    这条够不够格进「大环境」这段。
+# 宏观条目分三档。数字越大，越撑得住「这条 → 对你的影响」这句因果。
+#
+# 为什么分档而不是一票否决：原先只有「过 / 不过」两档，
+# 判据一收紧，十期里有七期大环境整块没播；一放松，又会出现
+# 「技能大赛」被讲成「产业政策」这种配错因果的段落。
+# 分成两档以后，两种损失都能控住：能讲因果的严格讲，
+# 讲不清因果的按「大方向」讲，措辞上让听众自己打折听。
+MACRO_TIER_STRICT = 2   # 有政策动作 + 关键词是主角（标题前段）+ 精确命中
+MACRO_TIER_LOOSE = 1    # 有政策动作，或有精确命中，但只有一头
+MACRO_TIER_FLOOR = 0    # 什么都不占，只是条宏观消息：保底用，措辞最软
+MACRO_TIER_NONE = -1    # 硬排除：评论、荐股、公告
 
-    额外两条判据，都是被真实错位逼出来的：
-    - 标题像评论/推荐/公告 → 不进（讲不出确定的影响）
-    - 命中的关键词不在前半句 → 说明它只是个配角，不是这条新闻在讲的事
+
+def _macro_level(title: str, cue_hit_at: int, is_default: bool) -> int:
+    """
+    这条够不够格进「大环境」这段，以及该按多硬的口径讲。
+
+    分档依据是三件事，缺一件就降一档：
+      1. 标题里有没有一个具体的政策 / 市场动作（MACRO_ACTION_WORDS）
+      2. 命中的关键词是不是这条新闻的主角（在标题前段，而不是背景板）
+      3. 解读句是不是这条新闻自己的因果（精确命中），还是领域通用句
+
+    三件都有 = 严格档；有两件 = 宽松档；只有一件或没有 = 保底档。
+    评论、荐股、采购公告仍然是硬排除——这类标题的共同点是
+    「没有发生任何事」，配任何解读都是错的，给它留位置不如空着。
     """
     t = (title or "").lower()
     if any(w in t for w in MACRO_NOT_SIGNAL):
-        return False
-    if not any(w.lower() in t for w in MACRO_ACTION_WORDS):
-        return False
-    # 命中的关键词必须出现在标题前半句：那才是这条新闻在讲的事。
-    # 「路条稀缺 承诺加码 A股破产重整门槛抬高」里的 A股 是背景板，
-    # 不是主角；按它配上「股市在放量波动」，听众会觉得主播没读标题。
-    return 0 <= cue_hit_at <= 9
+        return MACRO_TIER_NONE
+    # 疑问式标题是分析稿：《金价震荡回调，黄金挂钩理财"退烧"？》
+    # 它没有发生任何事，标题本身就在问问题，配一条确定的解读必然是编的。
+    if (title or "").strip().endswith(("？", "?")):
+        return MACRO_TIER_NONE
+    # 短标题信息量不够：八字以下的多是栏目名或半句话
+    core = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", title or "")
+    if len(core) < 8:
+        return MACRO_TIER_NONE
+    has_action = any(w.lower() in t for w in MACRO_ACTION_WORDS)
+    # 「关键词是不是主角」原来卡死在前 9 个字。这条判据对长标题不公平：
+    # 《前10个月全国一般公共预算收入同比增长4.9%》里「预算收入」在 12 位，
+    # 它明明就是这条新闻的主角，却因为字数被当成背景板。
+    # 现在改成「前 12 字，或标题长度的一半以内」——短标题还是严格要求，
+    # 长标题按占比算。老案例《路条稀缺 承诺加码 A股破产重整门槛抬高》
+    # （22 字，「A股」在 12 位）仍会被挡，那确实是背景板。
+    half = int(len(core) * 0.5)
+    is_lead = 0 <= cue_hit_at <= 12 or (len(core) >= 20 and 0 <= cue_hit_at <= half)
+    hit_cue = not is_default
+    score = int(has_action) + int(is_lead) + int(hit_cue)
+    # 预测、展望类的稿子只给宽松档：它讲的是「可能会怎样」，
+    # 不配用「这条的实际影响是」这种已经发生的口径去讲。
+    is_forecast = any(w in t for w in ("预计", "有望", "或将", "料将", "预测", "展望", "前瞻"))
+    if score >= 3 and not is_forecast:
+        return MACRO_TIER_STRICT
+    if score >= 2:
+        return MACRO_TIER_LOOSE
+    return MACRO_TIER_FLOOR
+
 
 
 def macro_reading(domain: str, title: str) -> Tuple[str, str]:
@@ -2421,6 +2739,13 @@ class NewsSummarizer:
 
         ai_items = [i for i in collected_data.get("AI Agent", []) if (i.get("title") or "").strip()]
         opc_items = [i for i in collected_data.get("一人公司", []) if (i.get("title") or "").strip()]
+        # 只有标题、正文全空的条目单独拎出来。它们不进正文编号，
+        # 但仍要在块尾交代一句「还有几条只拿到标题」——既不装作讲过了，
+        # 也不让听众在清单里找不到。开场报数用的也是这个过滤后的长度。
+        ai_bare = [i for i in ai_items if not _item_has_fact(i)]
+        opc_bare = [i for i in opc_items if not _item_has_fact(i)]
+        ai_say = [i for i in ai_items if _item_has_fact(i)]
+        opc_say = [i for i in opc_items if _item_has_fact(i)]
         macro_items = [i for i in collected_data.get("宏观大势", []) if (i.get("title") or "").strip()]
         has_news = any(collected_data.get(c) for c in ("权威要闻", "参考消息", "新浪财经"))
         # GitHub 这块一天只讲一个。取到几条只用第一条——
@@ -2433,31 +2758,45 @@ class NewsSummarizer:
         # 原因：开场要报「今天一共几块」。如果按「采到没有宏观条目」报块数，
         # 而条目后来在筛选里被全部淘汰，就会念出「今天一共 5 块」，
         # 实际只讲了 4 块——听众一直在等那个不存在的大环境段落。
-        macro_matched: List[Tuple[Dict[str, Any], str, str]] = []
-        macro_default: List[Tuple[Dict[str, Any], str, str]] = []
+        #
+        # 三档分别存：严格档撑得住因果，宽松档按大方向讲，
+        # 保底档只在一条严格档都没有时拿来占位（大环境这段必须存在，
+        # 这是明确要求：听时政的人不能因为当天没出政策就整块听不到）。
+        macro_pick: List[Tuple[int, Dict[str, Any], str, str, bool]] = []
         for _it in macro_items:
             _m, _a, _pos, _is_default = macro_reading_ex(_it.get("domain", ""), _it["title"])
             if not _m or not _a:
                 continue
-            if not _macro_worthy(_it["title"], _pos):
+            _lvl = _macro_level(_it["title"], _pos, _is_default)
+            if _lvl == MACRO_TIER_NONE:
                 continue
-            if _is_default:
-                # 用的是「这个领域通用」的解读，不是这条新闻自己的因果。
-                # 单独放到一边：只在前面的严格命中不够时，才拿一条来兜底。
-                macro_default.append((_it, _m, _a))
-                continue
-            macro_matched.append((_it, _m, _a))
-        # 严格命中不到两条时，补一条通用解读。
-        #
-        # 原先只要命中默认句就整条淘汰，结果 5 条候选里常常只剩 1 条，
-        # 这块只有一百来字就说完了。听众听到的是「今天大环境就一条」——
-        # 不是那天真没消息，是判据把能讲的都判掉了。补一条兜底，
-        # 措辞上仍按「大方向」讲，不假装它是精确因果。
-        if len(macro_matched) < 2 and macro_default:
-            macro_matched += macro_default[:2 - len(macro_matched)]
+            macro_pick.append((_lvl, _it, _m, _a, _is_default))
+
+        # 排序：先按档位，再按标题长度（短的更像一条消息，长的多是拼接稿）
+        macro_pick.sort(key=lambda x: (-x[0], len(x[1]["title"])))
+        strict_pick = [p for p in macro_pick if p[0] == MACRO_TIER_STRICT]
+        loose_pick = [p for p in macro_pick if p[0] == MACRO_TIER_LOOSE]
+        floor_pick = [p for p in macro_pick if p[0] == MACRO_TIER_FLOOR]
+
+        # 严格档优先，凑到 2 条；不足的用宽松档补；一条都没有时用保底档凑 1 条。
+        # 这个顺序不是「宁缺毋滥」的妥协，是三种讲法的可信度差别：
+        # 严格档说「这条的实际影响是」，宽松档说「这条我按大方向说」，
+        # 保底档只讲「外面在往哪走」，绝不断言因果。
+        macro_matched = [p for p in strict_pick[:4]]
+        # 严格档满两条以后还要再补一条宽松档：这块是整个节目里信息密度最高
+        # 的一段，两条 270 字太单薄，听众刚听出味道就结束了。
+        # 补到三条为止，第四条留给真正有料的节目。
+        if len(macro_matched) < 3:
+            macro_matched += loose_pick[:3 - len(macro_matched)]
+        if not macro_matched and floor_pick:
+            macro_matched += floor_pick[:1]
         # 这块是「说了就得管用」的高浓度段落，超过四条听众记不住，
         # 也会把后面的要闻挤没
         macro_matched = macro_matched[:4]
+        # 这一段里有没有一条能撑住「因为它，所以你要……」的因果。
+        # 没有的话，开场和过渡句都要跟着软下来，否则整段都在装懂。
+        macro_has_cause = any(p[0] >= MACRO_TIER_STRICT for p in macro_matched)
+
 
         # 每段既进播报稿，也作为前端章节（点了能跳到对应分钟）
         blocks: List[Tuple[str, str]] = []
@@ -2501,12 +2840,15 @@ class NewsSummarizer:
             plan_bits.append(
                 "一个没做成的例子" if case_kind == "sample"
                 else "一个具体的人在做的具体一件事")
-        if ai_items:
-            plan_bits.append(f"人工智能圈的 {len(ai_items)} 件事")
-        if opc_items:
-            plan_bits.append(f"一人公司的 {len(opc_items)} 条路子")
+        if ai_say:
+            plan_bits.append(f"人工智能圈的 {len(ai_say)} 件事")
+        if opc_say:
+            plan_bits.append(f"一人公司的 {len(opc_say)} 条路子")
         if macro_matched:
-            plan_bits.append("几个跟钱包有关的大环境信号")
+            # 开场只承诺当天真能兑现的东西。全是宽松档 / 保底档那天，
+            # 说「跟钱包有关」就是空头支票——听众会一路等一句明确的因果。
+            plan_bits.append("几个跟钱包有关的大环境信号" if macro_has_cause
+                             else "外面的几个大方向")
         if gh_items:
             plan_bits.append("一个 GitHub 上的开源项目")
         if has_news:
@@ -2834,20 +3176,26 @@ class NewsSummarizer:
             t_sp = re.sub(r"(人工智能|软件服务|智能体)\s+(?=[\u4e00-\u9fa5])", r"\1", t_sp)
             t_sp = re.sub(r"([A-Za-z0-9])([\u4e00-\u9fa5])", r"\1 \2", t_sp)
 
-            s_raw = item.get('summary', '') or ''
+            s_raw = _trim_ui_step(item.get('summary', '') or '')
             s_sp = ""
             if s_raw and not _summary_echoes_title(item['title'], s_raw) \
-                    and not _summary_offtopic(item['title'], s_raw):
+                    and not _summary_offtopic(item['title'], s_raw) \
+                    and not _is_promo_line(s_raw):
                 s_sp = _speakable(safe_ai_replace(s_raw)
                                   .replace("Agent", "智能体").replace("OPC", "一人公司"))
                 # 摘要放到 90 字。原先卡 60，模型或源站给的一句完整交代
                 # 常被切在半截，听众听到的是「……统一收件箱和帮助中心」这种
                 # 没有下文的句子。这条内容本身就短，多留 30 个字不会显得啰嗦。
                 s_sp = _cut(s_sp, 90)
+                # 摘要本身是口号 / 脚本残留 / 第一人称体验时，
+                # 宁可空着让后面的正文层补，也不要把它当事实念出去。
+                if _bad_summary(s_sp):
+                    s_sp = ""
             if not s_sp and not item.get('is_fallback'):
-                # 摘要被判定为「只是重复标题」时，正文里往往还有一句更具体的，
-                # 补上它，听众才知道这东西到底能干什么
-                s_sp = _describe_from_raw(item)
+                # 摘要被判定为「只是重复标题 / 口号 / 第一人称体验」时，
+                # 往后交给正文层补。注意真正的补位动作放在事实层之后（见下），
+                # 事实层能给出带数字的硬信息时，就不再用一句平淡的描写顶上去。
+                pass
 
             # 具体细节：一周里最有用的那一层。
             # 只念标题加一句概括，四条 AI 新闻加起来两百多字，听完什么也留不下。
@@ -2871,6 +3219,17 @@ class NewsSummarizer:
                     d_sp = ""
                 elif d_sp and _hollow(d_sp):
                     d_sp = ""
+
+            if not s_sp and not d_sp and not item.get('is_fallback'):
+                # 到这儿才轮到「它到底能干什么」那一句。
+                # 顺序是故意的：先让事实层去捞带数字的句子，捞到了就够了；
+                # 捞不到再用功能描写的句子顶，最后才是放宽版。
+                s_sp = _describe_from_raw(item)
+            if not s_sp and not d_sp and not item.get('is_fallback'):
+                # 三层正规原料都空了，才退到放宽版：不要求「用来 / 帮你」
+                # 这种功能句，只要正文里有一句实句就拿。这一层专门救
+                # 「第1条，财务团队的人工智能蓝图。」这种只有标题的条目。
+                s_sp = _loose_fact(item)
 
             # 判断句限量：AI 这块一天四条，每条都来一句「这意味着什么」，
             # 听众听到的就不是新闻而是评论，而且那些评论换条新闻照样成立。
@@ -2904,20 +3263,24 @@ class NewsSummarizer:
                 else:
                     judge_budget[0] -= 1
 
-            body = f"第{idx}条，{_end(t_sp)}"
+            body = _end(t_sp)
             if s_sp:
                 body += _end(s_sp)
             if d_sp:
                 body += _end(d_sp)
+            # 第二项告诉调用方「这条手里只有标题」：三层原料全空，
+            # 播出去就是「第1条，财务团队的人工智能蓝图。」
+            # 这种句子不该占编号，也不该硬凑一句点评顶上。
+            bare = not s_sp and not d_sp
             if not reading:
-                return body
+                return body, bare
             cue = _cue_for(date_str, idx)
-            return f"{body}{cue}，{_end(reading)}"
+            return f"{body}{cue}，{_end(reading)}", bare
 
         # 2. AI 动态：这块是「外面发生了什么事」，判断只给最值得的一两条
-        if ai_items:
+        if ai_say:
             sec += 1
-            if all(it.get("is_fallback") for it in ai_items):
+            if all(it.get("is_fallback") for it in ai_say):
                 ai_lines = [f"第{_cn_num(sec)}块，AI 这块今天没抓到实时动态，我不硬凑新闻，"
                             "给你几条半年内都不会过时的判断。"]
             else:
@@ -2925,20 +3288,28 @@ class NewsSummarizer:
                     "第{c}块，AI 圈。今天一共 {n} 条，我一条条说。",
                     "先说第{c}块，AI 圈今天发生的事，{n} 条。",
                     "第{c}块是 AI。过去一天有 {n} 条值得知道的。",
-                ], date_str, 7).format(c=_cn_num(sec), n=len(ai_items))]
+                ], date_str, 7).format(c=_cn_num(sec), n=len(ai_say))]
             # 判断句上限从 2 提到 4：每条都给一句「这跟你有什么关系」。
             # 原先只给两条，是为了防止「一天四条新闻配四条万能点评」——
             # 但现在每条前面已经讲了具体的用法和细节，判断句不再承担
             # 撑时长的作用，它只需要回答「所以我该在意什么」。
             budget = [4]
-            for i, item in enumerate(ai_items, 1):
-                ai_lines.append(speak_item("AI Agent", item, i, budget))
+            for i, item in enumerate(ai_say, 1):
+                text, _ = speak_item("AI Agent", item, i, budget)
+                ai_lines.append(f"第{i}条，{text}")
+            ai_lines += _bare_note(len(ai_bare), date_str, 33)
             add("AI 动态", "\n".join(ai_lines))
+        elif ai_items:
+            # 极端情况：抓到的每一条都只有标题。整块不念标题，
+            # 但也不能凭空消失——开场已经报了块数，消失会让人以为漏了。
+            sec += 1
+            add("AI 动态", f"第{_cn_num(sec)}块，AI 圈今天抓到的都是只有标题、没有正文的稿子，"
+                          "我不硬凑，列在页面清单里了。")
 
         # 3. 一人公司 / 独立开发者动态：每条都要能回答「这跟我有什么关系」
-        if opc_items:
+        if opc_say:
             sec += 1
-            if all(it.get("is_fallback") for it in opc_items):
+            if all(it.get("is_fallback") for it in opc_say):
                 opc_lines = [f"第{_cn_num(sec)}块，一人公司。今天没大的新动静，给你三条值得记住的判断。"]
             else:
                 opc_lines = [_day_pick([
@@ -2947,13 +3318,23 @@ class NewsSummarizer:
                     "第{c}块，看看一人公司这块。这几条都有明确的活儿在里面。",
                 ], date_str, 8).format(c=_cn_num(sec))]
             budget = [99]  # 一人公司这块本来就靠「能不能抄」立住，不设上限
-            for i, item in enumerate(opc_items, 1):
-                opc_lines.append(speak_item("一人公司", item, i, budget))
+            for i, item in enumerate(opc_say, 1):
+                text, _ = speak_item("一人公司", item, i, budget)
+                opc_lines.append(f"第{i}条，{text}")
+            opc_lines += _bare_note(len(opc_bare), date_str, 34)
             add("一人公司动态", "\n".join(opc_lines))
+        elif opc_items:
+            sec += 1
+            add("一人公司动态",
+                f"第{_cn_num(sec)}块，一人公司这块今天抓到的都是只有标题的帖子，"
+                "没正文，我不硬凑，列在清单里了。")
 
-        # 4. 大环境：只讲能在「这条新闻 → 对你的影响」之间建立因果的那几条。
-        #    对不上号的一律不进这块，退回后面的要闻简报念标题——
-        #    听者一听逻辑断了，整段的可信度就没了。
+        # 4. 大环境：这块必须存在，但分三档讲，口径跟着证据强弱走。
+        #
+        #    原先只有「能建立因果 / 不能建立因果」两种处理，判据一严
+        #    十期里七期整块消失。可这块是听众每天最想知道的部分——
+        #    外面在变什么、跟他的钱有没有关系。宁可讲得软一点，
+        #    也不能因为当天没出政策就整天不提。
         macro_lines = []
         # 筛选已经在开场之前算过一遍（见 macro_matched），这里直接复用。
         # 两处各算一次的话，两边的过滤条件迟早会漂移——开场说 5 块、
@@ -2962,33 +3343,78 @@ class NewsSummarizer:
 
         if matched:
             sec += 1
+            hard = [p for p in matched if p[0] >= MACRO_TIER_STRICT]
             if len(matched) == 1:
                 # 一条就说「一条」。说「几条」然后只念一条，听众会以为漏了
-                macro_lines.append(_day_pick([
-                    f"第{_cn_num(sec)}块，今天只有一条大环境消息真跟你钱包有关，我单独说。",
-                    f"第{_cn_num(sec)}块，外面的事今天大多跟你没关系，只有这一条值得知道。",
-                ], date_str, 9))
+                if hard:
+                    macro_lines.append(_day_pick([
+                        f"第{_cn_num(sec)}块，今天只有一条大环境消息真跟你钱包有关，我单独说。",
+                        f"第{_cn_num(sec)}块，外面的事今天大多跟你没关系，只有这一条值得知道。",
+                    ], date_str, 9))
+                else:
+                    # 只有一条撑不住因果的消息时，不吹「跟钱包有关」，
+                    # 否则听众会等一句根本不存在的因果。
+                    macro_lines.append(_day_pick([
+                        f"第{_cn_num(sec)}块，今天外面只有一条值得提一下的，我按大方向讲。",
+                        f"第{_cn_num(sec)}块，今天没有硬政策，只有一条方向上的消息，说给你听。",
+                    ], date_str, 9))
             else:
-                macro_lines.append(_day_pick([
-                    f"第{_cn_num(sec)}块，说几个跟钱包有关的外部变化。",
-                    f"第{_cn_num(sec)}块，看看外面正在变的几件事，都跟钱有关。",
-                    f"第{_cn_num(sec)}块，几条大环境消息，我挑能落到你身上的说。",
-                ], date_str, 9))
-            for i, (it, meaning, action) in enumerate(matched, 1):
+                if hard:
+                    macro_lines.append(_day_pick([
+                        f"第{_cn_num(sec)}块，说几个跟钱包有关的外部变化。",
+                        f"第{_cn_num(sec)}块，看看外面正在变的几件事，都跟钱有关。",
+                        f"第{_cn_num(sec)}块，几条大环境消息，我挑能落到你身上的说。",
+                    ], date_str, 9))
+                else:
+                    macro_lines.append(_day_pick([
+                        f"第{_cn_num(sec)}块，今天外面没有硬政策，我讲几条方向上的变化。",
+                        f"第{_cn_num(sec)}块，说说外面正在往哪走，这些跟你的关系没那么直接，你自己打折听。",
+                        f"第{_cn_num(sec)}块，几条大方向上的消息，我先讲事实，再说它可能意味着什么。",
+                    ], date_str, 9))
+            for i, (lvl, it, meaning, action, is_default) in enumerate(matched, 1):
                 title_spoken = _speakable(safe_ai_replace(it["title"]))
-                lead = _day_pick([
-                    "这条的实际影响是：", "这事的传导是这样：",
-                    "它往下会影响到：", "往你身上落是这样：",
-                ], date_str, 20 + i)
-                macro_lines.append(
-                    f"第{i}条，{_end(title_spoken)}{lead}{_end(meaning)}"
-                    f"对你来说，{_end(action)}"
-                )
-        # 没有一条能建立因果的，这块就整段不说。
-        # 以前这里会说一句「今天没什么能落到你身上的，我跳过」——那句是给
-        # 主播自己听的，听众并不关心你有没有跳过；更糟的是开场已经按
-        # 实际块数报了「今天一共 4 块」，正文再交代一句「这块跳过」，
-        # 反而让人以为漏了一块。
+                # 补一句事实：标题只说「发生了什么事」，听众往往还是不知道
+                # 具体到什么程度。正文里通常有一句带数字或明确动作的话，
+                # 补在标题和解读之间，这段才从「播报标题」变成「讲了一件事」。
+                fact = "" if _title_has_hard_number(title_spoken) else _facts_from_raw(it)
+                if fact and (is_similar_title(fact, title_spoken)
+                             or _summary_echoes_title(title_spoken, fact)):
+                    fact = ""
+                line = f"第{i}条，{_end(title_spoken)}"
+                if fact:
+                    fact_lead = _day_pick([
+                        "具体是：", "原文里是这么说的：",
+                        "这里有个细节：", "说得再具体点：",
+                    ], date_str, 40 + i)
+                    line += f"{fact_lead}{_end(fact)}"
+                if lvl >= MACRO_TIER_STRICT:
+                    lead = _day_pick([
+                        "这条的实际影响是：", "这事的传导是这样：",
+                        "它往下会影响到：", "往你身上落是这样：",
+                    ], date_str, 20 + i)
+                    line += f"{lead}{_end(meaning)}对你来说，{_end(action)}"
+                elif lvl == MACRO_TIER_LOOSE:
+                    # 宽松档：有动作或有关键词，但缺一头。因果不敢说死，
+                    # 用「按大方向看」把话挑明，听众自己会打折听。
+                    lead = _day_pick([
+                        "这条我按大方向看：", "往大处说是这样：",
+                        "它多半不是冲你来的，但方向是这样：",
+                    ], date_str, 20 + i)
+                    line += f"{lead}{_end(meaning)}"
+                    if action:
+                        line += f"要往自己身上套，{_end(action)}"
+                else:
+                    # 保底档：只是条宏观消息。只讲方向，不给行动建议——
+                    # 证据只有「标题里出现了某个词」，撑不起「你该怎么做」。
+                    line += _day_pick([
+                        "这条我不硬往你身上套，先记个方向。",
+                        "这条跟你的关系不一定直接，先放着。",
+                        "当作背景听着，别当成信号。",
+                    ], date_str, 20 + i)
+                macro_lines.append(line)
+        # 一条都没有的情况只会在「当天采集颗粒无收」时出现——
+        # 那种时候整块不说，也不解释「我跳过了」：开场已经按实际块数
+        # 报了「今天一共 4 块」，正文再交代一句反而让人以为漏了一块。
         if macro_lines:
             add("宏观大势", "\n".join(macro_lines))
 
@@ -3064,7 +3490,7 @@ class NewsSummarizer:
         # 现在逐条念标题，分组、编号、不解读。已经在大环境那段讲过的，
         # 这里不再念第二遍。
         news_groups = self._collect_news_groups(
-            collected_data, exclude_titles=[it["title"] for it, _, _ in matched])
+            collected_data, exclude_titles=[p[1]["title"] for p in matched])
         if news_groups:
             sec += 1
             total = sum(len(v) for _, v in news_groups)
@@ -3100,8 +3526,12 @@ class NewsSummarizer:
                 "今天这些就是全部。真要动手，就动第一块最后那一步，别拖到下一期。",
             ], date_str, 11)
         else:
-            act = today_action(bool(ai_items), bool(opc_items),
-                               [it.get("domain", "") for it in macro_items])
+            # 结尾的动作只跟「严格档」绑。原先拿采集到的全部候选域来选，
+            # 结果保底档讲了一条财经消息，结尾就让人去算负债利率——
+            # 中间那句因果根本没说过，听众会觉得前后不搭。
+            _hard_domains = [p[1].get("domain", "") for p in macro_matched
+                             if p[0] >= MACRO_TIER_STRICT]
+            act = today_action(bool(ai_say), bool(opc_say), _hard_domains)
             close_body = _day_pick([
                 f"今天就到这儿。非要带走一件事的话：{act}",
                 f"就说到这儿。今天能动手的一件是：{act}",

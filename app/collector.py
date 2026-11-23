@@ -710,7 +710,7 @@ MACRO_NEGATIVE = [
     # 转述性、表态性国际新闻：信息很碎，给不出任何个人行动指向
     "俄媒", "美媒", "英媒", "日媒", "韩媒", "外媒", "据报道", "报道称",
     "呼吁", "警告", "谴责", "指责", "抨击", "抗议", "回应称", "声称",
-    "扬言", "放话", "喊话", "爆料", "辟谣",
+    "扬言", "放话", "喊话", "爆料", "辟谣", "归咎", "甩锅", "表态", "发声",
     # 突发社会/安全事件：属新闻，但不构成可判断的趋势信号
     "黑客", "攻击", "泄露", "诈骗", "被捕", "受审", "维权", "投诉", "事故",
 ]
@@ -810,6 +810,11 @@ def build_macro_trends(pools: Dict[str, List[Dict[str, Any]]], exclude_titles: L
                 "source_name": chosen.get("source_name", ""),
                 "url": chosen.get("url", ""),
                 "published_at": chosen.get("published_at", ""),
+                # 正文也要带过来。以前这里只留标题和一句摘要，播报时
+                # 大环境这段就是「标题 + 一句万能解读」，听众听不出今天
+                # 到底发生了什么。带上 raw_text，写稿那层才能从中捞一句
+                # 带数字或具体动作的话，补在这条后面。
+                "raw_text": chosen.get("raw_text", "") or "",
                 "is_fallback": False,
             })
     return trends
@@ -1342,6 +1347,9 @@ class NewsCollector:
                             "title": title,
                             "category": "权威要闻",
                             "summary": summary or title,
+                            # RSS 的 description 通常是一段导语，200 字以内就够写稿用。
+                            # 不留下来，下游只能靠「标题 + 摘要」拼，摘不出事实。
+                            "raw_text": _clean_summary(fi.get("summary", "")[:2000]),
                             "source_name": name,
                             "url": fi.get("link", ""),
                             "published_at": (fi.get("published", "")[:19]) or datetime.datetime.now().strftime("%Y-%m-%d"),
@@ -2427,6 +2435,30 @@ README（截取）：
             results,
             exclude_titles=[it["title"] for it in (results["AI Agent"] + results["一人公司"])],
         )
+
+        # 给入选的宏观条目补正文。
+        #
+        # 这一步不能省：新浪财经是从列表页扒的标题，参考消息的 JSON 只有
+        # title + publishTime，两条都没有一句正文。结果大环境那段永远是
+        # 「标题 + 一句万能解读」——「降保证金、推做市、降费用。这条的实际
+        # 影响是：这是真金白银在减负。」听众听完不知道降的是谁的费。
+        # 五条并发抓一次，写稿那层才能从正文里捞一句带数字的话补进去。
+        macro_need = [it for it in results["宏观大势"]
+                      if len(it.get("raw_text") or "") < 200 and it.get("url")]
+        if macro_need:
+            # 单独开一个 client：这段在原来的 async with 之外，
+            # 复用那个 client 会报「client has been closed」，五条全抓空。
+            async with httpx.AsyncClient(headers=self.headers, timeout=15.0,
+                                         proxy=self.proxy) as mclient:
+                bodies = await asyncio.gather(
+                    *[self._fetch_article_body(mclient, it["url"]) for it in macro_need],
+                    return_exceptions=True)
+            for it, body in zip(macro_need, bodies):
+                if isinstance(body, str) and len(body) > len(it.get("raw_text") or ""):
+                    it["raw_text"] = body
+            got = sum(1 for it in macro_need if len(it.get("raw_text") or "") >= 200)
+            if got:
+                print(f"[Collector] 为 {got} 条宏观信号补抓了正文")
 
         return results
 
