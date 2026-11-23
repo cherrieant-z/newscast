@@ -15,6 +15,14 @@
     <link>https://cherrieant-z.github.io/newscast/</link>
   </image>
     <item>
+      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-24)</title>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-24) 发布日期：2026-11-24 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先搞清楚你是为谁做，再决定做什么。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：dev.to·公开构建） 【本期课题】I Said I Was Fixing Social Media. I Really Just Wanted My Own Room 0. 这是个什么 这是一个独立开发者自己搭的社交网站，打开之后能发帖、跟人聊天，规则由站主自己定。 1. 谁在为什么掏钱 2. 怎么收钱、有没有真的赚到 3. 你要准备什么、难在哪 最难的是分清自己动手的真实理由。冲着「修好社交媒体」去，安静几周就像失败；冲着「要个自己的</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-24.mp3" length="4941936" type="audio/mpeg"/>
+      <guid isPermaLink="false">2026-11-24</guid>
+      <pubDate>Tue, 24 Nov 2026 01:45:29 -0000</pubDate>
+      <itunes:duration>823</itunes:duration>
+    </item>
+    <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-23)</title>
       <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-23) 发布日期：2026-11-23 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「想法变成现实，现在只需要过去的一小部分功夫。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：HN·独立开发作品） 【本期课题】Trichroma, a Platformer of Light 0. 这是个什么 Trichroma 是一个平台跳跃游戏，打开后玩家操控角色在关卡里跳跃闯关，核心机制和光有关，死了会重来。 1. 谁在为什么掏钱 2. 怎么收钱、有没有真的赚到 3. 你要准备什么、难在哪 外行最可能卡在试玩测试和调难度上，光有 AI 写代码不够，得自己反复玩、找朋友玩，把反馈改进去。 4. 今天就能做的第一步 打</description>
       <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-23.mp3" length="4716720" type="audio/mpeg"/>
@@ -117,14 +125,6 @@
       <guid isPermaLink="false">2026-11-11</guid>
       <pubDate>Wed, 11 Nov 2026 10:34:02 -0000</pubDate>
       <itunes:duration>438</itunes:duration>
-    </item>
-    <item>
-      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10)</title>
-      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-10) 发布日期：2026-11-10 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「给AI请个保姆，不如先想清楚你要它替你扛哪件烂事。」 --- 🤖 全球 AI 与 Agent 前沿要点 (3-5条精选) 📌 【AI Agent】中信建投计算机行业2027年投资策略：建议关注国产算力等四个方向 - ① 一句话内容摘要：36氪获悉，中信建投证券研报称，2026年A股AI产业基于“小龙虾”的火爆、模型快速迭代和全球Capex投入持续加大 - ② 人话解读：有钱在往这个方向押注，说明它不只是个概念了；顺着它找能落地的具体环节，比追热点实在 📌 【AI Agent】ChatGPT 占全球 AI 聊天流量超 81%；iOS</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-10.mp3" length="1997136" type="audio/mpeg"/>
-      <guid isPermaLink="false">2026-11-10</guid>
-      <pubDate>Tue, 10 Nov 2026 09:20:16 -0000</pubDate>
-      <itunes:duration>332</itunes:duration>
     </item>
 </channel>
 </rss>
