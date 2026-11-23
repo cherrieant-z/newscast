@@ -372,8 +372,26 @@ async def build_today_report():
             if s.get("url"):
                 hist_urls.append(s["url"])
 
-    from app.collector import SeenHistory
+    from app.collector import SeenHistory, _gh_domains
     history = SeenHistory(hist_titles, hist_urls)
+
+    # GitHub 选品的「同类压制」：记住近十期讲过哪几个领域。
+    #
+    # 只按「同一个项目讲没讲过」去重不够——FreshRSS 和 Awesome RSSHub
+    # 是两个仓库，在听众耳朵里是同一件事讲了两遍。11-14 到 11-23 十天里，
+    # 音频和资讯聚合两类占了六期，就是只做项目级去重的后果。
+    gh_recent_domains = []
+    for rec in existing_reports[:10]:
+        if rec.get("date_str") == date_str:
+            continue
+        for s in (rec.get("sources") or []):
+            if s.get("category") != "GitHub 项目":
+                continue
+            gh_recent_domains.extend(_gh_domains(
+                s.get("title", ""), (s.get("url") or "").rstrip("/").rsplit("/", 1)[-1]))
+    if gh_recent_domains:
+        print(f"    GitHub 选题：近十期讲过 {len(gh_recent_domains)} 个领域标签，"
+              f"同类今天会降权")
 
     # 兜底观点、案例、金句这三样是「会反复出现」的东西，判断有没有用过必须看全部历史。
     # 只看最近 5 期的话，第 6 天就会把同一句话原样端上来——这正是听众说「似曾相识」的来源之一。
@@ -396,7 +414,8 @@ async def build_today_report():
     print(f"\n[1/4] 正在抓取 AI、一人公司、时政与财经要闻"
           f"（已载入最近 {history_episodes} 期共 {len(hist_titles)} 条历史标题做跨期去重；"
           f"另有 {len(all_titles)} 条全量历史用于避免旧观点、旧案例重播）...")
-    collected_data = await collector.collect_all(date_str, history, all_history)
+    collected_data = await collector.collect_all(
+        date_str, history, all_history, gh_recent_domains=gh_recent_domains)
 
     # 打印各板块实际取到的条数，便于在 Actions 日志里一眼看出「今天到底是真没新闻还是被滤空了」
     for cat, items in collected_data.items():

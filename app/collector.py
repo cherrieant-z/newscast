@@ -304,12 +304,40 @@ CASE_SELF_TALK = re.compile(
 # 元组第三个数是「相关度加分」。它只影响排序，不做准入：不相关的热门
 # 项目照样可能被选中（池子空的时候），只是排在后面。替听众判定
 # 「这个领域你不关心」这件事，之前已经错过一次了，不再做。
-GITHUB_TOPICS = [
-    ("播报与语音", "topic:text-to-speech", 45),
-    ("播客与音频", "topic:podcast", 45),
-    ("资讯抓取",   "topic:rss", 45),
-    ("自动化",     "topic:automation", 35),
-    ("模型应用",   "topic:llm", 25),
+#
+# 2026-11-23 复盘：原先固定查五条，其中三条（语音 / 播客 / RSS）根本是
+# 「音频与资讯」同一族，天天查同一个池子。11-14 到 11-23 十天里，音频类和
+# 资讯聚合类占了六期（FreshRSS、Awesome RSSHub、audio.cpp、WhisperLive、
+# VoiceStudio、cliamp），听众听到的是「又是这类东西」。
+#
+# 所以拆成两堆：核心两条每天必查（它们跟这条流水线最贴），轮换池每天取两条。
+# 轮换池 16 个领域，八天一轮，同一个领域八天见一次；再叠上星数档四天轮换，
+# 同一个 topic 同一档要三十二天才撞一次。
+GITHUB_CORE_TOPICS = [
+    ("播报与语音", "topic:text-to-speech", 30, "语音"),
+    ("资讯抓取",   "topic:rss", 30, "资讯聚合"),
+]
+
+# 第四个字段是这个 topic 归到哪个领域，用来跟「近十期讲过什么」对比。
+# 它必须手写，不能从 topic 名去猜：「资讯抓取」里没有 rss 两个字，
+# 而 RSS 项目的简介里几乎都有——靠猜会漏掉一半。
+GITHUB_ROTATION_TOPICS = [
+    ("播客与音频", "topic:podcast", 22, "音频"),
+    ("自动化",     "topic:automation", 22, "自动化"),
+    ("模型应用",   "topic:llm", 22, "大模型"),
+    ("智能体",     "topic:ai-agents", 20, "智能体"),
+    ("文档处理",   "topic:pdf", 20, "文档"),
+    ("个人效率",   "topic:productivity", 20, "效率"),
+    ("工作流",     "topic:workflow", 20, "自动化"),
+    ("自建服务",   "topic:self-hosted", 18, "自建服务"),
+    ("本地优先",   "topic:local-first", 18, "自建服务"),
+    ("翻译",       "topic:translation", 18, "翻译"),
+    ("爬虫工具",   "topic:scraper", 18, "抓取"),
+    ("知识库",     "topic:knowledge-base", 18, "笔记"),
+    ("笔记",       "topic:note-taking", 18, "笔记"),
+    ("营销增长",   "topic:marketing", 16, "营销"),
+    ("内容创作",   "topic:content-creation", 16, "视频"),
+    ("氛围编程",   "topic:vibe-coding", 16, "开发工具"),
 ]
 
 # 星数分档，按天轮换。
@@ -318,11 +346,16 @@ GITHUB_TOPICS = [
 # 天天查同一批，讲过的跳过、跳过就没了——到第三十一天这块就空了。
 # 分四档轮着查，同一批 topic 能看到四倍的项目，而且不会因为某天
 # 只看到千星级的就觉得「不够热」：档位本身在转。
+#
+# 最低档从「三百到一千」提到「一千到两千」。三百星的项目念出来，
+# 「很受欢迎」这四个字就撑不住了；实测那一档一天三十个候选里，
+# 常见的是课程抢课脚本、政府合规文档、Awesome 清单，讲给听众听
+# 纯属浪费时间——2026-11-23 试过一整轮，九个候选没有一个是能用的。
 GITHUB_STAR_BANDS = [
     ("stars:>20000",   "两万星以上"),
     ("stars:5000..20000", "五千到两万"),
-    ("stars:1000..5000",  "一千到五千"),
-    ("stars:300..1000",   "三百到一千"),
+    ("stars:2000..5000",  "两千到五千"),
+    ("stars:1000..2000",  "一千到两千"),
 ]
 # 近期新起那一路的窗口与门槛。三个月、一千五百星：
 # 低于这个数不叫「很受欢迎」，念出来像在给它做推广。
@@ -347,6 +380,9 @@ GITHUB_SYSTEM = """你是一名中文科技播客的编辑，服务对象是想�
   GitHub 是搜不到的。只有原名本身是中文时才照抄。不超过二十六个字符，
   不带斜杠、下划线、点。
 - what：三十到五十字，说清它是什么东西。要具体到「输入什么、输出什么」。
+  不要用「一个用 JavaScript 写的工具」这类说法打头——用什么语言写，
+  跟听众能用它干什么没关系，那是给开发者看的。直接说它是干什么的：
+  「一个可以托管的浏览器，给个网址就能返回截图、PDF 或纯文本」。
 - use：六十到九十字，讲两三个它真能干的场景。要落到「谁来用、用来干什么」，
   不要罗列功能菜单。
 - you：四十到七十字，讲它跟「一条每天早上自动生成的音频播报流水线」有没有交集。
@@ -356,6 +392,8 @@ GITHUB_SYSTEM = """你是一名中文科技播客的编辑，服务对象是想�
   ① 能直接用在这四步里的某一步（说清是哪一步、省掉多少手工活）
   ② 用不上，但它的做法有可借鉴的地方（说清借鉴什么）
   ③ 确实帮不上——就直说帮不上，再讲它更适合谁。
+  判断完是哪种，就按哪种写。不要写成「基本不沾边，不过你可以用它……」——
+  先声明没关系、再补一个用法，听众听到的是硬凑。
   把一个做视频的工具说成「丢给播报流水线就能出成片」，是明显的硬编关联。
   硬编一个关系，比承认无关更伤信任。
 
@@ -408,6 +446,58 @@ _GH_OFFTOPIC = re.compile(
 
 def _gh_offtopic(text: str) -> bool:
     return bool(_GH_OFFTOPIC.match((text or "").strip()))
+
+
+# GitHub 选题的领域标签。
+#
+# 派什么用：记住「最近讲过哪几个领域」，给同类候选降分。没有这张表，
+# 跨期去重只能拦住「同一个项目」，拦不住「同一个领域」——FreshRSS 和
+# Awesome RSSHub 是两个项目，在听众耳朵里却是同一件事讲了两次。
+#
+# 顺序有意义：越具体的领域排越前。一个项目可以同时命中多个（语音合成
+# 工具既算语音也算音频），压制时取命中的全部，这样「语音」讲过了，
+# 「音频」类的下一个也会被压住——它们对听众就是一类东西。
+_GH_DOMAIN_WORDS = [
+    ("语音", ("语音", "text-to-speech", "tts", "speech", "whisper", "voice",
+              "配音", "声音克隆", "朗读", "口播")),
+    ("音频", ("音频", "audio", "podcast", "播客", "音乐", "music", "mp3",
+              "midi", "音轨", "降噪")),
+    ("资讯聚合", ("rss", "订阅源", "新闻聚合", "聚合器", "feed", "reader",
+                 "阅读器", "newsletter", "邮件订阅", "信息流")),
+    ("视频", ("视频", "video", "剪辑", "字幕", "subtitle", "youtube",
+              "bilibili", "录屏", "转码", "竖屏")),
+    ("图像", ("图像", "图片", "image", "photo", "绘图", "画图", "stable-diffusion",
+              "抠图", "设计稿", "海报")),
+    ("翻译", ("翻译", "translate", "translation", "多语言", "双语", "字幕组")),
+    ("智能体", ("智能体", "agent", "assistant", "助手", "chatbot", "对话机器人", "mcp")),
+    ("大模型", ("大模型", "llm", "prompt", "提示词", "embedding", "微调", "推理引擎")),
+    ("抓取", ("爬虫", "scraper", "scrape", "crawler", "抓取", "采集", "spider")),
+    ("文档", ("文档", "pdf", "docx", "markdown", "排版", "试卷", "表格", "电子书")),
+    ("笔记", ("笔记", "note", "知识库", "knowledge", "wiki", "第二大脑", "书签")),
+    ("自动化", ("自动化", "automation", "工作流", "workflow", "定时任务",
+                "n8n", "zapier", "rpa")),
+    ("数据", ("数据库", "database", "sql", "分析", "analytics", "看板",
+              "dashboard", "报表", "图表")),
+    ("开发工具", ("编辑器", "ide", "终端", "terminal", "cli", "命令行",
+                  "调试", "代码补全")),
+    ("自建服务", ("自建", "self-hosted", "docker", "私有化", "离线运行", "本地运行")),
+    ("营销", ("营销", "marketing", "seo", "推广", "获客", "广告")),
+    ("效率", ("效率", "productivity", "待办", "todo", "时间管理", "日历", "剪贴板")),
+]
+
+
+def _gh_domains(*texts: str) -> List[str]:
+    """
+    这段文字（简介、主题标签、仓库名，或中文标题）属于哪几个领域。
+
+    传多个片段是因为来源不一样：候选有 topics 和英文简介，历史条目只有
+    中文标题和仓库名。两者都喂进同一张表，才能拿来做「同一类」的比较。
+    """
+    blob = " ".join(t for t in texts if t).lower()
+    if not blob:
+        return []
+    return [name for name, words in _GH_DOMAIN_WORDS
+            if any(w.lower() in blob for w in words)]
 
 
 FRONTIER_SYSTEM = """你是一名中文科技播客的选题编辑，服务对象是想靠 AI 做一人公司的普通人。
@@ -1881,7 +1971,8 @@ class NewsCollector:
         return pool
 
     async def fetch_github_pick(self, client: httpx.AsyncClient,
-                                all_history: "SeenHistory" = None) -> List[Dict[str, Any]]:
+                                all_history: "SeenHistory" = None,
+                                recent_domains: List[str] = None) -> List[Dict[str, Any]]:
         """
         每天讲一个 GitHub 项目。返回 0 条或 1 条。
 
@@ -1905,28 +1996,67 @@ class NewsCollector:
 
         cands: Dict[str, Dict[str, Any]] = {}
         today = datetime.date.today()
-        band_q, band_name = GITHUB_STAR_BANDS[
-            today.timetuple().tm_yday % len(GITHUB_STAR_BANDS)]
+        yday = today.timetuple().tm_yday
+        band_q, band_name = GITHUB_STAR_BANDS[yday % len(GITHUB_STAR_BANDS)]
         fresh_q = (f"created:>{ (today - datetime.timedelta(days=GITHUB_FRESH_DAYS)).isoformat() }"
                    f" stars:>{GITHUB_FRESH_MIN_STARS}")
-        queries = [(tag, f"{topic} {band_q}", rel) for tag, topic, rel in GITHUB_TOPICS]
-        print(f"[Collector] GitHub 项目：今天查「{band_name}」这一档")
-        if token:
-            # 带 token 的搜索接口是每分钟三十次，全部跑完也就一秒多。
-            queries.append(("近期新起", fresh_q, 10))
-            gap = 0.6
-        else:
-            # 不带 token 是每分钟十次。六条加上重跑一次就会撞上 403，
-            # 所以砍到最相关的三条加一条新起——宁可少看两个领域，
-            # 也不要跑到一半全被限流、一条候选都没拿到。
-            queries = queries[:3] + [("近期新起", fresh_q, 10)]
-            gap = 3.0
+
+        # 最近几期讲过的领域，按出现次数计。压制力度按次数累加：
+        # 同一个领域十天里讲过一次，扣 45 分（大约相当于少两万星），
+        # 讲两次扣 90 分——基本上就翻不了身了。
+        #
+        # 为什么用「扣分」而不是「直接排除」：排除会让池子在冷门档位
+        # 迅速见底（三百到一千星那一档，某个领域一天可能只有两三个可用），
+        # 扣分只是让别的领域优先，真没得选时今天照讲——不会开天窗。
+        recent_count: Dict[str, int] = {}
+        for d in (recent_domains or []):
+            recent_count[d] = recent_count.get(d, 0) + 1
+
+        # 今天查哪几个 topic。
+        #
+        # 顺序是「核心两条排最前，后面接轮换池」，但两条核心也要过冷却：
+        # 它们的领域只要在近十期里出现过，同样跳过。理由很实在——
+        # 语音和资讯聚合天天被查，而它们也正是最容易被连续讲的领域，
+        # 不跳的话这五路查询里有两路永远在查自己刚讲过的东西，白费额度。
+        #
+        # 冷却不等于淘汰：核心排在队首，十期一过它自动回到第一位。
+        rot = GITHUB_ROTATION_TOPICS
+        start = (yday * 2) % len(rot)
+        ordered = list(GITHUB_CORE_TOPICS) + [
+            rot[(start + i) % len(rot)] for i in range(len(rot))]
+
+        limit = 4 if token else 2
+        picked, skipped = [], []
+        for t in ordered:
+            if len(picked) >= limit:
+                break
+            if t[3] in recent_count:
+                skipped.append(t[0])
+                continue
+            picked.append(t)
+        if len(picked) < limit:
+            # 领域全在近十期里才会走到这里。按原顺序补齐，不因为跳过而少查。
+            for t in ordered:
+                if len(picked) >= limit:
+                    break
+                if t not in picked:
+                    picked.append(t)
+
+        queries = [(tag, f"{topic} {band_q}", rel) for tag, topic, rel, _ in picked]
+        print(f"[Collector] GitHub 项目：今天查「{band_name}」这一档，"
+              f"领域是「{'、'.join(t[0] for t in picked)}」"
+              + (f"（跳过刚讲过的：{'、'.join(skipped)}）" if skipped else ""))
+        queries.append(("近期新起", fresh_q, 25))
+        gap = 0.6 if token else 3.0
 
         for qi, (tag, q, rel) in enumerate(queries):
             if qi:
                 await asyncio.sleep(gap)
+            # 一次取五十个（接口上限一百）。取三十个的时候，四路领域
+            # 加起来才一百二十个候选，扣掉讲过的和同类被压的，能挑的
+            # 只剩个位数；五十个能把余地拉回来，代价只是响应大一点。
             url = ("https://api.github.com/search/repositories"
-                   f"?q={_urlquote(q, safe='')}&sort=stars&order=desc&per_page=30")
+                   f"?q={_urlquote(q, safe='')}&sort=stars&order=desc&per_page=50")
             try:
                 resp = await client.get(url, headers=gh_headers, timeout=20.0)
             except Exception as e:
@@ -1966,6 +2096,8 @@ class NewsCollector:
                     "url": html_url,
                     "relevance": rel,
                     "tag": tag,
+                    "domains": _gh_domains(desc, " ".join(r.get("topics") or []),
+                                           full.split("/")[-1]),
                 }
                 kept += 1
             print(f"[Collector] GitHub 搜索（{tag}）：{len(items)} 条，可用 {kept} 条")
@@ -1975,6 +2107,24 @@ class NewsCollector:
             return []
 
         now = datetime.datetime.now(datetime.timezone.utc)
+
+        # 最近几期讲过的领域，按出现次数计。压制力度按次数累加：
+        # 同一个领域十天里讲过一次，扣 45 分（大约相当于少两万星），
+        # 讲两次扣 90 分——基本上就翻不了身了。
+        #
+        # 为什么用「扣分」而不是「直接排除」：排除会让池子在冷门档位
+        # 迅速见底（三百到一千星那一档，某个领域一天可能只有两三个可用），
+        # 扣分只是让别的领域优先，真没得选时今天照讲——不会开天窗。
+        recent_count: Dict[str, int] = {}
+        for d in (recent_domains or []):
+            recent_count[d] = recent_count.get(d, 0) + 1
+        if recent_count:
+            print(f"[Collector] GitHub 项目：近十期讲过 "
+                  f"{'、'.join(f'{k}×{v}' for k, v in
+                              sorted(recent_count.items(), key=lambda x: -x[1]))}")
+
+        def _hits(c: Dict[str, Any]) -> List[str]:
+            return [d for d in (c.get("domains") or []) if d in recent_count]
 
         def _score(c: Dict[str, Any]) -> float:
             s = float(c["relevance"])
@@ -1991,13 +2141,33 @@ class NewsCollector:
                     s += 6
             except Exception:
                 pass
+            # 同类降权放最后，作用在「已经算完基础分」之上：
+            # 一个两万星的语音项目和一千星的知识库项目，在语音刚讲过的
+            # 第二天，该让后者上。
+            for d in _hits(c):
+                s -= 45 * min(recent_count[d], 3)
             return s
 
         ranked = sorted(cands.values(), key=_score, reverse=True)
-        print(f"[Collector] GitHub 项目候选 {len(ranked)} 个，"
-              f"前三是：{'、'.join(c['full_name'] for c in ranked[:3])}")
+        stale = sum(1 for c in ranked if _hits(c))
+        print(f"[Collector] GitHub 项目候选 {len(ranked)} 个"
+              f"（其中 {stale} 个属于近期讲过的领域，已降权），"
+              f"前三：{'、'.join(c['full_name'] for c in ranked[:3])}")
 
-        # 一条一条往下试，最多四条。这里有两个不同的淘汰理由，别混在一起：
+        # 试的顺序分两组：按领域查到的排前面，「近期新起」的排后面。
+        #
+        # 不分组的后果 2026-11-23 实测过：新起那一路（近九十天涨起来的）
+        # 星数动辄七八万，光星级分就把领域路那批几百星的小工具压死，
+        # 前六个名额全被图片编辑器、生活指南这种通用热门占满，
+        # 一串「跟流水线无关」念下来，最后只能拿第一个凑数。
+        #
+        # 新起那一路仍然保留——它是兜底，不是主力：领域路真没有能讲的，
+        # 由它来保证这块不开天窗。
+        by_domain = [c for c in ranked if c["tag"] != "近期新起"]
+        by_fresh = [c for c in ranked if c["tag"] == "近期新起"]
+        trial = by_domain[:6] + by_fresh[:3]
+
+        # 一条一条往下试，最多六条。这里有两个不同的淘汰理由，别混在一起：
         #   - 讲不明白（模型返回空、字段是英文、名字缺失）→ 直接换下一个
         #   - 讲得明白，但跟这条流水线没关系 → 先记下，继续往下找一个更贴的；
         #     实在找不到就回过头用它，今天这块照讲，只是实话实说「用不上」
@@ -2005,8 +2175,11 @@ class NewsCollector:
         # 后一条正是「最好跟本项目相关」的落法：相关是偏好，不是门槛。
         # 因为一个项目跟自己无关就当它不存在，等于又替听众挑领域——
         # 这件事之前已经错过一次了。
+        #
+        # 试到第九个（领域路六个 + 新起路三个）。同类降权之后，排在后面的
+        # 可能才是今天该讲的那一个，多给几个位置才够翻过被压过的那一票。
         offtopic_item: Dict[str, Any] = {}
-        for c in ranked[:4]:
+        for c in trial:
             readme = ""
             try:
                 rr = await client.get(
@@ -2071,12 +2244,24 @@ README（截取）：
                 "gh_stars": c["stars"],
                 "gh_language": c["language"],
                 "gh_tag": c["tag"],
+                # 领域标签存下来，下一期靠它判断「这类是不是刚讲过」
+                "gh_domains": c["domains"],
             }
 
-            if _gh_offtopic(you) and not offtopic_item:
-                print(f"[Collector] GitHub 项目（{c['full_name']}）跟流水线无关，"
-                      f"先记着，往下找个更贴的")
-                offtopic_item = item
+            # 「帮不上」的项目永远往下让，只留第一个兜底。
+            #
+            # 这里的条件原先写成 `_gh_offtopic(you) and not offtopic_item`，
+            # 于是第二个无关项目会跳过这个分支、直接掉到 return——把明确说
+            # 了「帮不上」的东西当成贴切的选中了。2026-11-23 那次实测就是：
+            # photocraft 被判无关记下来，下一个 HowToLiveBetter 同样无关，
+            # 却因为坑位已占而当场选中。
+            if _gh_offtopic(you):
+                if not offtopic_item:
+                    print(f"[Collector] GitHub 项目（{c['full_name']}）跟流水线无关，"
+                          f"先记着，往下找个更贴的")
+                    offtopic_item = item
+                else:
+                    print(f"[Collector] GitHub 项目（{c['full_name']}）也无关，接着往下找")
                 continue
 
             print(f"[Collector] GitHub 项目选中：{c['full_name']}"
@@ -2338,11 +2523,14 @@ README（截取）：
 
         return {"AI Agent": ai_items, "一人公司": opc_items, "案例候选": case_pool}
 
-    async def collect_all(self, date_str: str = None, history: "SeenHistory" = None, all_history: "SeenHistory" = None) -> Dict[str, List[Dict[str, Any]]]:
+    async def collect_all(self, date_str: str = None, history: "SeenHistory" = None,
+                          all_history: "SeenHistory" = None,
+                          gh_recent_domains: List[str] = None) -> Dict[str, List[Dict[str, Any]]]:
         """
         date_str:    本期归属日期
         history:     最近几期已播条目（新闻跨期去重）
         all_history: 全部历史（只用于「观点兜底 / 旧案例」这种绝不能重播的内容）
+        gh_recent_domains: 近十期讲过的 GitHub 选题领域，用来给同类降权
         """
         if not date_str:
             date_str = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -2357,7 +2545,7 @@ README（截取）：
                 self.fetch_authority_yaowen(client, history),
                 self.fetch_ximalaya_breakfast(client),
                 self.fetch_ai_agent_and_opc(client, date_str, history, all_history),
-                self.fetch_github_pick(client, all_history),
+                self.fetch_github_pick(client, all_history, gh_recent_domains),
             ]
             sina_res, cankao_res, xuexi_res, xm_res, ai_res, gh_res = await asyncio.gather(
                 *tasks, return_exceptions=True)
