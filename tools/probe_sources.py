@@ -31,14 +31,17 @@ CANDIDATES = [
     ("V2EX·分享创造", "https://www.v2ex.com/feed/create.xml"),
     ("Product Hunt", "https://www.producthunt.com/feed"),
     ("少数派", "https://sspai.com/feed"),
-    # --- 在用：案例第三路（Reddit 长正文）---
-    # 2026-11-13 起接入。实测 r/SideProject 稳定 200，25 条里 22 条正文超
-    # 300 字，中位数 978 字——是 HN story_text 的两三倍，且天然第一人称。
-    ("Reddit·SideProject", "https://www.reddit.com/r/SideProject/.rss"),
-    # 轮换板块：一周轮一圈，每天只多付一次请求。连着拉必 429。
-    ("Reddit·创业同行", "https://www.reddit.com/r/EntrepreneurRideAlong/.rss"),
-    ("Reddit·小微SaaS", "https://www.reddit.com/r/microsaas/.rss"),
-    ("Reddit·苦活起家", "https://www.reddit.com/r/sweatystartup/.rss"),
+    # --- 在用：案例第三路（dev.to 长文）---
+    # 2026-11-23 起接入，替掉 Reddit：那天 r/SideProject 的 .rss 已经 404，
+    # 其余板块一律 429。dev.to 的 tag feed 实测单条正文中位 3.5k~9.9k 字符，
+    # 第一人称，带真数字，且没有限流。
+    ("dev.to·公开构建", "https://dev.to/feed/tag/buildinpublic"),
+    ("dev.to·单人公司", "https://dev.to/feed/tag/solofounder"),
+    ("dev.to·小微SaaS", "https://dev.to/feed/tag/microsaas"),
+    ("dev.to·自筹创业", "https://dev.to/feed/tag/bootstrapping"),
+    # --- 已下线：Reddit ---
+    # 11-13 还能用（25 条里 22 条超 300 字），11-23 复查全挂。
+    ("Reddit·SideProject(已挂)", "https://www.reddit.com/r/SideProject/.rss"),
     # --- 候选：还没接，先留着看 ---
     ("HN·MRR", "https://hn.algolia.com/api/v1/search_by_date?query=MRR&tags=story&hitsPerPage=25"),
     ("HN·paying customers",

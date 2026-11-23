@@ -159,30 +159,29 @@ CASE_SHOW_QUERY = ("https://hn.algolia.com/api/v1/search_by_date?tags=show_hn"
 # 所以这里间隔 8 秒、429 不重试直接换下一个——
 # 案例池是「多一条多一份选择」，不值得为某个板块死等。
 # ============================================================
-REDDIT_CASE_SOURCES = [
-    # 主板块：展示自己作品的地方，正文最长。
-    # 实测四个板块里只有它每次都 200，所以固定拉它。
-    ("Reddit·个人项目", "https://www.reddit.com/r/SideProject/.rss"),
-]
-# 轮换板块：按日期取一个，一周轮一圈。
+# 第三路案例源：dev.to 的长文。
 #
-# 为什么不一起拉：Reddit 对未认证请求的限流是分钟级的，
-# 2026-11-13 实测连着拉四个板块，后三个全部 429——多拉不等于多拿，
-# 只是把流水线拖长 40 秒再空手回来。
-# 轮换的好处是每个板块都能覆盖到，而每天只付出一次请求的代价。
-REDDIT_CASE_ROTATION = [
-    # 讲「我这一路怎么走的」，最贴案例段要的时间线
-    ("Reddit·创业同行", "https://www.reddit.com/r/EntrepreneurRideAlong/.rss"),
+# 2026-11-23 复查时 Reddit 已经整条路死掉：r/SideProject 的 .rss 返回 404
+# （板块的 feed 被关掉了），其余板块一律 429。11-17 之后七期案例全部回落到
+# Show HN，于是又变回「技术库 + 作品发布」。所以换源。
+#
+# dev.to 的 tag feed 实测：单条正文中位 3.5k~9.9k 字符，第一人称，带收入数字
+# （「一年零订单」「我们自筹，实际拿到多少额度」），正好补「讲得清」这一段。
+# 按 tag 取，比按人订阅更稳——不依赖某个作者还写不写。
+DEVTO_CASE_TAGS = [
+    # 公开记录进度的人，最贴案例段要的时间线
+    ("dev.to·公开构建", "buildinpublic"),
+    # 明确写「一个人做」的人
+    ("dev.to·单人公司", "solofounder"),
     # 小微 SaaS，最贴「一个人做一门按月收钱的生意」
-    ("Reddit·小微SaaS", "https://www.reddit.com/r/microsaas/.rss"),
-    # 从脏活累活起家（清洗、搬家、维修），最贴「不是技术人也能干」
-    ("Reddit·苦活起家", "https://www.reddit.com/r/sweatystartup/.rss"),
+    ("dev.to·小微SaaS", "microsaas"),
+    # 独立开发者社区的主标签
+    ("dev.to·独立开发", "indiehackers"),
+    # 副业项目：动机和第一步通常写得最实
+    ("dev.to·副业项目", "sideproject"),
+    # 自筹资金，最适合讲「没融资怎么活」
+    ("dev.to·自筹创业", "bootstrapping"),
 ]
-
-# Reddit 帖子正文的尾巴：RSS 里会带
-# "submitted by /u/xxx [link] [comments]"，不清掉会被念出来。
-_REDDIT_TAIL = re.compile(
-    r"submitted by\s*/u/\S+.*$|\[link\]\s*\[comments\]", re.I | re.S)
 
 # 人工投喂目录。格式见 cases/README.md，规则只有三条：
 # 第一行是标题、「链接：」那行可选、正文至少一百二十字。
@@ -846,6 +845,10 @@ def _strip_html(text: str) -> str:
     """清理 HTML 标签与实体，得到纯文本摘要"""
     if not text:
         return ""
+    # 代码块整块丢掉。dev.to 的长文里常带几十行代码，标签一剥就变成
+    # 「const x = await fetch(...)」串进正文，既占长度也会被模型当事实。
+    text = re.sub(r'<pre\b.*?</pre>', ' ', text, flags=re.S | re.I)
+    text = re.sub(r'<code\b.*?</code>', ' ', text, flags=re.S | re.I)
     text = re.sub(r'<[^>]+>', ' ', text)
     text = re.sub(r'&nbsp;?', ' ', text)
     # 统一做实体解码：源里常见 &mdash; &ldquo; &#8217;，
@@ -911,6 +914,84 @@ def _is_stale(published: str, max_days: int = 2) -> bool:
     if dt.tzinfo is not None:
         dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
     return (datetime.datetime.utcnow() - dt).days > max_days
+
+
+# 三个中文要闻源的 URL 里都带发布日期，格式各不相同。
+_URL_DATE_PATTERNS = (
+    re.compile(r"/(\d{4})-(\d{2})-(\d{2})/"),   # finance.sina.com.cn/jjxw/2026-11-22/…
+    re.compile(r"/(\d{4})/(\d{2})-(\d{2})/"),   # chinanews.com.cn/cj/2026/11-22/…
+    re.compile(r"/(\d{4})/(\d{2})/(\d{2})/"),   # ckxxapp.ckxx.net/pages/2026/11/22/…
+)
+
+
+def _date_in_url(url: str):
+    """从新闻 URL 里取发布日期，取不到返回 None"""
+    for pat in _URL_DATE_PATTERNS:
+        m = pat.search(url or "")
+        if m:
+            try:
+                return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                return None
+    return None
+
+
+def _news_is_fresh(item: Dict[str, Any], today: datetime.date, max_days: int = 3) -> bool:
+    """
+    要闻的新鲜度闸门。
+
+    为什么非加不可：新浪财经的首页列表和参考消息的频道页都不带发布时间，
+    参考消息的源 2026-11-19 那天直接把 11-13 的九条又吐了一遍，全被当成
+    当天新闻播了出去。这三个源的条目靠 URL 里的日期判断，比看 published 可靠
+    ——新浪的 published 是抓取时刻，永远是「今天」。
+
+    窗口给三天：周一的早报要能带上周五的周末消息，两天会把它们一起砍掉；
+    而真正会重播的旧稿是六天前的（跨期去重的窗口刚好差一天），三天足够挡住。
+
+    取不到日期的照常保留，不误伤：靠跨期去重兜底。
+    """
+    d = _date_in_url(item.get("url") or "")
+    if d is None:
+        return True
+    return (today - d).days <= max_days
+
+
+# 「送码 / 求拍砖 / 大会报名」这类帖子不是案例，是推广。
+# 放进案例池，拆出来的是产品功能介绍，没有动机也没有卡点。
+_PROMO_TITLE = re.compile(
+    r"送.{0,4}(?:码|激活码)|求(?:拍砖|反馈|建议)|征集|报名|抽奖|招募|招聘|内推|"
+    r"折扣|优惠|限时|发布会|大会", re.I)
+
+
+# 大会通稿 / 嘉宾名单 / 报名页。这些不是新闻，也不是案例：
+# 2026-11-23 那期把「WISE2026 商业之王大会·具身智能分会场」整段念了出来，
+# 中间还带着「排名不分先后）段炎彪，云迹科技CPO」。标题里出现这些词就丢。
+_EVENT_PROMO = re.compile(r"报名|扫码|嘉宾|阵容|分会场|议程|门票|欢迎参加|诚邀|敬请期待")
+
+
+def _is_event_promo(title: str) -> bool:
+    return bool(_EVENT_PROMO.search(title or ""))
+
+
+def _title_is_promo(title: str) -> bool:
+    return bool(_PROMO_TITLE.search(title or ""))
+
+
+# 连载小说 / 诗歌会混进 buildinpublic 这类标签里。案例段要的是真人做真事，
+# 虚构故事拆出来的「他为什么做这个」是情节设定，不是动机。
+_CASE_FICTION = re.compile(
+    r"(?i)\bchapter\s+(?:\d+|[ivxlcdm]+|[a-z]+(?:-[a-z]+)?)\b|^\s*(?:chapter|prologue|epilogue)\b|"
+    r"\b(?:fiction|novel|short story|poem)\b")
+
+# dev.to 是全球社区，带上葡语、西语、日语的长文。系统提示词是中文播客，
+# 拿一篇葡语日记去拆，模型只能瞎猜人名和数字。用高频虚词判断是不是英文。
+_EN_STOPWORDS = re.compile(
+    r"(?i)\b(?:the|and|to|of|is|was|were|my|i|we|it|for|with|that|this|"
+    r"have|has|had|but|so|because|when|after|before|about|from)\b")
+
+
+def _looks_english(text: str) -> bool:
+    return len(_EN_STOPWORDS.findall((text or "")[:900])) >= 8
 
 
 def _clean_summary(text: str) -> str:
@@ -1336,6 +1417,9 @@ class NewsCollector:
                     # 固定专题栏目（学习卡、镜观·足迹等）天天挂在首页，不是今日新闻
                     if _is_evergreen(title):
                         continue
+                    # 大会通稿 / 嘉宾名单 / 报名页
+                    if _is_event_promo(title):
+                        continue
                     # 旧文不要：别让「过去 24 小时」里混进几年前的帖子
                     if _is_stale(fi.get("published", "")):
                         continue
@@ -1676,23 +1760,24 @@ class NewsCollector:
 
         print(f"[Collector] 案例候选池：前期 {len(pool)} 条（HN 两路）")
 
-        # ---- 第三路：Reddit 长正文（补「讲得清」的供给）----
+        # ---- 第三路：dev.to 长文（补「讲得清」的供给）----
         #
         # 前两路撑住「天天有」，但撑不住「讲得清」：HN 的帖子常常只有标题
-        # 加两百字说明，拆到「他卡在哪」就没词了。Reddit 那边是日记体，
-        # 中位 978 字，正好补这一段。
-        reddit_rows: List[Dict[str, Any]] = []
-        # 主板块固定 + 一个按天轮换的板块。轮换用「年内第几天」取模，
-        # 不引随机数：同一天重跑拿到的是同一个板块，日志可复现。
-        rotation = REDDIT_CASE_ROTATION[
-            datetime.date.today().timetuple().tm_yday % len(REDDIT_CASE_ROTATION)]
-        feeds = REDDIT_CASE_SOURCES + [rotation]
+        # 加两百字说明，拆到「他卡在哪」就没词了。dev.to 的 tag feed 是长文，
+        # 单条正文中位三五千字，天然第一人称（「我们自筹，实际拿到多少额度」）。
+        #
+        # 每天拉三个 tag：两个固定的（公开构建、单人公司）+ 一个按天轮换。
+        # 不六个全拉：总量够用，且一个 tag 十二三条，全拉会让池子里全是同一批人。
+        devto_rows: List[Dict[str, Any]] = []
+        rotation = DEVTO_CASE_TAGS[
+            2 + datetime.date.today().timetuple().tm_yday % (len(DEVTO_CASE_TAGS) - 2)]
+        feeds = DEVTO_CASE_TAGS[:2] + [rotation]
 
-        for idx, (name, feed_url) in enumerate(feeds):
+        for idx, (name, tag) in enumerate(feeds):
             if idx:
-                # 12 秒太短，实测第三个就开始 429。20 秒是本地和 Actions
-                # 两边都能过的一档，代价是一天多花二十秒。
-                await asyncio.sleep(20)
+                # dev.to 没有 Reddit 那种分钟级限流，但也没必要连着打
+                await asyncio.sleep(2)
+            feed_url = f"https://dev.to/feed/tag/{tag}"
             entries: List[Dict[str, str]] = []
             for attempt in range(2):
                 try:
@@ -1702,10 +1787,8 @@ class NewsCollector:
                     print(f"[Collector] 案例源 {name} 抓取异常: {e}")
                     break
                 if resp.status_code == 429:
-                    # 429 等一轮再试一次。还不行就走人：
-                    # 案例池少一个板块不影响今天，卡住会拖垮整条流水线。
-                    print(f"[Collector] 案例源 {name} 限流，等 30 秒重试")
-                    await asyncio.sleep(30)
+                    print(f"[Collector] 案例源 {name} 限流，等 20 秒重试")
+                    await asyncio.sleep(20)
                     continue
                 if resp.status_code != 200:
                     print(f"[Collector] 案例源 {name} 返回 {resp.status_code}")
@@ -1725,16 +1808,21 @@ class NewsCollector:
                 key = url.split("?")[0].rstrip("/")
                 if key in seen_urls:
                     continue
-                # 标题是问句的，是「求建议」不是「交结果」。
-                # Reddit 上这类帖子正文也写得长，但它拆出来的是作者的困惑，
-                # 不是他验证过的路——案例段要的是后者。
+                # 标题是问句的，是「求建议」不是「交结果」，和 Reddit 同理。
                 if title.rstrip().endswith("?"):
                     continue
-                body = _REDDIT_TAIL.sub("", it.get("summary") or "")
-                body = re.sub(r"\s+", " ", body).strip()[:4000]
-                # 三百字以下的多半是「求反馈」「求建议」——
-                # 不是没有故事，是没写出来，拆不出任何一栏。
-                if len(body) < 300:
+                body = re.sub(r"\s+", " ", it.get("summary") or "").strip()[:4000]
+                # dev.to 的正文整体偏长，六百字以下的多半是「发个版本号」的更新帖，
+                # 拆不出动机和卡点。这条是「讲得清」的门槛，不是行业门槛。
+                if len(body) < 600:
+                    continue
+                # 连载小说也会带 buildinpublic 标签（作者一本一本贴章节）。
+                # 那不是案例，是虚构故事，拆出来的「卡点」全是情节。
+                if _CASE_FICTION.search(title) or _CASE_FICTION.search(body[:200]):
+                    continue
+                if not _looks_english(body):
+                    continue
+                if _title_is_promo(title):
                     continue
                 if any(is_similar_title(title, t) for t in seen_titles):
                     continue
@@ -1743,7 +1831,7 @@ class NewsCollector:
                 seen_urls.add(key)
                 seen_titles.append(title)
                 added += 1
-                reddit_rows.append({
+                devto_rows.append({
                     "title": title,
                     "raw_text": body,
                     "summary": "",
@@ -1753,7 +1841,7 @@ class NewsCollector:
                     "is_real": True,
                 })
             print(f"[Collector] 案例源 {name}：{len(entries)} 条，可用 {added} 条")
-        pool.extend(reddit_rows)
+        pool.extend(devto_rows)
 
         # ---- 第四路：人工投喂 ----
         #
@@ -2296,6 +2384,20 @@ README（截取）：
                 results["案例候选"] = ai_res.get("案例候选", [])
             if isinstance(gh_res, list):
                 results["GitHub 项目"] = gh_res
+
+        # 要闻的新鲜度闸门。
+        # 2026-11-19 那期，参考消息吐回九条 11-13 的旧稿，被当成当天国际新闻
+        # 又念了一遍——和 11-14 整段重合。源不保证新鲜，这一步就得自己兜。
+        try:
+            ep_date = datetime.date.fromisoformat(date_str)
+        except Exception:
+            ep_date = datetime.date.today()
+        for cat in ("权威要闻", "参考消息", "新浪财经"):
+            before = len(results[cat])
+            results[cat] = [it for it in results[cat] if _news_is_fresh(it, ep_date)]
+            dropped = before - len(results[cat])
+            if dropped:
+                print(f"  [时效过滤] {cat}：丢掉 {dropped} 条两天前的旧稿")
 
         # 全局跨平台去重与纯英文长句过滤校验
         seen_titles = []

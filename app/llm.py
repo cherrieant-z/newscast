@@ -151,17 +151,37 @@ def _loads_loose(raw: str) -> Optional[Dict[str, Any]]:
 
 
 def clean(value: Any, limit: int = 200) -> str:
-    """把模型给的字段整理成能直接念的一句话：去掉换行、引号、Markdown 和多余空白"""
+    """把模型给的字段整理成能直接念的一句话：去掉换行、引号、Markdown 和多余空白
+
+    截断必须落在句子或分句边界上。原来的做法是「limit 以内找不到句末，就硬切
+    limit 个字符」——切在「分头查资料、写代」上，念出来是半个词；切在「真要自动化」
+    上，被补一个句号，变成一句没说完的话。这两种都在 11-23 那批里出现过。
+    """
     if value is None:
         return ""
     text = str(value)
     text = re.sub(r"[*#`>_]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     text = text.strip("「」\"'“”‘’ ")
-    if len(text) > limit:
-        cut = max(text.rfind("。", 0, limit), text.rfind("，", 0, limit))
-        text = text[:cut + 1] if cut > limit * 0.6 else text[:limit]
-    return text.strip()
+    if len(text) <= limit:
+        return text
+
+    head = text[:limit + 1]
+    # ① 句末标点：最理想，直接收在这里
+    cut = max(head.rfind("。"), head.rfind("！"), head.rfind("？"))
+    if cut >= limit * 0.5:
+        return text[:cut + 1].strip()
+    # ② 分句标点：退一步，收在一个完整分句上。逗号本身不留——
+    #    留着会被播报层的补句号变成「……发布播客，。」，听感像是突然被掐断
+    cut2 = max(head.rfind("，"), head.rfind("；"), head.rfind("、"), head.rfind("："))
+    if cut2 >= limit * 0.5:
+        return text[:cut2].strip()
+    # ③ 边界都在很前面：宁可少说半句，也不要留半截词
+    cut3 = max(cut, cut2)
+    if cut3 > 0:
+        return text[:cut3].strip("，、；： ")
+    return text[:limit].strip() + "……"
+
 
 
 def has_cjk(text: str) -> bool:

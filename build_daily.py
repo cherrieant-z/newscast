@@ -359,8 +359,9 @@ async def build_today_report():
 
     # 1. 采集资讯
     # 跨期去重：把最近几期已经播过的条目喂给采集器，避免「昨天念过的今天再念一遍」。
-    # 只回看 5 期：再往前的内容对「今天的新闻」已无参考价值，反而可能把可用素材滤空。
-    history_episodes = 5
+    # 回看期数从 5 提到 14：reports.json 本来就保留 14 期，只看 5 期等于留了个
+    # 「第 6 天自动释放」的后门——11-19 就原样重播了 11-14 的九条国际要闻。
+    history_episodes = 14
     hist_titles, hist_urls = [], []
     for rec in existing_reports[:history_episodes]:
         if rec.get("date_str") == date_str:

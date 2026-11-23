@@ -136,6 +136,31 @@ def _cut(text: str, limit: int = 80) -> str:
     return (head[:idx] if idx >= limit * 0.5 else head).rstrip("，、,；; ") + "……"
 
 
+def _open_clause(text: str, limit: int = 44) -> str:
+    """
+    开场第一句用的「这是什么」短句。
+
+    以前这里是 _cut(text, 26) 再把省略号 rstrip 掉，等于硬切 26 个字：
+    「springrep 是一个用 Rust 写的 B-r。」「Board 是一个网站，你可以在上面
+    用 AI 对话创。」——整期节目的第一句话是半个词，比什么都不说更糟。
+
+    现在优先取第一个句号前的完整句；太长才退到分句；连分句都没有就少说几句。
+    """
+    t = re.sub(r"\s+", " ", (text or "")).strip()
+    if not t:
+        return ""
+    first = re.split(r"(?<=[。！？])", t)[0] or t
+    first = first.rstrip("。！？ ")
+    if len(first) <= limit:
+        return first
+    head = first[:limit + 1]
+    cut = max(head.rfind("，"), head.rfind("；"), head.rfind("、"), head.rfind("："))
+    if cut >= 12:
+        return first[:cut].rstrip("，；、： ")
+    return head[:limit].rstrip("，；、： ")
+
+
+
 REVENUE_CUES = ("收入", "赚", "营收", "月入", "年入", "付费", "订阅", "客户", "用户")
 
 # ------------------------------------------------------------ 模型：案例拆解
@@ -194,6 +219,10 @@ QUOTE_SYSTEM = """你是一个中文播客的作者，节目每天早上陪听�
 - 不要用「赋能」「闭环」「赛道」「认知」「底层逻辑」这些词
 - 不要复述标题，要说出标题背后的那层意思
 - 不要说「今天这几条」「这几样东西」这类指代节目本身的话，金句要能自己站得住
+- 不要用「先……再……」这种句式和「先做 A，再谈 B」这种祈使句。这个句式
+  连续出现过五天，听众已经能背出来；换一个角度说同一件事：一个画面、
+  一个对比、一个反常识的判断，都比一句命令好
+- 不要写成人生道理。落在今天讲的那件事上，具体到能让人想起那条新闻
 
 只输出 JSON：{"quote":"你的金句"}"""
 
@@ -347,7 +376,40 @@ DAILY_QUOTES = [
 
 
 # 解读句的引入语。轮换使用，避免一期里同一个词反复出现。
-READING_CUES = ["要我说", "我的看法是", "说白了", "换个角度看", "我琢磨着"]
+#
+# 原来的池子只有五条，而且按「条目序号 % 5」取，等于每天的第三条永远是
+# 「说白了」、第一条永远是「要我说」——十期下来「要我说」出现三十三次。
+# 现在池子扩到十四条，并且按「日期 + 序号」取，同一天连着几条不重样，
+# 隔天整体平移。
+READING_CUES = [
+    "说白了",
+    "往深一层看",
+    "真正值得留意的是",
+    "落到你身上是这样",
+    "我的判断是",
+    "这里有个细节",
+    "拆开来看",
+    "顺着这个往下想",
+    "说句实在的",
+    "换个位置看",
+    "值得说一句的是",
+    "看清这一层就够",
+    "从结果倒推",
+    "放到半年这个尺度上看",
+]
+
+
+def _cue_for(date_str: str, idx: int) -> str:
+    """给第 idx 条挑一个解读引子。同一天内不重样，隔天整体平移。"""
+    if not READING_CUES:
+        return ""
+    try:
+        ord_ = datetime.date.fromisoformat(date_str).toordinal()
+    except Exception:
+        ord_ = datetime.date.today().toordinal()
+    # 乘 5 是跟池子长度 14 互质，保证相邻序号落在不同位置
+    return READING_CUES[(ord_ + idx * 5) % len(READING_CUES)]
+
 
 # ------------------------------------------------------------ 口播：把「看的字」变成「听的话」
 #
@@ -431,6 +493,35 @@ def _lcs_len(a: str, b: str) -> int:
     return best
 
 
+def _balance_brackets(text: str) -> str:
+    """
+    去掉不配对的括号。
+
+    论坛标题常被作者从中间截断，留下孤零零的右括号：
+    「支持 x64 & ARM64） Linux，64 位 GNOME / KDE / X11 / niri（原生 Wayland 与 X11」
+    念出来听众会以为漏了一段。成对的留着（括号里的字还要念），落单的去掉；
+    结尾有没闭合的左括号，就从那里截断。
+    """
+    out = []
+    depth = 0
+    for ch in text or "":
+        if ch in "（(":
+            depth += 1
+            out.append(ch)
+        elif ch in "）)":
+            if depth > 0:
+                depth -= 1
+                out.append(ch)
+        else:
+            out.append(ch)
+    s = "".join(out)
+    if depth > 0:
+        idx = max(s.rfind("（"), s.rfind("("))
+        if idx > 0:
+            s = s[:idx]
+    return s
+
+
 def _speakable(text: str) -> str:
     """
     洗成能直接念的样子：去掉链接、方括号标签、Markdown 记号、来源尾巴。
@@ -471,6 +562,8 @@ def _speakable(text: str) -> str:
         t = "".join(s for s in sents
                     if not any(k in s for k in ("送码", "激活码", "兑换码", "领码", "领取")))
     t = re.sub(r"\s+", " ", t).strip()
+    # 标题被作者截断时会留下不配对的括号，念出来像漏了一段
+    t = _balance_brackets(t)
     # 去掉括号但保留里面的字：「（参考消息）」已删，「（iOS）」念 iOS 就行
     t = re.sub(r"[（(]\s*[）)]", "", t)
     # 只删「替换出来的」那个空格：「企业 AI 的」→「企业 人工智能 的」。
@@ -501,13 +594,21 @@ def _same_event(a: str, b: str) -> bool:
 
     字面相似度不够用：「日本推动修订安保三文件」和「日本学者称安保三文件
     相关修订将加剧紧张」措辞差很远，但说的是同一件事，连着念两遍很刺眼。
-    改用引号里的专有名词判断——同一件事的报道通常都带着同一个词。
+    先用引号里的专有名词判断，再补一条「有六个字以上的公共片段」——
+    「融资保证金比例下限降至80%」和「100%降至80%！融资保证金比例下调」
+    字面相似度不高，但公共片段是「融资保证金比例」，一眼就是同一件事。
     """
     if is_similar_title(a, b):
         return True
     qa = set(re.findall(r"[「“\"]([^」”\"]{4,12})[」”\"]", a or ""))
     qb = set(re.findall(r"[「“\"]([^」”\"]{4,12})[」”\"]", b or ""))
-    return bool(qa & qb)
+    if qa & qb:
+        return True
+    ca = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", a or "")
+    cb = re.sub(r"[^\u4e00-\u9fa5A-Za-z0-9]", "", b or "")
+    if len(ca) >= 6 and len(cb) >= 6 and _lcs_len(ca, cb) >= 6:
+        return True
+    return False
 
 
 # 中文源条目没有 detail 字段（英文译稿才有）。它们的摘要往往只有
@@ -2120,7 +2221,10 @@ class NewsSummarizer:
         category_summary: Dict[str, str] = {
             "今日金句": quote_of_the_day,
             "搞钱案例": lead_title or "今日暂无新案例",
-            "宏观大势": f"今日识别 {len(collected_data.get('宏观大势', []))} 个跟决策有关的信号",
+            # 用「候选」不用「识别」：这里数的是采集到的原始条数，成稿还要过
+            # 一道因果筛选，十期里有七期最后一条都没留下。写「识别到 5 个信号」
+            # 而正文一句没讲，等于前端在替节目吹牛。
+            "宏观大势": f"今日候选 {len(collected_data.get('宏观大势', []))} 条，筛后进播报",
             "权威要闻": f"权威要闻共 {len(collected_data.get('权威要闻', []))} 条",
             "参考消息": f"国际要闻共 {len(collected_data.get('参考消息', []))} 条",
             "新浪财经": f"核心要闻共 {len(collected_data.get('新浪财经', []))} 条",
@@ -2294,8 +2398,7 @@ class NewsSummarizer:
         # 案例来自英文帖子时，标题也是英文的。开场第一句念一串英文，
         # 听众会直接关掉——换成「这是什么」的中文前半句，信息还在，人能听。
         if _mostly_english(spoken_lead):
-            spoken_lead = (_cut(_scrub_what(case_what), 26)
-                           .rstrip("。，,… ").rstrip("…").rstrip("。，,") or spoken_lead)
+            spoken_lead = (_open_clause(_scrub_what(case_what), 44) or spoken_lead)
 
         def clean(s: str, api: bool = False) -> str:
             t = safe_ai_replace(s or "").replace("7x24", "全天候24").replace("7*24", "全天候24")
@@ -2409,7 +2512,14 @@ class NewsSummarizer:
         if has_news:
             plan_bits.append("国内外和财经的要闻")
         plan = "、".join(plan_bits[:-1]) + "，最后是" + plan_bits[-1] if len(plan_bits) > 1 else "".join(plan_bits)
-        plan_line = f"今天一共 {len(plan_bits)} 块：{plan}。" if plan_bits else ""
+        # 这一句在十期里出现过十次，一字不差——开场是听众最先注意到重复的地方。
+        # 信息（几块、哪几块）不变，说法按日期轮。
+        plan_line = _day_pick([
+            f"今天一共 {len(plan_bits)} 块：{plan}。",
+            f"今天的安排是 {len(plan_bits)} 块，从前往后：{plan}。",
+            f"{len(plan_bits)} 块内容，依次是：{plan}。",
+            f"这一期 {len(plan_bits)} 块：{plan}。",
+        ], date_str, 31) if plan_bits else ""
 
         if has_case:
             if case_kind == "money":
@@ -2631,21 +2741,30 @@ class NewsSummarizer:
             # 启动成本只念一次；模型说「没提」就不念，别让听众连听两句「没写」
             startup_known = clean_startup and not any(k in clean_startup for k in UNKNOWN_MARKS)
             barrier_sp = _scrub_unknown(clean_barrier)
+            need_lead = _day_pick([
+                "你要真想干，得准备这些：",
+                "动手之前先备好这几样：",
+                "上手要有的东西：",
+            ], date_str, 24)
             if startup_known and barrier_sp:
                 # 「得准备这些：没有启动资金」——原文说的是不用花钱，
                 # 套上「要准备」就把意思说反了，这里换个说法
                 if re.match(r"(没有|不用|不需要|零|没什么)", clean_startup.strip()):
                     lead_st = f"启动这块：{_end(clean_startup)}"
                 else:
-                    lead_st = f"你要真想干，得准备这些：{_end(clean_startup)}"
+                    lead_st = f"{need_lead}{_end(clean_startup)}"
                 add("案例·难在哪", f"{lead_st}难的还在后头：{_end(barrier_sp)}")
             elif barrier_sp:
                 # 句子本身常以「难在」开头，前面再套「这一关：」会念成
                 # 「先想清楚这一关：难在没人被带到你面前」，重复且拗口
                 b = re.sub(r"^(难在|难点在于|最难的是|最难的一点是)[，,：:、]?", "", barrier_sp)
-                add("案例·难在哪", f"你要真想干，先想清楚这一关：{_end(b or barrier_sp)}")
+                add("案例·难在哪", _day_pick([
+                    f"你要真想干，先想清楚这一关：{_end(b or barrier_sp)}",
+                    f"真动手，第一道坎在这儿：{_end(b or barrier_sp)}",
+                    f"这一关绕不过去：{_end(b or barrier_sp)}",
+                ], date_str, 25))
             elif startup_known:
-                add("案例·难在哪", f"你要真想干，得准备这些：{_end(clean_startup)}")
+                add("案例·难在哪", f"{need_lead}{_end(clean_startup)}")
 
             # 反面样本必须有一句「所以呢」，否则听众的结论会是「这人挺惨」。
             # 这一句把「他没做成」翻译成「你该注意什么」，是整段的落点。
@@ -2666,7 +2785,10 @@ class NewsSummarizer:
                     "干完一件、收到一次反馈，比想清楚一百个模式都有用。",
                     "能走通的人靠的往往不是工具，是挑了一件别人懒得干的细活。"
                     "工具谁都能装，细活不是谁都愿意接。",
-                    "这条路最费劲的地方不在开头，在第三周。头三天靠新鲜，之后全靠排期。",
+                    "这条路真正难的不是做出来，是让人第二次打开它。",
+                    "先做一个只服务十个人的版本，比做一个等着所有人来的版本靠谱。",
+                    "把它当成一件可以反复改的活儿，而不是一次押上全部的赌注。",
+                    "工具会一直换，能攒下来的只有你对这门活儿的判断。",
                 ], date_str, 17))
 
             if clean_guide:
@@ -2789,7 +2911,7 @@ class NewsSummarizer:
                 body += _end(d_sp)
             if not reading:
                 return body
-            cue = READING_CUES[(idx - 1) % len(READING_CUES)]
+            cue = _cue_for(date_str, idx)
             return f"{body}{cue}，{_end(reading)}"
 
         # 2. AI 动态：这块是「外面发生了什么事」，判断只给最值得的一两条
