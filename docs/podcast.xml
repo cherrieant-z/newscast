@@ -15,6 +15,14 @@
     <link>https://cherrieant-z.github.io/newscast/</link>
   </image>
     <item>
+      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-27)</title>
+      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-27) 发布日期：2026-11-27 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先跑通一个页面，再想第二个。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：dev.to·副业项目） 【本期课题】Building a back-in-stock alert with Cloudflare Workers cron 0. 这是个什么 Store Stock Checker 是一个网站，你告诉它你想要的东西，它会在商品重新有货时通知你。 1. 谁在为什么掏钱 2. 怎么收钱、有没有真的赚到 Stripe 验证过的收入是每月五位数。 3. 你要准备什么、难在哪 最难的一步是怎么从五花八门的商品页面里读出有没</description>
+      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-27.mp3" length="4703184" type="audio/mpeg"/>
+      <guid isPermaLink="false">2026-11-27</guid>
+      <pubDate>Fri, 27 Nov 2026 02:50:06 -0000</pubDate>
+      <itunes:duration>783</itunes:duration>
+    </item>
+    <item>
       <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-26)</title>
       <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-26) 发布日期：2026-11-26 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「先查自己的构建包，再冷静拿证据回审核。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：dev.to·公开构建） 【本期课题】I shipped an iPhone app in a week. Here is what the first days looked like 0. 这是个什么 One Last Prompt 是一个 iPhone 应用，它让你自己选一个时间点，到点就把你手机上的 AI 应用锁住，晚上冒出来的想法可以对着手机说出来，应用先藏起来，第二天早上再还给你一条干净的提示词。 1. 谁在为什么掏钱 2.</description>
       <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-26.mp3" length="5171328" type="audio/mpeg"/>
@@ -117,14 +125,6 @@
       <guid isPermaLink="false">2026-11-14</guid>
       <pubDate>Sat, 14 Nov 2026 05:19:21 -0000</pubDate>
       <itunes:duration>737</itunes:duration>
-    </item>
-    <item>
-      <title>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-13)</title>
-      <description>全球AI资讯要点、一人公司搞钱拆解与权威要闻汇总 (2026-11-13) 发布日期：2026-11-13 &amp;nbsp;&amp;nbsp; 内容属性：纯干货无寒暄 · 案例深度拆解 · 权威要闻逐条播报 --- 💡 今日金句 (Quote of the Day) 🌟 「价格翻五倍，客户反而多了四个。」 --- 💰 一人公司搞钱案例拆解（真实项目 · 来源：Hacker News·收入帖） 【本期课题】月费从99美元涨到500美元，付费客户从2个变成6个 0. 这是个什么 这是一个按月收费的服务，用它的人能按月付费获得某种持续提供的价值。 1. 谁在为什么掏钱 愿意为这个服务按月掏钱的客户，具体是哪些人、解决什么麻烦，他没公开。 2. 怎么收钱、有没有真的赚到 按月收，从每月99美元涨到每月500美元。 涨价前有2个付费客户，涨价后有6个付费客户。 3. 你要准备什么、难在哪 难的不是定价本身，是</description>
-      <enclosure url="https://cherrieant-z.github.io/newscast/audio/newscast_2026-11-13.mp3" length="2785680" type="audio/mpeg"/>
-      <guid isPermaLink="false">2026-11-13</guid>
-      <pubDate>Fri, 13 Nov 2026 03:42:46 -0000</pubDate>
-      <itunes:duration>464</itunes:duration>
     </item>
 </channel>
 </rss>
